@@ -103,12 +103,12 @@ type SalesContextType = {
 
 // Default values (used as fallback/initial state)
 const defaultStats: Stats = {
-  callsToday: 42,
+  callsToday: 45,
   callsGoal: 60,
   connected: 8,
-  meetingsBooked: 2,
-  pipelineValue: 12450,
-  streak: 8,
+  meetingsBooked: 7,
+  pipelineValue: 37450,
+  streak: 42,
 };
 
 const defaultLead: Lead = {
