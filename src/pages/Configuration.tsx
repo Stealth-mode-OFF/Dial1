@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Save, LogOut, Bell, Shield, Database, Smartphone, Globe, User, CheckCircle2 } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 import { supabase } from '../utils/supabase/client';
@@ -8,20 +8,13 @@ export function Configuration() {
   const [activeSection, setActiveSection] = useState('profile');
   
   // Local state for form handling
-  const [formData, setFormData] = useState({
-      name: user.name,
-      role: user.role,
-      email: 'alex.sales@example.com' // Email is usually immutable or from auth
-  });
+  const profileDefaults = {
+      name: 'Pepa',
+      role: 'Senior B2B',
+      email: ''
+  };
+  const [formData, setFormData] = useState(profileDefaults);
   const [isSaved, setIsSaved] = useState(false);
-
-  useEffect(() => {
-      setFormData({
-          name: user.name,
-          role: user.role,
-          email: 'alex.sales@example.com'
-      });
-  }, [user]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
