@@ -25,6 +25,7 @@ export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-cent
     currentLead, 
     liveNote, 
     scriptStep,
+    recentActivity,
     setLiveNote, 
     setScriptStep,
     incrementCalls, 
@@ -155,17 +156,25 @@ export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-cent
           </div>
 
           {/* History Log */}
-          <div className="bg-white border-2 border-black p-4 flex-1">
+          <div className="bg-white border-2 border-black p-4 flex-1 overflow-y-auto max-h-60">
              <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-black uppercase tracking-wider flex items-center gap-2">
                 <Clock size={14} /> Interaction Log
               </h3>
             </div>
             <div className="space-y-4">
-              <div className="pl-3 border-l-4 border-slate-300">
-                <div className="text-xs font-mono font-bold text-slate-400 mb-1">YESTERDAY</div>
-                <div className="text-sm font-medium">Gatekeeper refused transfer. Mentioned "call back after 2PM".</div>
-              </div>
+              {/* Dynamic Activity Log */}
+              {recentActivity.length > 0 ? (
+                  recentActivity.map((log) => (
+                      <div key={log.id} className="pl-3 border-l-4 border-slate-300">
+                        <div className="text-[10px] font-mono font-bold text-slate-400 mb-1 uppercase">{log.timestamp}</div>
+                        <div className="text-xs font-bold">{log.description}</div>
+                        <div className="text-[10px] font-mono text-slate-500 mt-1">Score: {log.score}/100</div>
+                      </div>
+                  ))
+              ) : (
+                  <div className="text-xs font-mono text-slate-400 italic">No recent activity found.</div>
+              )}
             </div>
           </div>
         </div>
@@ -196,7 +205,7 @@ export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-cent
           </div>
 
           {/* Content Area - Notebook Paper */}
-          <div className="flex-1 p-6 overflow-y-auto bg-[url('https://www.transparenttextures.com/patterns/notebook.png')] bg-white relative">
+          <div className="flex-1 p-6 overflow-y-auto bg-white relative" style={{ backgroundImage: 'linear-gradient(#00000010 1px, transparent 1px)', backgroundSize: '100% 2rem' }}>
             
             {activeTab === 'script' && (
               <div className="space-y-6 max-w-2xl mx-auto">

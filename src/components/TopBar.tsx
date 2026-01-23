@@ -31,7 +31,7 @@ export function TopBar({ onNavigate }: { onNavigate?: (tab: string) => void }) {
         {/* System Status Ticket */}
         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_black]">
           <div className={`w-3 h-3 rounded-full border-2 border-black ${integrations.pipedrive ? 'bg-green-400' : 'bg-red-400'}`}></div>
-          <span className="text-xs font-black uppercase tracking-tight font-mono">
+          <span className="text-[10px] font-bold uppercase tracking-wide font-mono">
             SYSTEM: {integrations.pipedrive ? 'ONLINE' : 'OFFLINE'}
           </span>
         </div>
@@ -51,8 +51,8 @@ export function TopBar({ onNavigate }: { onNavigate?: (tab: string) => void }) {
             {user.avatarInitials}
           </div>
           <div className="flex flex-col items-start">
-            <span className="text-sm font-black leading-none">{user.name.split(' ')[0]}</span>
-            <span className="text-[10px] font-mono font-bold text-slate-500 uppercase">{user.role}</span>
+            <span className="text-sm font-black leading-tight">{user.name.split(' ')[0]}</span>
+            <span className="text-[10px] font-mono font-medium text-slate-500 uppercase tracking-wide">{user.role}</span>
           </div>
         </button>
       </div>

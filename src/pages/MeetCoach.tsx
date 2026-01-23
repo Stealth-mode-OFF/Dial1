@@ -3,7 +3,7 @@ import { Mic2, Play, Rewind, FastForward, MessageSquare, AlertTriangle, CheckCir
 import { useSales } from '../contexts/SalesContext';
 
 export function MeetCoach() {
-  const { user } = useSales();
+  const { user, stats } = useSales();
 
   return (
     <div className="p-4 h-full flex flex-col gap-6 font-sans text-slate-900 bg-grid-pattern">
@@ -17,10 +17,10 @@ export function MeetCoach() {
          <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
                <div className="text-xs font-bold uppercase text-slate-500">Current Level</div>
-               <div className="text-2xl font-black font-mono">SENIOR AE</div>
+               <div className="text-2xl font-black font-mono uppercase">{user.role}</div>
             </div>
             <div className="w-16 h-16 bg-black text-yellow-400 flex items-center justify-center font-black text-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]">
-               42
+               {stats.streak}
             </div>
          </div>
       </div>

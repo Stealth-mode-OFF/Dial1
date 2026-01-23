@@ -1,15 +1,37 @@
-import React, { useState } from 'react';
-import { Save, LogOut, Bell, Shield, Database, Smartphone, Globe, User } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Save, LogOut, Bell, Shield, Database, Smartphone, Globe, User, CheckCircle2 } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 import { supabase } from '../utils/supabase/client';
 
 export function Configuration() {
-  const { user, integrations } = useSales();
+  const { user, integrations, updateUser, toggleIntegration } = useSales();
   const [activeSection, setActiveSection] = useState('profile');
+  
+  // Local state for form handling
+  const [formData, setFormData] = useState({
+      name: user.name,
+      role: user.role,
+      email: 'alex.sales@example.com' // Email is usually immutable or from auth
+  });
+  const [isSaved, setIsSaved] = useState(false);
+
+  useEffect(() => {
+      setFormData({
+          name: user.name,
+          role: user.role,
+          email: 'alex.sales@example.com'
+      });
+  }, [user]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     window.location.reload();
+  };
+
+  const handleSaveProfile = () => {
+      updateUser({ name: formData.name, role: formData.role });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
   };
 
   const sections = [
@@ -68,22 +90,36 @@ export function Configuration() {
                  <div className="flex-1 space-y-4 w-full">
                     <div>
                        <label className="block text-xs font-black uppercase mb-1 bg-black text-white inline-block px-1">Callsign (Name)</label>
-                       <input type="text" defaultValue={user.name} className="w-full bg-slate-50 border-2 border-black p-3 font-mono font-bold focus:outline-none focus:bg-white focus:shadow-[4px_4px_0px_0px_black] transition-all" />
+                       <input 
+                            type="text" 
+                            value={formData.name} 
+                            onChange={(e) => setFormData({...formData, name: e.target.value})}
+                            className="w-full bg-slate-50 border-2 border-black p-3 font-mono font-bold focus:outline-none focus:bg-white focus:shadow-[4px_4px_0px_0px_black] transition-all" 
+                       />
                     </div>
                     <div>
                        <label className="block text-xs font-black uppercase mb-1 bg-black text-white inline-block px-1">Rank (Role)</label>
-                       <input type="text" defaultValue={user.role} className="w-full bg-slate-50 border-2 border-black p-3 font-mono font-bold focus:outline-none focus:bg-white focus:shadow-[4px_4px_0px_0px_black] transition-all" />
+                       <input 
+                            type="text" 
+                            value={formData.role} 
+                            onChange={(e) => setFormData({...formData, role: e.target.value})}
+                            className="w-full bg-slate-50 border-2 border-black p-3 font-mono font-bold focus:outline-none focus:bg-white focus:shadow-[4px_4px_0px_0px_black] transition-all" 
+                       />
                     </div>
                     <div>
                        <label className="block text-xs font-black uppercase mb-1 bg-slate-300 text-black inline-block px-1">Base (Email)</label>
-                       <input type="email" defaultValue={user.email} disabled className="w-full bg-slate-200 border-2 border-black text-slate-500 p-3 font-mono font-bold cursor-not-allowed opacity-70" />
+                       <input type="email" value={formData.email} disabled className="w-full bg-slate-200 border-2 border-black text-slate-500 p-3 font-mono font-bold cursor-not-allowed opacity-70" />
                     </div>
                  </div>
               </div>
 
               <div className="pt-8 flex justify-end border-t-2 border-dashed border-slate-300">
-                 <button className="bg-black text-white px-8 py-4 font-black uppercase border-2 border-black flex items-center gap-2 hover:bg-slate-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] active:translate-y-[2px] active:shadow-none transition-all">
-                    <Save size={20} /> Save Changes
+                 <button 
+                    onClick={handleSaveProfile}
+                    className={`px-8 py-4 font-black uppercase border-2 border-black flex items-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] active:translate-y-[2px] active:shadow-none transition-all ${isSaved ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-slate-800'}`}
+                 >
+                    {isSaved ? <CheckCircle2 size={20} /> : <Save size={20} />}
+                    {isSaved ? 'Identity Updated' : 'Save Changes'}
                  </button>
               </div>
            </div>
@@ -102,7 +138,10 @@ export function Configuration() {
                     <Database size={32} className="mb-4" strokeWidth={2} />
                     <h3 className="font-black text-xl uppercase">Pipedrive CRM</h3>
                     <p className="font-mono text-xs text-slate-600 mt-2 mb-6 font-bold">Sync contacts, deals, and activities in real-time.</p>
-                    <button className={`w-full font-black uppercase py-3 border-2 border-black transition-all shadow-[2px_2px_0px_0px_black] active:translate-y-[2px] active:shadow-none ${integrations.pipedrive ? 'bg-white text-black hover:bg-red-100 hover:text-red-600 hover:border-red-600' : 'bg-black text-white hover:bg-slate-800'}`}>
+                    <button 
+                        onClick={() => toggleIntegration('pipedrive')}
+                        className={`w-full font-black uppercase py-3 border-2 border-black transition-all shadow-[2px_2px_0px_0px_black] active:translate-y-[2px] active:shadow-none ${integrations.pipedrive ? 'bg-white text-black hover:bg-red-100 hover:text-red-600 hover:border-red-600' : 'bg-black text-white hover:bg-slate-800'}`}
+                    >
                        {integrations.pipedrive ? 'Disconnect' : 'Connect'}
                     </button>
                  </div>

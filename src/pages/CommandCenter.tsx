@@ -80,12 +80,12 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
                 <div className="bg-grid-pattern absolute inset-0 opacity-50 pointer-events-none"></div>
                 <div className="relative z-10">
                     <div className="flex items-center gap-2 mb-2">
-                        <span className="bg-black text-white px-2 py-0.5 text-xs font-mono font-bold uppercase">Today's Mission</span>
-                        <span className="bg-yellow-300 text-black px-2 py-0.5 text-xs font-mono font-bold uppercase border-2 border-black transform -rotate-2">
+                        <span className="bg-black text-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">Today's Mission</span>
+                        <span className="bg-yellow-300 text-black px-2 py-0.5 text-[10px] font-mono font-bold uppercase border-2 border-black transform -rotate-2">
                             {new Date().toLocaleDateString()}
                         </span>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-black text-black tracking-tighter leading-none">
+                    <h1 className="text-4xl md:text-5xl font-black text-black tracking-tight leading-none mb-1">
                         PRIORITY QUEUE
                     </h1>
                 </div>
@@ -101,16 +101,16 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
             {/* The "Main Task" Card - Looks like a key card */}
             <div className={`relative border-2 border-black p-8 neobrutal-shadow flex flex-col md:flex-row items-center justify-between gap-8 overflow-hidden group ${focusConfig[focusMode].bg}`}>
                 {/* Decorative background texture */}
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-20 pointer-events-none"></div>
+                <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
                 
                 <div className="relative z-10 flex-1">
-                    <div className="inline-block bg-white border-2 border-black px-3 py-1 text-xs font-black uppercase mb-4 shadow-[2px_2px_0px_0px_black] rotate-1">
+                    <div className="inline-block bg-white border-2 border-black px-3 py-1 text-[10px] font-bold uppercase tracking-widest mb-4 shadow-[2px_2px_0px_0px_black] rotate-1">
                         Current Mode: {focusConfig[focusMode].label}
                     </div>
-                    <p className="text-xl md:text-2xl font-bold text-black border-l-4 border-black pl-4 leading-tight">
+                    <p className="text-lg md:text-xl font-bold text-black border-l-4 border-black pl-4 leading-snug max-w-lg">
                         {focusConfig[focusMode].desc}
                     </p>
-                    <div className="mt-4 flex items-center gap-2 font-mono text-sm font-bold text-black/80">
+                    <div className="mt-5 flex items-center gap-2 font-mono text-xs font-bold text-black/70 uppercase tracking-wide">
                         <Battery size={16} fill="black" />
                         <span>ENERGY LEVEL: OPTIMAL</span>
                     </div>
@@ -135,16 +135,16 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
             {/* Integration Status Strips */}
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white border-2 border-black p-3 flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
-                    <span className="font-mono text-xs font-bold uppercase">Database Sync</span>
+                    <span className="font-bold text-[10px] uppercase tracking-wider text-slate-600">Database Sync</span>
                     <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold">ONLINE</span>
+                        <span className="text-[10px] font-bold">ONLINE</span>
                         <div className="w-3 h-3 bg-green-400 border-2 border-black rounded-full animate-pulse"></div>
                     </div>
                 </div>
                 <div className={`border-2 border-black p-3 flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] ${integrations.pipedrive ? 'bg-white' : 'bg-slate-100'}`}>
-                    <span className="font-mono text-xs font-bold uppercase">CRM Connection</span>
+                    <span className="font-bold text-[10px] uppercase tracking-wider text-slate-600">CRM Connection</span>
                     <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold">{integrations.pipedrive ? 'CONNECTED' : 'OFFLINE'}</span>
+                        <span className="text-[10px] font-bold">{integrations.pipedrive ? 'CONNECTED' : 'OFFLINE'}</span>
                         <div className={`w-3 h-3 border-2 border-black rounded-full ${integrations.pipedrive ? 'bg-green-400' : 'bg-red-400'}`}></div>
                     </div>
                 </div>
@@ -157,21 +157,21 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
             {/* Main Stats Card */}
             <div className="bg-white border-2 border-black p-6 neobrutal-shadow relative">
                 <div className="absolute -top-3 -right-3 bg-yellow-400 border-2 border-black px-2 py-1 rotate-3 shadow-sm z-10">
-                    <span className="text-xs font-black uppercase">LIVE STATS</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">LIVE STATS</span>
                 </div>
 
                 <div className="space-y-6 divide-y-2 divide-dashed divide-slate-300">
                     <div className="pt-2">
-                        <div className="text-xs font-mono font-bold text-slate-500 mb-1">CALLS_TODAY</div>
-                        <div className="text-5xl font-black text-black tracking-tighter">{stats.callsToday}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">CALLS_TODAY</div>
+                        <div className="text-5xl font-black text-black tracking-tight">{stats.callsToday}</div>
                     </div>
                     <div className="pt-4">
-                        <div className="text-xs font-mono font-bold text-slate-500 mb-1">PIPELINE_VALUE</div>
-                        <div className="text-3xl font-black text-emerald-600 tracking-tighter">€{stats.pipelineValue.toLocaleString()}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">PIPELINE_VALUE</div>
+                        <div className="text-3xl font-black text-emerald-600 tracking-tight">€{stats.pipelineValue.toLocaleString()}</div>
                     </div>
                     <div className="pt-4">
-                        <div className="text-xs font-mono font-bold text-slate-500 mb-1">CONNECT_RATE</div>
-                        <div className="text-3xl font-black text-black tracking-tighter">{Math.round((stats.connected / (stats.callsToday || 1)) * 100)}%</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">CONNECT_RATE</div>
+                        <div className="text-3xl font-black text-black tracking-tight">{Math.round((stats.connected / (stats.callsToday || 1)) * 100)}%</div>
                     </div>
                 </div>
             </div>
@@ -182,8 +182,8 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
                 className="w-full bg-pink-400 border-2 border-black p-4 neobrutal-shadow flex items-center justify-between group hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
             >
                 <div className="text-left">
-                    <div className="font-black text-lg text-black uppercase leading-none">View Reports</div>
-                    <div className="font-mono text-xs font-bold text-black/70">DEEP_DIVE_ANALYSIS.EXE</div>
+                    <div className="font-black text-lg text-black uppercase leading-none mb-1">View Reports</div>
+                    <div className="font-mono text-[10px] font-medium text-black/60 uppercase tracking-wide">DEEP_DIVE_ANALYSIS.EXE</div>
                 </div>
                 <Activity className="text-black group-hover:rotate-12 transition-transform" size={24} strokeWidth={3} />
             </button>

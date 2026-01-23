@@ -8,7 +8,8 @@ import {
   ArrowDownRight, 
   Download,
   Filter,
-  Phone
+  Phone,
+  CheckCircle2
 } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 import { 
@@ -21,16 +22,24 @@ import {
   ResponsiveContainer
 } from 'recharts';
 
-export function Intelligence() {
-  const { stats } = useSales();
+// Icon mapping for dynamic rendering
+const iconMap: Record<string, React.ElementType> = {
+  'Filter': Filter,
+  'Target': Target,
+  'ArrowDownRight': ArrowDownRight,
+  'Phone': Phone,
+  'Calendar': Calendar,
+  'TrendingUp': TrendingUp,
+  'Download': Download
+};
 
-  const weeklyData = [
-    { name: 'Mon', calls: 45, meetings: 2 },
-    { name: 'Tue', calls: 52, meetings: 3 },
-    { name: 'Wed', calls: 38, meetings: 1 },
-    { name: 'Thu', calls: 65, meetings: 5 },
-    { name: 'Fri', calls: 48, meetings: 2 },
-  ];
+export function Intelligence() {
+  const { stats, schedule, updateScheduleStatus } = useSales();
+
+  const handleToggleStatus = (id: string, currentStatus: string) => {
+      const newStatus = currentStatus === 'completed' ? 'pending' : 'completed';
+      updateScheduleStatus(id, newStatus);
+  };
 
   return (
     <div className="p-4 space-y-6 relative font-sans text-slate-900">
@@ -76,7 +85,7 @@ export function Intelligence() {
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
          
-         {/* Main Chart */}
+         {/* Main Chart - TACTICAL SCHEDULE (Connected to Backend) */}
          <div className="lg:col-span-2 bg-white border-2 border-black p-6 shadow-[8px_8px_0px_0px_black] relative overflow-hidden">
             <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-4">
                <h3 className="text-xl font-black uppercase flex items-center gap-2">
@@ -93,51 +102,57 @@ export function Intelligence() {
                 {/* Vertical Line */}
                 <div className="absolute left-[27px] top-4 bottom-4 w-1 bg-slate-200 z-0"></div>
 
-                {[
-                    { time: '09:00', end: '09:30', title: 'Intel & Prep', type: 'prep', icon: Filter, desc: 'Review CRM, Coffee, Set Daily Goals' },
-                    { time: '09:30', end: '10:30', title: 'Deep Canvasing', type: 'work', icon: Target, desc: 'Prospecting new leads. No distractions.' },
-                    { time: '10:30', end: '10:45', title: 'Neuro-Reset', type: 'break', icon: ArrowDownRight, desc: 'Walk, Stretch, No Screens.' },
-                    { time: '10:45', end: '11:45', title: 'Demo / Outbound', type: 'work', icon: Phone, desc: 'High energy calls & presentations.' },
-                    { time: '11:45', end: '12:45', title: 'Recharge', type: 'break', icon: Calendar, desc: 'Lunch & Disconnect.' },
-                    { time: '12:45', end: '13:45', title: 'Closing Time', type: 'work', icon: TrendingUp, desc: 'Contracts, Negotiations, Follow-ups.' },
-                    { time: '13:45', end: '14:00', title: 'Daily Wrap-Up', type: 'prep', icon: Download, desc: 'Update CRM, Prep "Tomorrow List".' },
-                ].map((slot, i) => (
-                    <div key={i} className={`relative z-10 flex gap-4 group ${slot.type === 'break' ? 'opacity-70 hover:opacity-100' : ''}`}>
-                        {/* Time Column */}
-                        <div className="w-14 flex flex-col items-end pt-1">
-                            <span className="text-xs font-mono font-black text-slate-900">{slot.time}</span>
-                            <span className="text-[10px] font-mono font-bold text-slate-400">{slot.end}</span>
-                        </div>
+                {schedule.map((slot, i) => {
+                    const Icon = iconMap[slot.icon] || Target;
+                    return (
+                        <div key={i} className={`relative z-10 flex gap-4 group ${slot.type === 'break' ? 'opacity-70 hover:opacity-100' : ''}`}>
+                            {/* Time Column */}
+                            <div className="w-14 flex flex-col items-end pt-1">
+                                <span className="text-xs font-mono font-black text-slate-900">{slot.time}</span>
+                                <span className="text-[10px] font-mono font-bold text-slate-400">{slot.end}</span>
+                            </div>
 
-                        {/* Timeline Node */}
-                        <div className="relative pt-1">
-                             <div className={`w-3 h-3 border-2 border-black rounded-full z-20 relative ${
-                                slot.type === 'work' ? 'bg-black' : 
-                                slot.type === 'break' ? 'bg-white' : 'bg-yellow-300'
-                             }`}></div>
-                        </div>
+                            {/* Timeline Node */}
+                            <div className="relative pt-1">
+                                <button 
+                                    onClick={() => handleToggleStatus(slot.id, slot.status)}
+                                    className={`w-4 h-4 border-2 border-black rounded-full z-20 relative flex items-center justify-center transition-colors ${
+                                    slot.status === 'completed' ? 'bg-green-500' :
+                                    slot.type === 'work' ? 'bg-black' : 
+                                    slot.type === 'break' ? 'bg-white' : 'bg-yellow-300'
+                                }`}>
+                                    {slot.status === 'completed' && <CheckCircle2 size={10} className="text-white" />}
+                                </button>
+                            </div>
 
-                        {/* Content Card */}
-                        <div className={`flex-1 mb-4 p-3 border-2 border-black transition-all ${
-                            slot.type === 'work' ? 'bg-white shadow-[4px_4px_0px_0px_black] hover:translate-x-1' : 
-                            slot.type === 'break' ? 'bg-slate-50 border-dashed text-slate-500' : 
-                            'bg-yellow-50 shadow-[2px_2px_0px_0px_black]'
-                        }`}>
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <div className={`text-sm font-black uppercase flex items-center gap-2 ${slot.type === 'work' ? 'text-black' : 'text-slate-600'}`}>
-                                        <slot.icon size={14} />
-                                        {slot.title}
+                            {/* Content Card */}
+                            <div 
+                                onClick={() => handleToggleStatus(slot.id, slot.status)}
+                                className={`flex-1 mb-4 p-3 border-2 border-black transition-all cursor-pointer ${
+                                slot.status === 'completed' ? 'bg-slate-100 opacity-60 decoration-slate-400' :
+                                slot.type === 'work' ? 'bg-white shadow-[4px_4px_0px_0px_black] hover:translate-x-1' : 
+                                slot.type === 'break' ? 'bg-slate-50 border-dashed text-slate-500' : 
+                                'bg-yellow-50 shadow-[2px_2px_0px_0px_black]'
+                            }`}>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className={`text-sm font-black uppercase flex items-center gap-2 ${slot.type === 'work' ? 'text-black' : 'text-slate-600'} ${slot.status === 'completed' ? 'line-through decoration-2 decoration-black' : ''}`}>
+                                            <Icon size={14} />
+                                            {slot.title}
+                                        </div>
+                                        <div className="text-xs font-mono font-bold mt-1 opacity-80">{slot.desc}</div>
                                     </div>
-                                    <div className="text-xs font-mono font-bold mt-1 opacity-80">{slot.desc}</div>
+                                    {slot.type === 'work' && slot.status !== 'completed' && (
+                                        <div className="bg-black text-white text-[10px] font-bold px-1.5 py-0.5 uppercase">Focus</div>
+                                    )}
+                                    {slot.status === 'completed' && (
+                                        <div className="bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 uppercase border border-green-500">Done</div>
+                                    )}
                                 </div>
-                                {slot.type === 'work' && (
-                                    <div className="bg-black text-white text-[10px] font-bold px-1.5 py-0.5 uppercase">Focus</div>
-                                )}
                             </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
 
                 <div className="ml-20 mt-2 p-3 bg-black text-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] text-center transform -rotate-1">
                     <div className="text-lg font-black uppercase tracking-widest">System Shutdown</div>

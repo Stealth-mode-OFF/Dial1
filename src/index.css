@@ -100,6 +100,7 @@
     --color-black: #000;
     --color-white: #fff;
     --spacing: .25rem;
+    --container-lg: 32rem;
     --container-2xl: 42rem;
     --container-7xl: 80rem;
     --text-xs: .75rem;
@@ -531,6 +532,10 @@
     margin-top: calc(var(--spacing) * 4);
   }
 
+  .mt-5 {
+    margin-top: calc(var(--spacing) * 5);
+  }
+
   .mt-6 {
     margin-top: calc(var(--spacing) * 6);
   }
@@ -647,6 +652,10 @@
     height: 100vh;
   }
 
+  .max-h-60 {
+    max-height: calc(var(--spacing) * 60);
+  }
+
   .w-0\.5 {
     width: calc(var(--spacing) * .5);
   }
@@ -717,6 +726,10 @@
 
   .max-w-7xl {
     max-width: var(--container-7xl);
+  }
+
+  .max-w-lg {
+    max-width: var(--container-lg);
   }
 
   .flex-1 {
@@ -1239,14 +1252,6 @@
     background-color: var(--color-yellow-400);
   }
 
-  .bg-\[url\(\'https\:\/\/www\.transparenttextures\.com\/patterns\/diagmonds-light\.png\'\)\] {
-    background-image: url("https://www.transparenttextures.com/patterns/diagmonds-light.png");
-  }
-
-  .bg-\[url\(\'https\:\/\/www\.transparenttextures\.com\/patterns\/notebook\.png\'\)\] {
-    background-image: url("https://www.transparenttextures.com/patterns/notebook.png");
-  }
-
   .fill-black {
     fill: var(--color-black);
   }
@@ -1544,6 +1549,16 @@
     color: var(--color-black);
   }
 
+  .text-black\/60 {
+    color: #0009;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-black\/60 {
+      color: color-mix(in oklab, var(--color-black) 60%, transparent);
+    }
+  }
+
   .text-black\/70 {
     color: #000000b3;
   }
@@ -1551,16 +1566,6 @@
   @supports (color: color-mix(in lab, red, red)) {
     .text-black\/70 {
       color: color-mix(in oklab, var(--color-black) 70%, transparent);
-    }
-  }
-
-  .text-black\/80 {
-    color: #000c;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-black\/80 {
-      color: color-mix(in oklab, var(--color-black) 80%, transparent);
     }
   }
 
@@ -1656,12 +1661,38 @@
     text-transform: uppercase;
   }
 
+  .italic {
+    font-style: italic;
+  }
+
+  .line-through {
+    text-decoration-line: line-through;
+  }
+
+  .decoration-black {
+    -webkit-text-decoration-color: var(--color-black);
+    text-decoration-color: var(--color-black);
+  }
+
+  .decoration-slate-400 {
+    -webkit-text-decoration-color: var(--color-slate-400);
+    text-decoration-color: var(--color-slate-400);
+  }
+
+  .decoration-2 {
+    text-decoration-thickness: 2px;
+  }
+
   .placeholder-slate-400::placeholder {
     color: var(--color-slate-400);
   }
 
   .opacity-0 {
     opacity: 0;
+  }
+
+  .opacity-10 {
+    opacity: .1;
   }
 
   .opacity-20 {
@@ -2140,6 +2171,13 @@
     .md\:text-5xl {
       font-size: var(--text-5xl);
       line-height: var(--tw-leading, var(--text-5xl--line-height));
+    }
+  }
+
+  @media (width >= 48rem) {
+    .md\:text-xl {
+      font-size: var(--text-xl);
+      line-height: var(--tw-leading, var(--text-xl--line-height));
     }
   }
 

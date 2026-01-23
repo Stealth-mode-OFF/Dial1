@@ -52,7 +52,7 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
                 className={`mb-1 transition-transform group-hover:scale-110 ${isActive ? 'text-black' : 'text-slate-900'}`} 
                 strokeWidth={2.5}
               />
-              <span className="text-[10px] font-bold uppercase tracking-tighter leading-none">{item.label}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide leading-none">{item.label}</span>
             </button>
           );
         })}

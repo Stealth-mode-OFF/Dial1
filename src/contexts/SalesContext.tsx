@@ -63,6 +63,17 @@ type ActivityLog = {
   score?: number; // 0-100
 };
 
+export type ScheduleItem = {
+  id: string;
+  time: string;
+  end: string;
+  title: string;
+  type: 'prep' | 'work' | 'break';
+  icon: string; // Storing icon name as string for serializability
+  desc: string;
+  status: 'pending' | 'active' | 'completed';
+};
+
 type SalesContextType = {
   stats: Stats;
   currentLead: Lead;
@@ -72,6 +83,7 @@ type SalesContextType = {
   configSettings: ConfigurationSettings;
   recentActivity: ActivityLog[];
   objectionCounts: Record<string, number>;
+  schedule: ScheduleItem[];
   liveNote: string;
   scriptStep: number;
   incrementCalls: () => void;
@@ -83,6 +95,7 @@ type SalesContextType = {
   updateUser: (updates: Partial<UserProfile>) => void;
   updateCoachSettings: (updates: Partial<CoachSettings>) => void;
   updateConfigSettings: (section: keyof ConfigurationSettings, updates: any) => void;
+  updateScheduleStatus: (id: string, status: ScheduleItem['status']) => void;
   setLiveNote: (note: string) => void;
   setScriptStep: (step: number) => void;
   resetData: () => Promise<void>;
@@ -143,6 +156,16 @@ const defaultConfigSettings: ConfigurationSettings = {
   }
 };
 
+const defaultSchedule: ScheduleItem[] = [
+    { id: '1', time: '09:00', end: '09:30', title: 'Intel & Prep', type: 'prep', icon: 'Filter', desc: 'Review CRM, Coffee, Set Daily Goals', status: 'completed' },
+    { id: '2', time: '09:30', end: '10:30', title: 'Deep Canvasing', type: 'work', icon: 'Target', desc: 'Prospecting new leads. No distractions.', status: 'active' },
+    { id: '3', time: '10:30', end: '10:45', title: 'Neuro-Reset', type: 'break', icon: 'ArrowDownRight', desc: 'Walk, Stretch, No Screens.', status: 'pending' },
+    { id: '4', time: '10:45', end: '11:45', title: 'Demo / Outbound', type: 'work', icon: 'Phone', desc: 'High energy calls & presentations.', status: 'pending' },
+    { id: '5', time: '11:45', end: '12:45', title: 'Recharge', type: 'break', icon: 'Calendar', desc: 'Lunch & Disconnect.', status: 'pending' },
+    { id: '6', time: '12:45', end: '13:45', title: 'Closing Time', type: 'work', icon: 'TrendingUp', desc: 'Contracts, Negotiations, Follow-ups.', status: 'pending' },
+    { id: '7', time: '13:45', end: '14:00', title: 'Daily Wrap-Up', type: 'prep', icon: 'Download', desc: 'Update CRM, Prep "Tomorrow List".', status: 'pending' },
+];
+
 const SalesContext = createContext<SalesContextType | undefined>(undefined);
 
 export function SalesProvider({ children }: { children: ReactNode }) {
@@ -152,6 +175,7 @@ export function SalesProvider({ children }: { children: ReactNode }) {
   const [integrations, setIntegrations] = useState<Integrations>(defaultIntegrations);
   const [coachSettings, setCoachSettings] = useState<CoachSettings>(defaultCoachSettings);
   const [configSettings, setConfigSettings] = useState<ConfigurationSettings>(defaultConfigSettings);
+  const [schedule, setSchedule] = useState<ScheduleItem[]>(defaultSchedule);
   
   // Live Campaign State (Transient, not synced to backend for now)
   const [liveNote, setLiveNote] = useState('');
@@ -204,7 +228,8 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         coachData, 
         configData, 
         activityData,
-        objectionData
+        objectionData,
+        scheduleData
       ] = await Promise.all([
         apiCall('/stats', 'GET'),
         apiCall('/user', 'GET'),
@@ -212,7 +237,8 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         apiCall('/coachsettings', 'GET'),
         apiCall('/configsettings', 'GET'),
         apiCall('/recentactivity', 'GET'),
-        apiCall('/objectioncounts', 'GET')
+        apiCall('/objectioncounts', 'GET'),
+        apiCall('/schedule', 'GET')
       ]);
 
       if (statsData) setStats(statsData);
@@ -222,6 +248,7 @@ export function SalesProvider({ children }: { children: ReactNode }) {
       if (configData) setConfigSettings(configData);
       if (activityData) setRecentActivity(activityData);
       if (objectionData) setObjectionCounts(objectionData);
+      if (scheduleData) setSchedule(scheduleData);
     };
 
     loadAll();
@@ -336,6 +363,14 @@ export function SalesProvider({ children }: { children: ReactNode }) {
     sync('/configsettings', newSettings);
   };
 
+  const updateScheduleStatus = (id: string, status: ScheduleItem['status']) => {
+    const newSchedule = schedule.map(item => 
+        item.id === id ? { ...item, status } : item
+    );
+    setSchedule(newSchedule);
+    sync('/schedule', newSchedule);
+  };
+
   const resetData = async () => {
     await apiCall('/reset', 'POST');
     window.location.reload();
@@ -351,6 +386,7 @@ export function SalesProvider({ children }: { children: ReactNode }) {
       configSettings,
       recentActivity,
       objectionCounts,
+      schedule,
       liveNote,
       scriptStep,
       incrementCalls, 
@@ -362,6 +398,7 @@ export function SalesProvider({ children }: { children: ReactNode }) {
       updateUser,
       updateCoachSettings,
       updateConfigSettings,
+      updateScheduleStatus,
       setLiveNote,
       setScriptStep,
       resetData

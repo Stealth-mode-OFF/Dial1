@@ -99,6 +99,15 @@ const defaults = {
     { id: '1', type: 'meeting', description: 'Demo with Acme Corp', timestamp: '2h ago', score: 92 },
     { id: '2', type: 'call', description: 'Intro call - Stark Ind', timestamp: '4h ago', score: 64 },
     { id: '3', type: 'call', description: 'Follow-up / Wayne Ent', timestamp: 'Yesterday', score: 85 },
+  ],
+  schedule: [
+    { id: '1', time: '09:00', end: '09:30', title: 'Intel & Prep', type: 'prep', icon: 'Filter', desc: 'Review CRM, Coffee, Set Daily Goals', status: 'completed' },
+    { id: '2', time: '09:30', end: '10:30', title: 'Deep Canvasing', type: 'work', icon: 'Target', desc: 'Prospecting new leads. No distractions.', status: 'active' },
+    { id: '3', time: '10:30', end: '10:45', title: 'Neuro-Reset', type: 'break', icon: 'ArrowDownRight', desc: 'Walk, Stretch, No Screens.', status: 'pending' },
+    { id: '4', time: '10:45', end: '11:45', title: 'Demo / Outbound', type: 'work', icon: 'Phone', desc: 'High energy calls & presentations.', status: 'pending' },
+    { id: '5', time: '11:45', end: '12:45', title: 'Recharge', type: 'break', icon: 'Calendar', desc: 'Lunch & Disconnect.', status: 'pending' },
+    { id: '6', time: '12:45', end: '13:45', title: 'Closing Time', type: 'work', icon: 'TrendingUp', desc: 'Contracts, Negotiations, Follow-ups.', status: 'pending' },
+    { id: '7', time: '13:45', end: '14:00', title: 'Daily Wrap-Up', type: 'prep', icon: 'Download', desc: 'Update CRM, Prep "Tomorrow List".', status: 'pending' },
   ]
 };
 
