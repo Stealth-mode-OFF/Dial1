@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useSales } from '../contexts/SalesContext';
 import {
   Zap,
@@ -7,13 +7,47 @@ import {
   Activity,
   Phone,
   Battery,
+  Target,
+  Flame,
+  X
 } from "lucide-react";
 
 export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaigns' | 'intelligence' | 'configuration') => void }) {
   const { stats, integrations } = useSales();
+  const [focusMode, setFocusMode] = useState<'volume' | 'quality' | 'closing'>('quality');
+  const [isAdjustingFocus, setIsAdjustingFocus] = useState(false);
+
+  const focusConfig = {
+    volume: { label: 'High Volume', color: 'from-blue-500 to-indigo-600', icon: Zap, desc: 'Maximum calls per hour.' },
+    quality: { label: 'High Quality', color: 'from-[#6366F1] to-[#8B5CF6]', icon: Target, desc: 'Identified for immediate contact with probability > 85%.' },
+    closing: { label: 'Closing Mode', color: 'from-emerald-500 to-teal-600', icon: Flame, desc: 'Focus on bottom-of-funnel deals.' }
+  };
   
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 max-w-7xl mx-auto space-y-6 relative">
+      
+      {/* Focus Adjust Overlay */}
+      {isAdjustingFocus && (
+        <div className="absolute top-20 right-6 z-20 bg-white shadow-xl rounded-2xl p-4 border border-slate-200 w-72 animate-in fade-in slide-in-from-top-4 duration-200">
+           <div className="flex justify-between items-center mb-4">
+             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Select Focus</h3>
+             <button onClick={() => setIsAdjustingFocus(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+           </div>
+           <div className="space-y-2">
+             {(['volume', 'quality', 'closing'] as const).map((mode) => (
+               <button
+                 key={mode}
+                 onClick={() => { setFocusMode(mode); setIsAdjustingFocus(false); }}
+                 className={`w-full text-left p-3 rounded-xl border-2 transition-all ${focusMode === mode ? 'border-indigo-500 bg-indigo-50' : 'border-transparent hover:bg-slate-50'}`}
+               >
+                 <div className="font-bold text-slate-900 text-sm">{focusConfig[mode].label}</div>
+                 <div className="text-xs text-slate-500 leading-tight mt-0.5">{focusConfig[mode].desc}</div>
+               </button>
+             ))}
+           </div>
+        </div>
+      )}
+
       {/* Status Bar */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 flex items-center justify-between">
@@ -51,28 +85,31 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
             AI Priority Queue
           </h1>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+        <button 
+          onClick={() => setIsAdjustingFocus(!isAdjustingFocus)}
+          className={`flex items-center gap-2 px-4 py-2 border rounded-full text-sm font-medium transition-colors ${isAdjustingFocus ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+        >
           <Activity size={16} />
-          Adjust Focus
+          {isAdjustingFocus ? 'Select Mode' : 'Adjust Focus'}
         </button>
       </div>
 
       {/* Priority Queue Card */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#6366F1] to-[#8B5CF6] text-white p-8 md:p-12 shadow-xl shadow-indigo-500/20 group">
+      <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${focusConfig[focusMode].color} text-white p-8 md:p-12 shadow-xl shadow-indigo-500/20 group transition-all duration-500`}>
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/20 backdrop-blur-md px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-white/10">
-          AI Priority Queue
+          {focusConfig[focusMode].label}
         </div>
 
         <div className="flex flex-col items-center justify-center text-center space-y-8 z-10 relative">
           <p className="text-lg md:text-xl font-medium max-w-2xl leading-relaxed opacity-90">
-            Identified for immediate contact with probability of success {">"} 85%.
+            {focusConfig[focusMode].desc}
           </p>
 
           <button 
             onClick={() => onNavigate?.('live-campaigns')}
             className="bg-white text-slate-900 px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-3 shadow-lg hover:scale-105 hover:shadow-xl transition-all duration-200 group-hover:ring-4 ring-white/20"
           >
-            <Zap className="fill-slate-900" size={20} />
+            {React.createElement(focusConfig[focusMode].icon, { className: "fill-slate-900", size: 20 })}
             Start Power Dialer
             <ArrowRight size={20} />
           </button>
@@ -85,7 +122,10 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
 
         {/* Decorative elements */}
         <div className="absolute top-0 right-0 p-4">
-          <button className="p-2 bg-black/20 rounded-full hover:bg-black/30 transition-colors text-white/80">
+          <button 
+            onClick={() => onNavigate?.('configuration')}
+            className="p-2 bg-black/20 rounded-full hover:bg-black/30 transition-colors text-white/80"
+          >
             <Settings2 size={16} />
           </button>
         </div>

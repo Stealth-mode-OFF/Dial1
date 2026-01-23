@@ -32,6 +32,29 @@ type Integrations = {
   slack: boolean;
 };
 
+type CoachSettings = {
+  activePersona: string;
+  interventions: {
+    speedAlert: boolean;
+    monologueBreaker: boolean;
+    fillerWordKiller: boolean;
+    sentimentTracker: boolean;
+  };
+};
+
+type ConfigurationSettings = {
+  notifications: {
+    emailDigest: boolean;
+    slackAlerts: boolean;
+    browserPush: boolean;
+  };
+  audio: {
+    inputDevice: string;
+    outputDevice: string;
+    noiseCancellation: boolean;
+  };
+};
+
 type ActivityLog = {
   id: string;
   type: 'call' | 'meeting' | 'email';
@@ -45,8 +68,12 @@ type SalesContextType = {
   currentLead: Lead;
   user: UserProfile;
   integrations: Integrations;
+  coachSettings: CoachSettings;
+  configSettings: ConfigurationSettings;
   recentActivity: ActivityLog[];
   objectionCounts: Record<string, number>;
+  liveNote: string;
+  scriptStep: number;
   incrementCalls: () => void;
   recordConnection: (success: boolean) => void;
   recordObjection: (objection: string) => void;
@@ -54,6 +81,10 @@ type SalesContextType = {
   nextLead: () => void;
   toggleIntegration: (key: keyof Integrations) => void;
   updateUser: (updates: Partial<UserProfile>) => void;
+  updateCoachSettings: (updates: Partial<CoachSettings>) => void;
+  updateConfigSettings: (section: keyof ConfigurationSettings, updates: any) => void;
+  setLiveNote: (note: string) => void;
+  setScriptStep: (step: number) => void;
 };
 
 const defaultStats: Stats = {
@@ -87,6 +118,29 @@ const defaultIntegrations: Integrations = {
   slack: false,
 };
 
+const defaultCoachSettings: CoachSettings = {
+  activePersona: 'challenger',
+  interventions: {
+    speedAlert: true,
+    monologueBreaker: true,
+    fillerWordKiller: false,
+    sentimentTracker: true
+  }
+};
+
+const defaultConfigSettings: ConfigurationSettings = {
+  notifications: {
+    emailDigest: true,
+    slackAlerts: false,
+    browserPush: true
+  },
+  audio: {
+    inputDevice: 'Default Microphone',
+    outputDevice: 'Default Speakers',
+    noiseCancellation: true
+  }
+};
+
 const SalesContext = createContext<SalesContextType | undefined>(undefined);
 
 export function SalesProvider({ children }: { children: ReactNode }) {
@@ -94,6 +148,13 @@ export function SalesProvider({ children }: { children: ReactNode }) {
   const [currentLead, setCurrentLead] = useState<Lead>(defaultLead);
   const [user, setUser] = useState<UserProfile>(defaultUser);
   const [integrations, setIntegrations] = useState<Integrations>(defaultIntegrations);
+  const [coachSettings, setCoachSettings] = useState<CoachSettings>(defaultCoachSettings);
+  const [configSettings, setConfigSettings] = useState<ConfigurationSettings>(defaultConfigSettings);
+  
+  // Live Campaign State
+  const [liveNote, setLiveNote] = useState('');
+  const [scriptStep, setScriptStep] = useState(0);
+
   const [recentActivity, setRecentActivity] = useState<ActivityLog[]>([
     { id: '1', type: 'meeting', description: 'Demo with Acme Corp', timestamp: '2h ago', score: 92 },
     { id: '2', type: 'call', description: 'Intro call - Stark Ind', timestamp: '4h ago', score: 64 },
@@ -213,6 +274,10 @@ export function SalesProvider({ children }: { children: ReactNode }) {
     
     const randomIdx = Math.floor(Math.random() * names.length);
     
+    // Reset transient state
+    setLiveNote('');
+    setScriptStep(0);
+    
     setCurrentLead({
       id: Math.random().toString(),
       name: names[randomIdx],
@@ -230,21 +295,40 @@ export function SalesProvider({ children }: { children: ReactNode }) {
     setUser(prev => ({ ...prev, ...updates }));
   };
 
+  const updateCoachSettings = (updates: Partial<CoachSettings>) => {
+    setCoachSettings(prev => ({ ...prev, ...updates }));
+  };
+
+  const updateConfigSettings = (section: keyof ConfigurationSettings, updates: any) => {
+    setConfigSettings(prev => ({
+      ...prev,
+      [section]: { ...prev[section], ...updates }
+    }));
+  };
+
   return (
     <SalesContext.Provider value={{ 
       stats, 
       currentLead, 
       user, 
       integrations, 
+      coachSettings,
+      configSettings,
       recentActivity,
       objectionCounts,
+      liveNote,
+      scriptStep,
       incrementCalls, 
       recordConnection, 
       recordObjection,
       bookMeeting, 
       nextLead,
       toggleIntegration,
-      updateUser
+      updateUser,
+      updateCoachSettings,
+      updateConfigSettings,
+      setLiveNote,
+      setScriptStep
     }}>
       {children}
     </SalesContext.Provider>

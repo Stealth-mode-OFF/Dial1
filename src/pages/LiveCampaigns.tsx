@@ -15,12 +15,25 @@ import {
   MoreHorizontal,
   Flame,
   Target,
-  Trophy
+  Trophy,
+  ArrowRight
 } from 'lucide-react';
 
 export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-center') => void }) {
   const [activeTab, setActiveTab] = useState<'script' | 'objections' | 'notes'>('script');
-  const { stats, currentLead, incrementCalls, recordConnection, recordObjection, bookMeeting, nextLead } = useSales();
+  const { 
+    stats, 
+    currentLead, 
+    liveNote, 
+    scriptStep,
+    setLiveNote, 
+    setScriptStep,
+    incrementCalls, 
+    recordConnection, 
+    recordObjection, 
+    bookMeeting, 
+    nextLead 
+  } = useSales();
 
   const handleBookMeeting = () => {
     bookMeeting();
@@ -39,8 +52,25 @@ export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-cent
 
   const handleObjectionClick = (objection: string) => {
     recordObjection(objection);
-    // Maybe show a toast or visual feedback here in a real app
   };
+
+  const scriptSteps = [
+    {
+      title: "Discovery",
+      text: `"Viděl jsem vaši zprávu o expanzi, ${currentLead.name.split(' ')[0]}. Jak momentálně řešíte onboarding nových obchodníků v regionu?"`,
+      goal: "Uncover pain points regarding speed to ramp-up."
+    },
+    {
+      title: "Value Proposition",
+      text: `"Pomáháme týmům jako ${currentLead.company} škálovat o 300% rychleji díky automatizaci tréninku. Zní to jako něco, co byste chtěli prozkoumat?"`,
+      goal: "Establish relevance and hook interest."
+    },
+    {
+      title: "Closing",
+      text: `"Navrhuji krátkou 15minutovou ukázku příští úterý. Jak jste na tom časově?"`,
+      goal: "Secure the meeting."
+    }
+  ];
 
   return (
     <div className="flex flex-col h-full bg-[#F8FAFC] font-sans text-slate-900">
@@ -179,26 +209,33 @@ export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-cent
                 {/* Active Step */}
                 <div className="bg-white p-6 rounded-xl border border-indigo-200 shadow-sm ring-4 ring-indigo-50">
                   <div className="flex justify-between items-start mb-4">
-                    <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-2 py-1 rounded">Current Step: Discovery</span>
-                    <button className="text-slate-400 hover:text-indigo-600 transition-colors">
-                      <ChevronRight size={20} />
+                    <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-2 py-1 rounded">
+                      Current Step: {scriptSteps[scriptStep].title}
+                    </span>
+                    <button 
+                      onClick={() => setScriptStep((scriptStep + 1) % scriptSteps.length)}
+                      className="text-slate-400 hover:text-indigo-600 transition-colors flex items-center gap-1 text-xs font-bold uppercase"
+                    >
+                      Next Step <ChevronRight size={16} />
                     </button>
                   </div>
                   <h2 className="text-lg font-bold text-slate-900 mb-3">
-                    "Viděl jsem vaši zprávu o expanzi. Jak momentálně řešíte onboarding nových obchodníků v regionu?"
+                    {scriptSteps[scriptStep].text}
                   </h2>
                   <div className="text-sm text-slate-500 italic">
-                    Goal: Uncover pain points regarding speed to ramp-up.
+                    Goal: {scriptSteps[scriptStep].goal}
                   </div>
                 </div>
 
                 {/* Upcoming Steps (Faded) */}
-                <div className="opacity-50 pointer-events-none space-y-4 grayscale">
-                  <div className="bg-white p-4 rounded-xl border border-slate-200">
-                    <h3 className="font-bold text-slate-700">Value Proposition</h3>
-                    <p className="text-sm text-slate-500">We help scale sales teams 3x faster...</p>
+                {scriptStep < scriptSteps.length - 1 && (
+                  <div className="opacity-50 space-y-4 grayscale">
+                    <div className="bg-white p-4 rounded-xl border border-slate-200">
+                      <h3 className="font-bold text-slate-700">{scriptSteps[scriptStep + 1].title}</h3>
+                      <p className="text-sm text-slate-500 truncate">{scriptSteps[scriptStep + 1].text}</p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -220,6 +257,8 @@ export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-cent
 
             {activeTab === 'notes' && (
               <textarea 
+                value={liveNote}
+                onChange={(e) => setLiveNote(e.target.value)}
                 className="w-full h-full p-4 bg-white border border-slate-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 placeholder="Start typing notes..."
                 autoFocus

@@ -73,7 +73,6 @@ export function Intelligence({ onNavigate }: { onNavigate?: (tab: string) => voi
               <AlertTriangle size={20} className="text-orange-500" />
               Top Objections
             </h3>
-            <button className="text-indigo-600 text-sm font-bold hover:underline">View All</button>
           </div>
           <div className="space-y-4">
             {sortedObjections.map(([label, count], i) => (

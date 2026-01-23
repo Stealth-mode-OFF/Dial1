@@ -12,12 +12,15 @@ import {
   Mic2,
   Settings,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Speaker,
+  Mic,
+  Volume2
 } from 'lucide-react';
 
 export function Configuration({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const [activeSection, setActiveSection] = useState('integrations');
-  const { user, integrations, toggleIntegration, updateUser } = useSales();
+  const { user, integrations, configSettings, toggleIntegration, updateUser, updateConfigSettings } = useSales();
 
   // Local state for form inputs (for UI responsiveness before blur/save)
   const [formData, setFormData] = useState({
@@ -217,9 +220,99 @@ export function Configuration({ onNavigate }: { onNavigate?: (tab: string) => vo
               </div>
              </div>
           )}
+
+          {activeSection === 'notifications' && (
+             <div className="space-y-8">
+               <div>
+                <h3 className="text-2xl font-bold text-slate-900 mb-2">Notifications</h3>
+                <p className="text-slate-500">Choose how you want to be notified.</p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100">
+                {[
+                  { id: 'emailDigest', label: 'Daily Email Digest', desc: 'Summary of your calls and performance.' },
+                  { id: 'slackAlerts', label: 'Slack Alerts', desc: 'Get notified when a lead opens an email.' },
+                  { id: 'browserPush', label: 'Browser Push', desc: 'Real-time alerts for incoming calls.' },
+                ].map((item) => (
+                   <div key={item.id} className="p-6 flex items-center justify-between">
+                     <div>
+                       <h4 className="font-bold text-slate-900">{item.label}</h4>
+                       <p className="text-sm text-slate-500">{item.desc}</p>
+                     </div>
+                     <div 
+                        onClick={() => updateConfigSettings('notifications', { [item.id]: !configSettings.notifications[item.id as keyof typeof configSettings.notifications] })}
+                        className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer ${configSettings.notifications[item.id as keyof typeof configSettings.notifications] ? 'bg-indigo-500' : 'bg-slate-200'}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform ${configSettings.notifications[item.id as keyof typeof configSettings.notifications] ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                      </div>
+                   </div>
+                ))}
+              </div>
+             </div>
+          )}
+
+          {activeSection === 'audio' && (
+             <div className="space-y-8">
+               <div>
+                <h3 className="text-2xl font-bold text-slate-900 mb-2">Audio & Video</h3>
+                <p className="text-slate-500">Configure your input and output devices.</p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-2xl p-8 space-y-6">
+                
+                {/* Microphone */}
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
+                     <Mic size={14} /> Input Device (Microphone)
+                   </label>
+                   <select 
+                    value={configSettings.audio.inputDevice}
+                    onChange={(e) => updateConfigSettings('audio', { inputDevice: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                   >
+                     <option>Default Microphone (Built-in)</option>
+                     <option>AirPods Pro</option>
+                     <option>Blue Yeti X</option>
+                   </select>
+                </div>
+
+                {/* Speakers */}
+                <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
+                     <Speaker size={14} /> Output Device (Speakers)
+                   </label>
+                   <select 
+                    value={configSettings.audio.outputDevice}
+                    onChange={(e) => updateConfigSettings('audio', { outputDevice: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                   >
+                     <option>Default Speakers (Built-in)</option>
+                     <option>AirPods Pro</option>
+                     <option>External Headphones</option>
+                   </select>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                   <div>
+                     <h4 className="font-bold text-slate-900 flex items-center gap-2">
+                       <Volume2 size={16} /> Noise Cancellation
+                     </h4>
+                     <p className="text-sm text-slate-500">AI-powered background noise removal.</p>
+                   </div>
+                   <div 
+                      onClick={() => updateConfigSettings('audio', { noiseCancellation: !configSettings.audio.noiseCancellation })}
+                      className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer ${configSettings.audio.noiseCancellation ? 'bg-indigo-500' : 'bg-slate-200'}`}
+                    >
+                      <div className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform ${configSettings.audio.noiseCancellation ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                    </div>
+                </div>
+
+              </div>
+             </div>
+          )}
           
           {/* Fallback for other sections */}
-          {!['integrations', 'profile'].includes(activeSection) && (
+          {!['integrations', 'profile', 'notifications', 'audio'].includes(activeSection) && (
             <div className="flex flex-col items-center justify-center h-96 text-center">
               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
                 <Settings className="text-slate-400" size={32} />
