@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
+import { DebugOverlay } from './components/DebugOverlay';
 import { CommandCenter } from './pages/CommandCenter';
 import { LiveCampaigns } from './pages/LiveCampaigns';
 import { Intelligence } from './pages/Intelligence';
@@ -45,6 +46,7 @@ export default function App() {
           </main>
         </div>
       </div>
+      <DebugOverlay />
     </SalesProvider>
   );
 }
