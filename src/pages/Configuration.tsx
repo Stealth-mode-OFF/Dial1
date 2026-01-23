@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSales } from '../contexts/SalesContext';
 import { 
   User, 
   CreditCard, 
@@ -9,11 +10,28 @@ import {
   Check,
   Globe,
   Mic2,
-  Settings
+  Settings,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 
 export function Configuration({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const [activeSection, setActiveSection] = useState('integrations');
+  const { user, integrations, toggleIntegration, updateUser } = useSales();
+
+  // Local state for form inputs (for UI responsiveness before blur/save)
+  const [formData, setFormData] = useState({
+    firstName: user.name.split(' ')[0],
+    lastName: user.name.split(' ').slice(1).join(' '),
+    email: 'alex.sales@example.com'
+  });
+
+  const handleProfileSave = () => {
+    updateUser({
+      name: `${formData.firstName} ${formData.lastName}`,
+      avatarInitials: `${formData.firstName[0]}${formData.lastName[0]}`.toUpperCase()
+    });
+  };
 
   return (
     <div className="flex h-full bg-[#F8FAFC]">
@@ -69,8 +87,15 @@ export function Configuration({ onNavigate }: { onNavigate?: (tab: string) => vo
                         <p className="text-sm text-slate-500">Sync contacts, deals, and activities.</p>
                       </div>
                     </div>
-                    <button className="px-4 py-2 bg-emerald-50 text-emerald-700 text-sm font-bold rounded-lg border border-emerald-200 flex items-center gap-2">
-                      <Check size={16} /> Connected
+                    <button 
+                      onClick={() => toggleIntegration('pipedrive')}
+                      className={`px-4 py-2 text-sm font-bold rounded-lg border flex items-center gap-2 transition-all ${
+                        integrations.pipedrive 
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {integrations.pipedrive ? <><Check size={16} /> Connected</> : 'Connect'}
                     </button>
                   </div>
 
@@ -83,13 +108,20 @@ export function Configuration({ onNavigate }: { onNavigate?: (tab: string) => vo
                         <p className="text-sm text-slate-500">Capture audio and video for analysis.</p>
                       </div>
                     </div>
-                    <button className="px-4 py-2 bg-emerald-50 text-emerald-700 text-sm font-bold rounded-lg border border-emerald-200 flex items-center gap-2">
-                      <Check size={16} /> Active
+                    <button 
+                      onClick={() => toggleIntegration('googleMeet')}
+                      className={`px-4 py-2 text-sm font-bold rounded-lg border flex items-center gap-2 transition-all ${
+                        integrations.googleMeet 
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {integrations.googleMeet ? <><Check size={16} /> Active</> : 'Enable'}
                     </button>
                   </div>
 
                   {/* Supabase */}
-                  <div className="p-6 flex items-center justify-between bg-slate-50/50">
+                  <div className="p-6 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-white font-bold text-xs">SB</div>
                       <div>
@@ -97,8 +129,8 @@ export function Configuration({ onNavigate }: { onNavigate?: (tab: string) => vo
                         <p className="text-sm text-slate-500">Store call logs and analytics data.</p>
                       </div>
                     </div>
-                     <button className="px-4 py-2 bg-white text-slate-700 text-sm font-bold rounded-lg border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-colors">
-                      Configure
+                     <button className="px-4 py-2 bg-emerald-50 text-emerald-700 text-sm font-bold rounded-lg border border-emerald-200 flex items-center gap-2 cursor-default">
+                      <Check size={16} /> Connected
                     </button>
                   </div>
 
@@ -111,8 +143,15 @@ export function Configuration({ onNavigate }: { onNavigate?: (tab: string) => vo
                         <p className="text-sm text-slate-500">Send call summaries to your team channel.</p>
                       </div>
                     </div>
-                    <button className="px-4 py-2 bg-white text-slate-700 text-sm font-bold rounded-lg border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-colors">
-                      Connect
+                    <button 
+                      onClick={() => toggleIntegration('slack')}
+                      className={`px-4 py-2 text-sm font-bold rounded-lg border flex items-center gap-2 transition-all ${
+                        integrations.slack 
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {integrations.slack ? <><Check size={16} /> Connected</> : 'Connect'}
                     </button>
                   </div>
                 </div>
@@ -130,7 +169,7 @@ export function Configuration({ onNavigate }: { onNavigate?: (tab: string) => vo
               <div className="bg-white border border-slate-200 rounded-2xl p-8 space-y-6">
                 <div className="flex items-center gap-6">
                   <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center text-2xl font-bold text-indigo-600 border-4 border-white shadow-lg">
-                    JD
+                    {user.avatarInitials}
                   </div>
                   <button className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50">
                     Change Avatar
@@ -140,20 +179,38 @@ export function Configuration({ onNavigate }: { onNavigate?: (tab: string) => vo
                 <div className="grid grid-cols-2 gap-6">
                    <div>
                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">First Name</label>
-                     <input type="text" defaultValue="John" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500" />
+                     <input 
+                      type="text" 
+                      value={formData.firstName}
+                      onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500" 
+                     />
                    </div>
                    <div>
                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Last Name</label>
-                     <input type="text" defaultValue="Doe" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500" />
+                     <input 
+                      type="text" 
+                      value={formData.lastName}
+                      onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500" 
+                     />
                    </div>
                    <div className="col-span-2">
                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Email Address</label>
-                     <input type="email" defaultValue="john.doe@company.com" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500" />
+                     <input 
+                      type="email" 
+                      value={formData.email}
+                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500" 
+                     />
                    </div>
                 </div>
                 
                 <div className="pt-4 border-t border-slate-100 flex justify-end">
-                   <button className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors">
+                   <button 
+                    onClick={handleProfileSave}
+                    className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors"
+                   >
                      Save Changes
                    </button>
                 </div>

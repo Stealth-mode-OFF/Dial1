@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaigns' | 'intelligence' | 'configuration') => void }) {
-  const { stats } = useSales();
+  const { stats, integrations } = useSales();
   
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -21,22 +21,22 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
             <span className="text-xs font-bold text-slate-500 uppercase">
               Supabase
             </span>
-            <div className="w-2 h-2 rounded-full bg-amber-400"></div>
+            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
           </div>
           <span className="text-xs text-slate-500 font-medium">
-            Check VITE_SUPABASE_* and redeploy
+            Database Sync Active
           </span>
         </div>
 
-        <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-3 flex items-center justify-between">
+        <div className={`border rounded-lg px-4 py-3 flex items-center justify-between transition-colors ${integrations.pipedrive ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-emerald-700 uppercase">
+            <span className={`text-xs font-bold uppercase ${integrations.pipedrive ? 'text-emerald-700' : 'text-slate-500'}`}>
               Pipedrive
             </span>
-            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+            <div className={`w-2 h-2 rounded-full ${integrations.pipedrive ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
           </div>
-          <span className="text-xs text-emerald-700 font-medium">
-            Connected
+          <span className={`text-xs font-medium ${integrations.pipedrive ? 'text-emerald-700' : 'text-slate-500'}`}>
+            {integrations.pipedrive ? 'Connected' : 'Disconnected'}
           </span>
         </div>
       </div>
@@ -65,8 +65,7 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
 
         <div className="flex flex-col items-center justify-center text-center space-y-8 z-10 relative">
           <p className="text-lg md:text-xl font-medium max-w-2xl leading-relaxed opacity-90">
-            Identifikováno pro okamžitý kontakt s
-            pravděpodobností úspěchu {">"} 85%.
+            Identified for immediate contact with probability of success {">"} 85%.
           </p>
 
           <button 

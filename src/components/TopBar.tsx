@@ -1,7 +1,10 @@
 import React from 'react';
+import { useSales } from '../contexts/SalesContext';
 import { Search, Bell, Command, Bot } from 'lucide-react';
 
 export function TopBar({ onNavigate }: { onNavigate?: (tab: 'configuration') => void }) {
+  const { user } = useSales();
+
   return (
     <div className="h-16 border-b border-slate-200 bg-white px-6 flex items-center justify-between sticky top-0 z-10">
       <div className="flex items-center gap-4 flex-1">
@@ -36,7 +39,7 @@ export function TopBar({ onNavigate }: { onNavigate?: (tab: 'configuration') => 
           onClick={() => onNavigate?.('configuration')}
           className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold border border-slate-200 hover:bg-slate-200 transition-colors"
         >
-           J
+           {user.avatarInitials}
         </button>
       </div>
     </div>

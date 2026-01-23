@@ -20,7 +20,7 @@ import {
 
 export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-center') => void }) {
   const [activeTab, setActiveTab] = useState<'script' | 'objections' | 'notes'>('script');
-  const { stats, currentLead, incrementCalls, recordConnection, bookMeeting, nextLead } = useSales();
+  const { stats, currentLead, incrementCalls, recordConnection, recordObjection, bookMeeting, nextLead } = useSales();
 
   const handleBookMeeting = () => {
     bookMeeting();
@@ -35,6 +35,11 @@ export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-cent
       incrementCalls();
       if (type === 'refused') recordConnection(false);
       nextLead();
+  };
+
+  const handleObjectionClick = (objection: string) => {
+    recordObjection(objection);
+    // Maybe show a toast or visual feedback here in a real app
   };
 
   return (
@@ -121,7 +126,7 @@ export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-cent
               <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-800">Why calling now?</h3>
             </div>
             <p className="text-sm text-indigo-900 font-medium leading-relaxed">
-              Společnost TechCorp včera oznámila expanzi do regionu CEE. John pravděpodobně hledá nástroje pro škálování týmu.
+              Společnost {currentLead.company} včera oznámila expanzi do regionu CEE. {currentLead.name.split(' ')[0]} pravděpodobně hledá nástroje pro škálování týmu.
             </p>
           </div>
 
@@ -200,9 +205,14 @@ export function LiveCampaigns({ onNavigate }: { onNavigate?: (tab: 'command-cent
             {activeTab === 'objections' && (
               <div className="grid grid-cols-2 gap-4">
                  {['Too expensive', 'Send me an email', 'Not interested', 'Using competitor'].map((obj) => (
-                   <button key={obj} className="p-4 bg-white border border-slate-200 rounded-xl text-left hover:border-orange-300 hover:shadow-md transition-all group">
+                   <button 
+                    key={obj} 
+                    onClick={() => handleObjectionClick(obj)}
+                    className="p-4 bg-white border border-slate-200 rounded-xl text-left hover:border-orange-300 hover:shadow-md transition-all group focus:ring-2 focus:ring-orange-500/20"
+                   >
                      <div className="text-xs font-bold text-slate-400 uppercase mb-2 group-hover:text-orange-500">Objection</div>
                      <div className="font-bold text-slate-800">{obj}</div>
+                     <div className="mt-2 text-xs text-slate-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity">Click to log & view counter</div>
                    </button>
                  ))}
               </div>
