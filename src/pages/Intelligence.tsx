@@ -69,7 +69,7 @@ export function Intelligence() {
            { label: 'Total Calls', value: stats.callsToday, change: '+12%', color: 'bg-white', text: 'text-black' },
            { label: 'Connect Rate', value: '18%', change: '-2%', color: 'bg-white', text: 'text-black' },
            { label: 'Meetings Booked', value: stats.meetingsBooked, change: '+5%', color: 'bg-yellow-300', text: 'text-black' },
-           { label: 'Pipeline Added', value: `€${stats.pipelineValue}`, change: '+24%', color: 'bg-black', text: 'text-white' }
+           { label: 'Pipeline Added', value: `€${stats.pipelineValue.toLocaleString()}`, change: '+24%', color: 'bg-black', text: 'text-white' }
          ].map((kpi, i) => (
            <div key={i} className={`${kpi.color} border-2 border-black p-4 shadow-[4px_4px_0px_0px_black] group hover:translate-y-[-2px] hover:translate-x-[-2px] hover:shadow-[6px_6px_0px_0px_black] transition-all`}>
               <div className={`text-xs font-mono font-bold uppercase mb-2 ${kpi.text === 'text-white' ? 'text-slate-400' : 'text-slate-500'}`}>{kpi.label}</div>
