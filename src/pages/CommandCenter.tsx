@@ -9,7 +9,10 @@ import {
   Battery,
   Target,
   Flame,
-  X
+  X,
+  Sticker,
+  Coffee,
+  Crown
 } from "lucide-react";
 
 export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaigns' | 'intelligence' | 'configuration') => void }) {
@@ -18,178 +21,181 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
   const [isAdjustingFocus, setIsAdjustingFocus] = useState(false);
 
   const focusConfig = {
-    volume: { label: 'High Volume', color: 'from-blue-500 to-indigo-600', icon: Zap, desc: 'Maximum calls per hour.' },
-    quality: { label: 'High Quality', color: 'from-[#6366F1] to-[#8B5CF6]', icon: Target, desc: 'Identified for immediate contact with probability > 85%.' },
-    closing: { label: 'Closing Mode', color: 'from-emerald-500 to-teal-600', icon: Flame, desc: 'Focus on bottom-of-funnel deals.' }
+    volume: { 
+        label: 'High Volume', 
+        bg: 'bg-blue-400', 
+        border: 'border-blue-500', 
+        icon: Zap, 
+        desc: 'Maximum calls per hour. Speed run mode.' 
+    },
+    quality: { 
+        label: 'High Quality', 
+        bg: 'bg-purple-400', 
+        border: 'border-purple-500', 
+        icon: Crown, 
+        desc: 'Identified for immediate contact (Prob > 85%).' 
+    },
+    closing: { 
+        label: 'Closing Mode', 
+        bg: 'bg-emerald-400', 
+        border: 'border-emerald-500', 
+        icon: Flame, 
+        desc: 'Bottom-of-funnel only. Glengarry Glen Ross style.' 
+    }
   };
   
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 relative">
+    <div className="p-2 space-y-6 relative">
       
-      {/* Focus Adjust Overlay */}
+      {/* Focus Adjust Overlay - Looks like a sticky note */}
       {isAdjustingFocus && (
-        <div className="absolute top-20 right-6 z-20 bg-white shadow-xl rounded-2xl p-4 border border-slate-200 w-72 animate-in fade-in slide-in-from-top-4 duration-200">
-           <div className="flex justify-between items-center mb-4">
-             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Select Focus</h3>
-             <button onClick={() => setIsAdjustingFocus(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+        <div className="absolute top-16 right-0 z-30 bg-yellow-100 border-2 border-black neobrutal-shadow p-4 w-72 rotate-1 animate-in fade-in slide-in-from-top-4 duration-200">
+           <div className="flex justify-between items-center mb-4 border-b-2 border-black pb-2">
+             <h3 className="text-sm font-black text-black uppercase tracking-wide font-mono">SELECT_MODE</h3>
+             <button onClick={() => setIsAdjustingFocus(false)} className="text-black hover:rotate-90 transition-transform"><X size={20} strokeWidth={3} /></button>
            </div>
-           <div className="space-y-2">
+           <div className="space-y-3">
              {(['volume', 'quality', 'closing'] as const).map((mode) => (
                <button
                  key={mode}
                  onClick={() => { setFocusMode(mode); setIsAdjustingFocus(false); }}
-                 className={`w-full text-left p-3 rounded-xl border-2 transition-all ${focusMode === mode ? 'border-indigo-500 bg-indigo-50' : 'border-transparent hover:bg-slate-50'}`}
+                 className={`w-full text-left p-3 border-2 border-black transition-all hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_black] ${focusMode === mode ? 'bg-black text-white' : 'bg-white text-black'}`}
                >
-                 <div className="font-bold text-slate-900 text-sm">{focusConfig[mode].label}</div>
-                 <div className="text-xs text-slate-500 leading-tight mt-0.5">{focusConfig[mode].desc}</div>
+                 <div className="font-bold text-sm uppercase font-mono">{focusConfig[mode].label}</div>
+                 <div className={`text-xs mt-1 ${focusMode === mode ? 'text-slate-300' : 'text-slate-500'}`}>{focusConfig[mode].desc}</div>
                </button>
              ))}
            </div>
         </div>
       )}
 
-      {/* Status Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-500 uppercase">
-              Supabase
-            </span>
-            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-          </div>
-          <span className="text-xs text-slate-500 font-medium">
-            Database Sync Active
-          </span>
-        </div>
+      {/* Main Grid Layout */}
+      <div className="grid grid-cols-12 gap-6">
 
-        <div className={`border rounded-lg px-4 py-3 flex items-center justify-between transition-colors ${integrations.pipedrive ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
-          <div className="flex items-center gap-2">
-            <span className={`text-xs font-bold uppercase ${integrations.pipedrive ? 'text-emerald-700' : 'text-slate-500'}`}>
-              Pipedrive
-            </span>
-            <div className={`w-2 h-2 rounded-full ${integrations.pipedrive ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
-          </div>
-          <span className={`text-xs font-medium ${integrations.pipedrive ? 'text-emerald-700' : 'text-slate-500'}`}>
-            {integrations.pipedrive ? 'Connected' : 'Disconnected'}
-          </span>
-        </div>
-      </div>
-
-      {/* Header */}
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-            Today's Focus
-          </h2>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-            AI Priority Queue
-          </h1>
-        </div>
-        <button 
-          onClick={() => setIsAdjustingFocus(!isAdjustingFocus)}
-          className={`flex items-center gap-2 px-4 py-2 border rounded-full text-sm font-medium transition-colors ${isAdjustingFocus ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-        >
-          <Activity size={16} />
-          {isAdjustingFocus ? 'Select Mode' : 'Adjust Focus'}
-        </button>
-      </div>
-
-      {/* Priority Queue Card */}
-      <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${focusConfig[focusMode].color} text-white p-8 md:p-12 shadow-xl shadow-indigo-500/20 group transition-all duration-500`}>
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/20 backdrop-blur-md px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-white/10">
-          {focusConfig[focusMode].label}
-        </div>
-
-        <div className="flex flex-col items-center justify-center text-center space-y-8 z-10 relative">
-          <p className="text-lg md:text-xl font-medium max-w-2xl leading-relaxed opacity-90">
-            {focusConfig[focusMode].desc}
-          </p>
-
-          <button 
-            onClick={() => onNavigate?.('live-campaigns')}
-            className="bg-white text-slate-900 px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-3 shadow-lg hover:scale-105 hover:shadow-xl transition-all duration-200 group-hover:ring-4 ring-white/20"
-          >
-            {React.createElement(focusConfig[focusMode].icon, { className: "fill-slate-900", size: 20 })}
-            Start Power Dialer
-            <ArrowRight size={20} />
-          </button>
-
-          <div className="flex items-center gap-2 text-xs font-medium opacity-75 bg-black/10 px-3 py-1.5 rounded-lg">
-            <Battery size={12} />
-            High energy mode active
-          </div>
-        </div>
-
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 p-4">
-          <button 
-            onClick={() => onNavigate?.('configuration')}
-            className="p-2 bg-black/20 rounded-full hover:bg-black/30 transition-colors text-white/80"
-          >
-            <Settings2 size={16} />
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { label: "Calls Today", value: stats.callsToday.toString(), sub: null },
-          {
-            label: "Pipeline",
-            value: `€${stats.pipelineValue.toLocaleString()}`,
-            sub: null,
-            valueColor: "text-emerald-500",
-          },
-          { label: "Connect Rate", value: `${Math.round((stats.connected / (stats.callsToday || 1)) * 100)}%`, sub: null },
-        ].map((stat, i) => (
-          <div
-            key={i}
-            className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-300 transition-colors"
-          >
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-              {stat.label}
-            </span>
-            <span
-              className={`text-4xl font-bold ${stat.valueColor || "text-slate-900"}`}
-            >
-              {stat.value}
-            </span>
-          </div>
-        ))}
-
-        <div 
-          onClick={() => onNavigate?.('live-campaigns')}
-          className="bg-[#0F172A] rounded-2xl p-6 flex flex-col justify-between group cursor-pointer hover:bg-[#1E293B] transition-colors relative overflow-hidden"
-        >
-          <div className="z-10">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
-              Quick Action
-            </span>
-            <div className="flex items-center gap-2 text-white text-xl font-bold mt-2">
-              Open Dialer
-              <ArrowRight
-                size={18}
-                className="group-hover:translate-x-1 transition-transform"
-              />
+        {/* LEFT COLUMN: The "Notebook" List (Replacing huge card) */}
+        <div className="col-span-12 lg:col-span-8 space-y-6">
+            
+            {/* Header Area */}
+            <div className="flex justify-between items-end bg-white border-2 border-black p-4 neobrutal-shadow relative overflow-hidden">
+                <div className="bg-grid-pattern absolute inset-0 opacity-50 pointer-events-none"></div>
+                <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="bg-black text-white px-2 py-0.5 text-xs font-mono font-bold uppercase">Today's Mission</span>
+                        <span className="bg-yellow-300 text-black px-2 py-0.5 text-xs font-mono font-bold uppercase border-2 border-black transform -rotate-2">
+                            {new Date().toLocaleDateString()}
+                        </span>
+                    </div>
+                    <h1 className="text-4xl md:text-5xl font-black text-black tracking-tighter leading-none">
+                        PRIORITY QUEUE
+                    </h1>
+                </div>
+                <button 
+                    onClick={() => setIsAdjustingFocus(!isAdjustingFocus)}
+                    className="relative z-10 bg-white border-2 border-black px-4 py-2 font-bold text-sm hover:bg-slate-100 flex items-center gap-2 shadow-[2px_2px_0px_0px_black] active:translate-y-[2px] active:shadow-none"
+                >
+                    <Settings2 size={16} />
+                    ADJUST FOCUS
+                </button>
             </div>
-          </div>
-          <Phone
-            className="absolute -bottom-4 -right-4 text-slate-800 opacity-50"
-            size={80}
-          />
-        </div>
-      </div>
 
-      {/* Bottom section */}
-      <div className="pt-8 text-center">
-        <button 
-          onClick={() => onNavigate?.('intelligence')}
-          className="text-sm font-medium text-slate-500 hover:text-slate-700 flex items-center justify-center gap-2 mx-auto"
-        >
-          View activity feed & insights
-          <ArrowRight size={14} className="rotate-90" />
-        </button>
+            {/* The "Main Task" Card - Looks like a key card */}
+            <div className={`relative border-2 border-black p-8 neobrutal-shadow flex flex-col md:flex-row items-center justify-between gap-8 overflow-hidden group ${focusConfig[focusMode].bg}`}>
+                {/* Decorative background texture */}
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-20 pointer-events-none"></div>
+                
+                <div className="relative z-10 flex-1">
+                    <div className="inline-block bg-white border-2 border-black px-3 py-1 text-xs font-black uppercase mb-4 shadow-[2px_2px_0px_0px_black] rotate-1">
+                        Current Mode: {focusConfig[focusMode].label}
+                    </div>
+                    <p className="text-xl md:text-2xl font-bold text-black border-l-4 border-black pl-4 leading-tight">
+                        {focusConfig[focusMode].desc}
+                    </p>
+                    <div className="mt-4 flex items-center gap-2 font-mono text-sm font-bold text-black/80">
+                        <Battery size={16} fill="black" />
+                        <span>ENERGY LEVEL: OPTIMAL</span>
+                    </div>
+                </div>
+
+                <div className="relative z-10">
+                    <button 
+                        onClick={() => onNavigate?.('live-campaigns')}
+                        className="bg-white text-black border-2 border-black px-8 py-4 text-xl font-black flex items-center gap-3 shadow-[8px_8px_0px_0px_black] hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[12px_12px_0px_0px_black] transition-all active:translate-x-0 active:translate-y-0 active:shadow-[4px_4px_0px_0px_black]"
+                    >
+                        START DIALING
+                        <ArrowRight size={24} strokeWidth={3} />
+                    </button>
+                </div>
+                
+                {/* Sticker Decor */}
+                <div className="absolute top-4 right-4 opacity-20 group-hover:opacity-100 transition-opacity">
+                    <Sticker size={64} className="text-black rotate-12" />
+                </div>
+            </div>
+
+            {/* Integration Status Strips */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white border-2 border-black p-3 flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
+                    <span className="font-mono text-xs font-bold uppercase">Database Sync</span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold">ONLINE</span>
+                        <div className="w-3 h-3 bg-green-400 border-2 border-black rounded-full animate-pulse"></div>
+                    </div>
+                </div>
+                <div className={`border-2 border-black p-3 flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] ${integrations.pipedrive ? 'bg-white' : 'bg-slate-100'}`}>
+                    <span className="font-mono text-xs font-bold uppercase">CRM Connection</span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold">{integrations.pipedrive ? 'CONNECTED' : 'OFFLINE'}</span>
+                        <div className={`w-3 h-3 border-2 border-black rounded-full ${integrations.pipedrive ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* RIGHT COLUMN: Stats as "Stickies" */}
+        <div className="col-span-12 lg:col-span-4 space-y-6">
+            
+            {/* Main Stats Card */}
+            <div className="bg-white border-2 border-black p-6 neobrutal-shadow relative">
+                <div className="absolute -top-3 -right-3 bg-yellow-400 border-2 border-black px-2 py-1 rotate-3 shadow-sm z-10">
+                    <span className="text-xs font-black uppercase">LIVE STATS</span>
+                </div>
+
+                <div className="space-y-6 divide-y-2 divide-dashed divide-slate-300">
+                    <div className="pt-2">
+                        <div className="text-xs font-mono font-bold text-slate-500 mb-1">CALLS_TODAY</div>
+                        <div className="text-5xl font-black text-black tracking-tighter">{stats.callsToday}</div>
+                    </div>
+                    <div className="pt-4">
+                        <div className="text-xs font-mono font-bold text-slate-500 mb-1">PIPELINE_VALUE</div>
+                        <div className="text-3xl font-black text-emerald-600 tracking-tighter">€{stats.pipelineValue.toLocaleString()}</div>
+                    </div>
+                    <div className="pt-4">
+                        <div className="text-xs font-mono font-bold text-slate-500 mb-1">CONNECT_RATE</div>
+                        <div className="text-3xl font-black text-black tracking-tighter">{Math.round((stats.connected / (stats.callsToday || 1)) * 100)}%</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Quick Link - Sticker Style */}
+            <button 
+                onClick={() => onNavigate?.('intelligence')}
+                className="w-full bg-pink-400 border-2 border-black p-4 neobrutal-shadow flex items-center justify-between group hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
+            >
+                <div className="text-left">
+                    <div className="font-black text-lg text-black uppercase leading-none">View Reports</div>
+                    <div className="font-mono text-xs font-bold text-black/70">DEEP_DIVE_ANALYSIS.EXE</div>
+                </div>
+                <Activity className="text-black group-hover:rotate-12 transition-transform" size={24} strokeWidth={3} />
+            </button>
+            
+             <div className="text-center">
+                <div className="inline-flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full border border-slate-300">
+                    <Coffee size={12} />
+                    <span>Take a break in 45m</span>
+                </div>
+             </div>
+
+        </div>
       </div>
     </div>
   );

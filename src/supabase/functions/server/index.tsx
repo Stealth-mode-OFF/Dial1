@@ -46,46 +46,114 @@ async function set(key: string, value: any) {
   }
 }
 
-// Default stats
-const defaultStats = {
-  callsToday: 42,
-  callsGoal: 60,
-  connected: 8,
-  meetingsBooked: 2,
-  pipelineValue: 12450,
-  streak: 8,
+// Defaults
+const defaults = {
+  stats: {
+    callsToday: 42,
+    callsGoal: 60,
+    connected: 8,
+    meetingsBooked: 2,
+    pipelineValue: 12450,
+    streak: 8,
+  },
+  user: {
+    name: 'Alex Salesman',
+    role: 'Senior AE',
+    avatarInitials: 'AS',
+    status: 'online',
+    energyLevel: 85,
+  },
+  integrations: {
+    pipedrive: true,
+    googleMeet: true,
+    slack: false,
+  },
+  coachSettings: {
+    activePersona: 'challenger',
+    interventions: {
+      speedAlert: true,
+      monologueBreaker: true,
+      fillerWordKiller: false,
+      sentimentTracker: true
+    }
+  },
+  configSettings: {
+    notifications: {
+      emailDigest: true,
+      slackAlerts: false,
+      browserPush: true
+    },
+    audio: {
+      inputDevice: 'Default Microphone',
+      outputDevice: 'Default Speakers',
+      noiseCancellation: true
+    }
+  },
+  objectionCounts: {
+    'Too expensive': 42,
+    'Send me an email': 28,
+    'Not interested': 15,
+    'Using competitor': 12,
+  },
+  recentActivity: [
+    { id: '1', type: 'meeting', description: 'Demo with Acme Corp', timestamp: '2h ago', score: 92 },
+    { id: '2', type: 'call', description: 'Intro call - Stark Ind', timestamp: '4h ago', score: 64 },
+    { id: '3', type: 'call', description: 'Follow-up / Wayne Ent', timestamp: 'Yesterday', score: 85 },
+  ]
 };
 
-// Explicitly define routes with the full prefix to avoid basePath confusion
 const PREFIX = '/make-server-139017f8';
 
-app.get(`${PREFIX}/stats`, async (c) => {
-  try {
-    const stored = await get('stats');
-    if (!stored) {
-      try {
-        await set('stats', defaultStats);
-      } catch (e) {
-        console.warn('Could not initialize stats, using defaults');
+// Generic handler factory to reduce boilerplate
+const createHandler = (key: keyof typeof defaults) => {
+  // GET handler
+  app.get(`${PREFIX}/${key.toLowerCase()}`, async (c) => {
+    try {
+      const stored = await get(key);
+      if (!stored) {
+        // Initialize if not exists
+        try {
+          await set(key, defaults[key]);
+        } catch (e) {
+          console.warn(`Could not initialize ${key}, using defaults`);
+        }
+        return c.json(defaults[key]);
       }
-      return c.json(defaultStats);
+      return c.json(stored);
+    } catch (error) {
+      console.error(`Error fetching ${key}:`, error);
+      return c.json(defaults[key]);
     }
-    return c.json(stored);
-  } catch (error) {
-    console.error('Error fetching stats:', error);
-    return c.json(defaultStats);
-  }
-})
+  });
 
-app.post(`${PREFIX}/stats`, async (c) => {
+  // POST handler
+  app.post(`${PREFIX}/${key.toLowerCase()}`, async (c) => {
+    try {
+      const body = await c.req.json();
+      await set(key, body);
+      return c.json({ success: true, [key]: body });
+    } catch (error) {
+      console.error(`Error saving ${key}:`, error);
+      return c.json({ error: `Failed to save ${key}` }, 500);
+    }
+  });
+};
+
+// Register routes
+(Object.keys(defaults) as Array<keyof typeof defaults>).forEach(key => {
+  createHandler(key);
+});
+
+// Special handler for "reset" (useful for debugging/demos)
+app.post(`${PREFIX}/reset`, async (c) => {
   try {
-    const body = await c.req.json();
-    await set('stats', body);
-    return c.json({ success: true, stats: body });
+    for (const key of Object.keys(defaults)) {
+       await set(key, defaults[key as keyof typeof defaults]);
+    }
+    return c.json({ success: true, message: 'All data reset to defaults' });
   } catch (error) {
-    console.error('Error saving stats:', error);
-    return c.json({ error: 'Failed to save stats' }, 500);
+    return c.json({ error: 'Failed to reset' }, 500);
   }
-})
+});
 
 Deno.serve(app.fetch)

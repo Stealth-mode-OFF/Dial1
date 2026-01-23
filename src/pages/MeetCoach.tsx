@@ -1,203 +1,122 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Mic2, Play, Rewind, FastForward, MessageSquare, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
-import { 
-  Mic, 
-  Play, 
-  Settings, 
-  Award, 
-  BarChart, 
-  Volume2, 
-  Zap,
-  CheckCircle2,
-  AlertCircle
-} from 'lucide-react';
 
-export function MeetCoach({ onNavigate }: { onNavigate?: (tab: string) => void }) {
-  const { coachSettings, updateCoachSettings, recentActivity } = useSales();
-  const [isTestingVoice, setIsTestingVoice] = useState(false);
-
-  const toggleIntervention = (key: keyof typeof coachSettings.interventions) => {
-    updateCoachSettings({
-      interventions: {
-        ...coachSettings.interventions,
-        [key]: !coachSettings.interventions[key]
-      }
-    });
-  };
-
-  const handleTestVoice = () => {
-    setIsTestingVoice(true);
-    setTimeout(() => setIsTestingVoice(false), 2000);
-  };
-
-  // Calculate scores from recent calls
-  const recentCallScores = recentActivity
-    .filter(a => a.type === 'call' || a.type === 'meeting')
-    .map(a => a.score || 0);
-  
-  const avgScore = recentCallScores.length > 0 
-    ? Math.round(recentCallScores.reduce((a, b) => a + b, 0) / recentCallScores.length)
-    : 0;
+export function MeetCoach() {
+  const { user } = useSales();
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Meet Coach</h1>
-          <p className="text-slate-500 font-medium mt-1">Configure your real-time AI sales companion</p>
-        </div>
-        <button 
-          onClick={handleTestVoice}
-          disabled={isTestingVoice}
-          className={`font-bold py-2 px-6 rounded-xl shadow-lg transition-all flex items-center gap-2 ${
-            isTestingVoice 
-              ? 'bg-emerald-500 text-white shadow-emerald-200' 
-              : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
-          }`}
-        >
-          {isTestingVoice ? <Volume2 size={18} className="animate-pulse" /> : <Play size={18} fill="currentColor" />}
-          {isTestingVoice ? 'Listening...' : 'Test Voice'}
-        </button>
+    <div className="p-4 h-full flex flex-col gap-6 font-sans text-slate-900 bg-grid-pattern">
+      
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-end bg-white border-2 border-black p-4 neobrutal-shadow">
+         <div>
+            <div className="bg-emerald-600 text-white text-xs font-mono font-bold uppercase px-2 py-0.5 inline-block mb-1 border-2 border-black">AI Trainer Active</div>
+            <h1 className="text-4xl font-black text-black uppercase tracking-tighter leading-none">Drill Sergeant</h1>
+         </div>
+         <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+               <div className="text-xs font-bold uppercase text-slate-500">Current Level</div>
+               <div className="text-2xl font-black font-mono">SENIOR AE</div>
+            </div>
+            <div className="w-16 h-16 bg-black text-yellow-400 flex items-center justify-center font-black text-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]">
+               42
+            </div>
+         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Column: Persona Selection */}
-        <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <Zap size={20} className="text-yellow-500 fill-yellow-500" />
-              Select Coaching Persona
-            </h2>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+         
+         {/* Main Training Area */}
+         <div className="lg:col-span-8 flex flex-col gap-6">
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { 
-                  id: 'challenger', 
-                  name: 'The Challenger', 
-                  desc: 'Pushes you to control the frame. Focuses on tension and authority.',
-                  color: 'indigo' 
-                },
-                { 
-                  id: 'empath', 
-                  name: 'The Empath', 
-                  desc: 'Focuses on deep listening and mirroring. Great for complex discovery.',
-                  color: 'emerald' 
-                },
-                { 
-                  id: 'wolf', 
-                  name: 'Wolf Mode', 
-                  desc: 'High energy closing. Short, punchy sentences. Maximum urgency.',
-                  color: 'slate' 
-                },
-                { 
-                  id: 'custom', 
-                  name: 'Custom Profile', 
-                  desc: 'Train your own model based on your top 10% performers.',
-                  color: 'purple' 
-                }
-              ].map((persona) => (
-                <div 
-                  key={persona.id}
-                  onClick={() => updateCoachSettings({ activePersona: persona.id })}
-                  className={`cursor-pointer rounded-xl p-5 border-2 transition-all relative ${
-                    coachSettings.activePersona === persona.id 
-                      ? `border-${persona.color}-500 bg-${persona.color}-50` 
-                      : 'border-slate-100 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  {coachSettings.activePersona === persona.id && (
-                    <div className={`absolute top-3 right-3 text-${persona.color}-600`}>
-                      <CheckCircle2 size={20} fill="currentColor" className="text-white" />
-                    </div>
-                  )}
-                  <div className={`w-10 h-10 rounded-lg bg-${persona.color}-100 flex items-center justify-center mb-3`}>
-                    <Mic size={20} className={`text-${persona.color}-600`} />
+            {/* Active Session Card */}
+            <div className="bg-white border-2 border-black p-8 shadow-[8px_8px_0px_0px_black] flex-1 flex flex-col justify-between relative">
+               <div className="flex justify-between items-start">
+                  <div className="bg-red-100 text-red-600 border-2 border-red-500 px-3 py-1 text-xs font-black uppercase flex items-center gap-2 animate-pulse shadow-[2px_2px_0px_0px_red]">
+                     <div className="w-2 h-2 bg-red-600 rounded-full border border-red-600"></div> Recording
                   </div>
-                  <h3 className="font-bold text-slate-900 mb-1">{persona.name}</h3>
-                  <p className="text-sm text-slate-500 leading-snug">{persona.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+                  <div className="text-4xl font-mono font-black text-slate-200">00:14:23</div>
+               </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <Settings size={20} className="text-slate-400" />
-              Intervention Settings
-            </h2>
-            
-            <div className="space-y-6">
-              {[
-                { id: 'speedAlert', label: 'Speed Alert', desc: 'Warn me if I speak faster than 160 wpm' },
-                { id: 'monologueBreaker', label: 'Monologue Breaker', desc: 'Nudge me if I talk for > 45 seconds' },
-                { id: 'fillerWordKiller', label: 'Filler Word Killer', desc: 'Track "um", "uh", "like" in real-time' },
-                { id: 'sentimentTracker', label: 'Sentiment Tracker', desc: 'Alert if prospect sentiment drops below neutral' },
-              ].map((setting, i) => {
-                 const isActive = coachSettings.interventions[setting.id as keyof typeof coachSettings.interventions];
-                 return (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors">
-                    <div>
-                      <div className="font-bold text-slate-900">{setting.label}</div>
-                      <div className="text-sm text-slate-500">{setting.desc}</div>
-                    </div>
-                    <div 
-                      onClick={() => toggleIntervention(setting.id as any)}
-                      className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer ${isActive ? 'bg-indigo-500' : 'bg-slate-200'}`}
-                    >
-                      <div className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform ${isActive ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                    </div>
+               <div className="flex-1 flex items-center justify-center py-12">
+                  <div className="relative">
+                     <div className="w-48 h-48 rounded-full border-4 border-black bg-slate-50 flex items-center justify-center relative shadow-[4px_4px_0px_0px_black]">
+                        <Mic2 size={64} className="text-slate-400" />
+                        <div className="absolute inset-0 border-4 border-emerald-500 rounded-full border-t-transparent animate-spin-slow"></div>
+                     </div>
+                     <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-2 font-bold font-mono text-sm border-2 border-emerald-500 whitespace-nowrap shadow-[4px_4px_0px_0px_emerald]">
+                        LISTENING...
+                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+               </div>
 
-        {/* Right Column: Recent Reviews */}
-        <div className="space-y-6">
-          <div className="bg-slate-900 text-white rounded-2xl p-6 relative overflow-hidden">
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 text-indigo-300 font-bold uppercase text-xs tracking-wider mb-2">
-                <Award size={14} /> Weekly Score
-              </div>
-              <div className="text-4xl font-extrabold mb-1">{avgScore}/100</div>
-              <p className="text-slate-400 text-sm">Based on your recent calls.</p>
+               <div className="border-t-4 border-dashed border-slate-200 pt-6">
+                  <h3 className="text-xs font-black uppercase text-slate-400 mb-4 bg-slate-100 inline-block px-2">Live Feedback Stream</h3>
+                  <div className="space-y-3">
+                     <div className="flex gap-4 items-start border-l-4 border-green-500 pl-4 py-1">
+                        <div className="bg-green-100 text-green-700 p-1 border-2 border-green-500 rounded-full">
+                           <CheckCircle2 size={16} />
+                        </div>
+                        <div>
+                           <div className="text-sm font-bold">Excellent tone modulation</div>
+                           <div className="text-xs text-slate-500 font-mono">00:12:05</div>
+                        </div>
+                     </div>
+                     <div className="flex gap-4 items-start border-l-4 border-yellow-500 pl-4 py-1">
+                         <div className="bg-yellow-100 text-yellow-700 p-1 border-2 border-yellow-500 rounded-full">
+                           <AlertTriangle size={16} />
+                        </div>
+                        <div>
+                           <div className="text-sm font-bold">Missed opportunity to qualify budget</div>
+                           <div className="text-xs text-slate-500 font-mono">00:13:42</div>
+                        </div>
+                     </div>
+                  </div>
+               </div>
             </div>
-            <div className="absolute right-0 bottom-0 opacity-10">
-              <Award size={120} />
-            </div>
-          </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h3 className="font-bold text-slate-900 mb-4">Recent Game Tapes</h3>
-            <div className="space-y-4">
-              {recentActivity.filter(a => a.type !== 'email').slice(0, 3).map((tape, i) => (
-                <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer bg-white">
-                   <div className="flex items-center gap-3">
-                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${tape.score && tape.score > 75 ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                       {tape.score}
-                     </div>
-                     <div>
-                       <div className="font-bold text-slate-900 text-sm">{tape.description}</div>
-                       <div className="text-xs text-slate-400">{tape.timestamp}</div>
-                     </div>
-                   </div>
-                   <Play size={16} className="text-slate-300 hover:text-indigo-600" />
-                </div>
-              ))}
-              {recentActivity.length === 0 && (
-                 <div className="text-center py-8 text-slate-400 text-sm">
-                   <AlertCircle className="mx-auto mb-2 opacity-50" />
-                   No recordings yet
-                 </div>
-              )}
+            {/* Controls */}
+            <div className="grid grid-cols-3 gap-4">
+               <button className="bg-white border-2 border-black p-4 flex items-center justify-center hover:bg-slate-100 shadow-[4px_4px_0px_0px_black] active:translate-y-[2px] active:shadow-none transition-all">
+                  <Rewind size={24} strokeWidth={3} />
+               </button>
+               <button className="bg-red-500 text-white border-2 border-black p-4 flex items-center justify-center hover:bg-red-400 shadow-[4px_4px_0px_0px_black] active:translate-y-[2px] active:shadow-none transition-all group">
+                  <div className="w-5 h-5 bg-white border-2 border-black group-hover:scale-90 transition-transform"></div>
+               </button>
+               <button className="bg-white border-2 border-black p-4 flex items-center justify-center hover:bg-slate-100 shadow-[4px_4px_0px_0px_black] active:translate-y-[2px] active:shadow-none transition-all">
+                  <FastForward size={24} strokeWidth={3} />
+               </button>
             </div>
-            <button className="w-full mt-4 py-3 text-sm font-bold text-indigo-600 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition-colors">
-              View All Recordings
-            </button>
-          </div>
-        </div>
+         </div>
+
+         {/* Sidebar - Scenarios */}
+         <div className="lg:col-span-4 space-y-6">
+            <div className="bg-yellow-300 border-2 border-black p-6 shadow-[4px_4px_0px_0px_black]">
+               <h3 className="font-black text-xl uppercase mb-4 flex items-center gap-2 border-b-2 border-black pb-2">
+                  <MessageSquare size={24} /> Scenarios
+               </h3>
+               <div className="space-y-3">
+                  {['Cold Call: Gatekeeper', 'Discovery: Enterprise', 'Closing: Price Objection', 'Follow-up: Ghosting'].map((scenario, i) => (
+                     <button key={i} className="w-full text-left bg-white border-2 border-black p-3 font-bold text-sm hover:translate-x-[2px] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_black] transition-all flex justify-between items-center group active:translate-x-0 active:translate-y-0 active:shadow-none">
+                        {scenario}
+                        <Play size={16} className="opacity-0 group-hover:opacity-100 transition-opacity fill-black" />
+                     </button>
+                  ))}
+               </div>
+            </div>
+
+            <div className="bg-slate-800 text-white border-2 border-black p-6 relative overflow-hidden shadow-[4px_4px_0px_0px_black]">
+               <div className="relative z-10">
+                  <h3 className="font-black text-lg uppercase mb-2 text-emerald-400">Daily Challenge</h3>
+                  <p className="font-mono text-sm mb-4 text-slate-300 border-l-2 border-emerald-500 pl-2">"Handle 3 objections in a row without saying 'I understand'."</p>
+                  <div className="w-full bg-black border border-slate-600 h-4 mb-2 relative">
+                     <div className="bg-emerald-500 h-full w-2/3 border-r border-black"></div>
+                  </div>
+                  <div className="text-right text-xs font-mono font-bold text-emerald-400">2/3 COMPLETED</div>
+               </div>
+            </div>
+         </div>
 
       </div>
     </div>

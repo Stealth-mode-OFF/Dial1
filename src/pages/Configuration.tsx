@@ -1,330 +1,134 @@
 import React, { useState } from 'react';
+import { Save, LogOut, Bell, Shield, Database, Smartphone, Globe, User } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
-import { 
-  User, 
-  CreditCard, 
-  Bell, 
-  Database, 
-  Shield, 
-  Plug, 
-  Check,
-  Globe,
-  Mic2,
-  Settings,
-  ToggleLeft,
-  ToggleRight,
-  Speaker,
-  Mic,
-  Volume2
-} from 'lucide-react';
+import { supabase } from '../utils/supabase/client';
 
-export function Configuration({ onNavigate }: { onNavigate?: (tab: string) => void }) {
-  const [activeSection, setActiveSection] = useState('integrations');
-  const { user, integrations, configSettings, toggleIntegration, updateUser, updateConfigSettings } = useSales();
+export function Configuration() {
+  const { user, integrations } = useSales();
+  const [activeSection, setActiveSection] = useState('profile');
 
-  // Local state for form inputs (for UI responsiveness before blur/save)
-  const [formData, setFormData] = useState({
-    firstName: user.name.split(' ')[0],
-    lastName: user.name.split(' ').slice(1).join(' '),
-    email: 'alex.sales@example.com'
-  });
-
-  const handleProfileSave = () => {
-    updateUser({
-      name: `${formData.firstName} ${formData.lastName}`,
-      avatarInitials: `${formData.firstName[0]}${formData.lastName[0]}`.toUpperCase()
-    });
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    window.location.reload();
   };
 
+  const sections = [
+    { id: 'profile', icon: User, label: 'Identity' },
+    { id: 'integrations', icon: Database, label: 'Data Links' },
+    { id: 'notifications', icon: Bell, label: 'Alerts' },
+    { id: 'security', icon: Shield, label: 'Security' },
+  ];
+
   return (
-    <div className="flex h-full bg-[#F8FAFC]">
-      {/* Settings Sidebar */}
-      <div className="w-64 bg-white border-r border-slate-200 flex-shrink-0">
-        <div className="p-6">
-          <h2 className="text-xl font-extrabold text-slate-900">Settings</h2>
+    <div className="p-4 h-full bg-grid-pattern font-sans flex flex-col md:flex-row gap-6">
+      
+      {/* Sidebar Navigation */}
+      <div className="w-full md:w-64 flex flex-col gap-4">
+        <div className="bg-black text-white p-4 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]">
+           <h2 className="font-black text-2xl uppercase tracking-tighter">System Config</h2>
+           <p className="font-mono text-xs text-slate-400">BUILD 2026.01.23</p>
         </div>
-        <nav className="space-y-1 px-3">
-          {[
-            { id: 'profile', label: 'My Profile', icon: User },
-            { id: 'integrations', label: 'Integrations', icon: Plug },
-            { id: 'notifications', label: 'Notifications', icon: Bell },
-            { id: 'audio', label: 'Audio & Video', icon: Mic2 },
-            { id: 'security', label: 'Security', icon: Shield },
-            { id: 'billing', label: 'Billing', icon: CreditCard },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveSection(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                activeSection === item.id
-                  ? 'bg-indigo-50 text-indigo-700'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              <item.icon size={18} />
-              {item.label}
-            </button>
-          ))}
+
+        <nav className="space-y-2">
+          {sections.map((section) => {
+            const isActive = activeSection === section.id;
+            return (
+              <button
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                className={`w-full text-left p-4 font-bold uppercase border-2 border-black transition-all flex items-center gap-3 shadow-[4px_4px_0px_0px_black] ${isActive ? 'bg-yellow-400 text-black translate-x-[-2px] translate-y-[-2px]' : 'bg-white text-black hover:bg-slate-50 hover:translate-x-[-2px] hover:translate-y-[-2px]'}`}
+              >
+                <section.icon size={20} strokeWidth={3} />
+                {section.label}
+              </button>
+            )
+          })}
         </nav>
+
+        <button 
+           onClick={handleSignOut}
+           className="mt-auto bg-red-600 text-white p-4 font-black uppercase border-2 border-black shadow-[4px_4px_0px_0px_black] hover:bg-red-500 hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_0px_black] transition-all flex items-center justify-center gap-2"
+        >
+           <LogOut size={20} strokeWidth={3} /> Terminate Session
+        </button>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 p-8 overflow-y-auto">
-        <div className="max-w-3xl">
-          
-          {activeSection === 'integrations' && (
-            <div className="space-y-8">
-              <div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Connected Apps</h3>
-                <p className="text-slate-500">Manage your connections to external tools and CRMs.</p>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-                <div className="divide-y divide-slate-100">
-                  {/* Pipedrive */}
-                  <div className="p-6 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center text-white font-bold text-xs">PD</div>
-                      <div>
-                        <h4 className="font-bold text-slate-900">Pipedrive CRM</h4>
-                        <p className="text-sm text-slate-500">Sync contacts, deals, and activities.</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => toggleIntegration('pipedrive')}
-                      className={`px-4 py-2 text-sm font-bold rounded-lg border flex items-center gap-2 transition-all ${
-                        integrations.pipedrive 
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      {integrations.pipedrive ? <><Check size={16} /> Connected</> : 'Connect'}
-                    </button>
-                  </div>
-
-                  {/* Google Meet */}
-                  <div className="p-6 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white font-bold text-xs">GM</div>
-                      <div>
-                        <h4 className="font-bold text-slate-900">Google Meet</h4>
-                        <p className="text-sm text-slate-500">Capture audio and video for analysis.</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => toggleIntegration('googleMeet')}
-                      className={`px-4 py-2 text-sm font-bold rounded-lg border flex items-center gap-2 transition-all ${
-                        integrations.googleMeet 
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      {integrations.googleMeet ? <><Check size={16} /> Active</> : 'Enable'}
-                    </button>
-                  </div>
-
-                  {/* Supabase */}
-                  <div className="p-6 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-white font-bold text-xs">SB</div>
-                      <div>
-                        <h4 className="font-bold text-slate-900">Supabase Database</h4>
-                        <p className="text-sm text-slate-500">Store call logs and analytics data.</p>
-                      </div>
-                    </div>
-                     <button className="px-4 py-2 bg-emerald-50 text-emerald-700 text-sm font-bold rounded-lg border border-emerald-200 flex items-center gap-2 cursor-default">
-                      <Check size={16} /> Connected
-                    </button>
-                  </div>
-
-                   {/* Slack */}
-                   <div className="p-6 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-[#4A154B] rounded-xl flex items-center justify-center text-white font-bold text-xs">SL</div>
-                      <div>
-                        <h4 className="font-bold text-slate-900">Slack</h4>
-                        <p className="text-sm text-slate-500">Send call summaries to your team channel.</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => toggleIntegration('slack')}
-                      className={`px-4 py-2 text-sm font-bold rounded-lg border flex items-center gap-2 transition-all ${
-                        integrations.slack 
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      {integrations.slack ? <><Check size={16} /> Connected</> : 'Connect'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeSection === 'profile' && (
-             <div className="space-y-8">
-               <div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Profile Settings</h3>
-                <p className="text-slate-500">Manage your personal information and preferences.</p>
-              </div>
+      <div className="flex-1 bg-white border-2 border-black p-8 shadow-[8px_8px_0px_0px_black] relative overflow-hidden">
+        
+        {/* Profile Section */}
+        {activeSection === 'profile' && (
+           <div className="space-y-8 relative z-10">
+              <h2 className="text-4xl font-black uppercase border-b-4 border-black pb-4">Operative Identity</h2>
               
-              <div className="bg-white border border-slate-200 rounded-2xl p-8 space-y-6">
-                <div className="flex items-center gap-6">
-                  <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center text-2xl font-bold text-indigo-600 border-4 border-white shadow-lg">
+              <div className="flex flex-col md:flex-row items-start gap-8">
+                 <div className="w-32 h-32 bg-yellow-400 border-2 border-black flex items-center justify-center text-5xl font-black shadow-[4px_4px_0px_0px_black]">
                     {user.avatarInitials}
-                  </div>
-                  <button className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50">
-                    Change Avatar
-                  </button>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-6">
-                   <div>
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">First Name</label>
-                     <input 
-                      type="text" 
-                      value={formData.firstName}
-                      onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500" 
-                     />
-                   </div>
-                   <div>
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Last Name</label>
-                     <input 
-                      type="text" 
-                      value={formData.lastName}
-                      onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500" 
-                     />
-                   </div>
-                   <div className="col-span-2">
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Email Address</label>
-                     <input 
-                      type="email" 
-                      value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500" 
-                     />
-                   </div>
-                </div>
-                
-                <div className="pt-4 border-t border-slate-100 flex justify-end">
-                   <button 
-                    onClick={handleProfileSave}
-                    className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors"
-                   >
-                     Save Changes
-                   </button>
-                </div>
-              </div>
-             </div>
-          )}
-
-          {activeSection === 'notifications' && (
-             <div className="space-y-8">
-               <div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Notifications</h3>
-                <p className="text-slate-500">Choose how you want to be notified.</p>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100">
-                {[
-                  { id: 'emailDigest', label: 'Daily Email Digest', desc: 'Summary of your calls and performance.' },
-                  { id: 'slackAlerts', label: 'Slack Alerts', desc: 'Get notified when a lead opens an email.' },
-                  { id: 'browserPush', label: 'Browser Push', desc: 'Real-time alerts for incoming calls.' },
-                ].map((item) => (
-                   <div key={item.id} className="p-6 flex items-center justify-between">
-                     <div>
-                       <h4 className="font-bold text-slate-900">{item.label}</h4>
-                       <p className="text-sm text-slate-500">{item.desc}</p>
-                     </div>
-                     <div 
-                        onClick={() => updateConfigSettings('notifications', { [item.id]: !configSettings.notifications[item.id as keyof typeof configSettings.notifications] })}
-                        className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer ${configSettings.notifications[item.id as keyof typeof configSettings.notifications] ? 'bg-indigo-500' : 'bg-slate-200'}`}
-                      >
-                        <div className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform ${configSettings.notifications[item.id as keyof typeof configSettings.notifications] ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                      </div>
-                   </div>
-                ))}
-              </div>
-             </div>
-          )}
-
-          {activeSection === 'audio' && (
-             <div className="space-y-8">
-               <div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Audio & Video</h3>
-                <p className="text-slate-500">Configure your input and output devices.</p>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-2xl p-8 space-y-6">
-                
-                {/* Microphone */}
-                <div>
-                   <label className="block text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
-                     <Mic size={14} /> Input Device (Microphone)
-                   </label>
-                   <select 
-                    value={configSettings.audio.inputDevice}
-                    onChange={(e) => updateConfigSettings('audio', { inputDevice: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
-                   >
-                     <option>Default Microphone (Built-in)</option>
-                     <option>AirPods Pro</option>
-                     <option>Blue Yeti X</option>
-                   </select>
-                </div>
-
-                {/* Speakers */}
-                <div>
-                   <label className="block text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
-                     <Speaker size={14} /> Output Device (Speakers)
-                   </label>
-                   <select 
-                    value={configSettings.audio.outputDevice}
-                    onChange={(e) => updateConfigSettings('audio', { outputDevice: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
-                   >
-                     <option>Default Speakers (Built-in)</option>
-                     <option>AirPods Pro</option>
-                     <option>External Headphones</option>
-                   </select>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                   <div>
-                     <h4 className="font-bold text-slate-900 flex items-center gap-2">
-                       <Volume2 size={16} /> Noise Cancellation
-                     </h4>
-                     <p className="text-sm text-slate-500">AI-powered background noise removal.</p>
-                   </div>
-                   <div 
-                      onClick={() => updateConfigSettings('audio', { noiseCancellation: !configSettings.audio.noiseCancellation })}
-                      className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer ${configSettings.audio.noiseCancellation ? 'bg-indigo-500' : 'bg-slate-200'}`}
-                    >
-                      <div className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform ${configSettings.audio.noiseCancellation ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                 </div>
+                 <div className="flex-1 space-y-4 w-full">
+                    <div>
+                       <label className="block text-xs font-black uppercase mb-1 bg-black text-white inline-block px-1">Callsign (Name)</label>
+                       <input type="text" defaultValue={user.name} className="w-full bg-slate-50 border-2 border-black p-3 font-mono font-bold focus:outline-none focus:bg-white focus:shadow-[4px_4px_0px_0px_black] transition-all" />
                     </div>
-                </div>
-
+                    <div>
+                       <label className="block text-xs font-black uppercase mb-1 bg-black text-white inline-block px-1">Rank (Role)</label>
+                       <input type="text" defaultValue={user.role} className="w-full bg-slate-50 border-2 border-black p-3 font-mono font-bold focus:outline-none focus:bg-white focus:shadow-[4px_4px_0px_0px_black] transition-all" />
+                    </div>
+                    <div>
+                       <label className="block text-xs font-black uppercase mb-1 bg-slate-300 text-black inline-block px-1">Base (Email)</label>
+                       <input type="email" defaultValue={user.email} disabled className="w-full bg-slate-200 border-2 border-black text-slate-500 p-3 font-mono font-bold cursor-not-allowed opacity-70" />
+                    </div>
+                 </div>
               </div>
-             </div>
-          )}
-          
-          {/* Fallback for other sections */}
-          {!['integrations', 'profile', 'notifications', 'audio'].includes(activeSection) && (
-            <div className="flex flex-col items-center justify-center h-96 text-center">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                <Settings className="text-slate-400" size={32} />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Work in Progress</h3>
-              <p className="text-slate-500 max-w-sm">
-                The <span className="font-bold text-slate-700">{activeSection}</span> settings module is currently under development.
-              </p>
-            </div>
-          )}
 
-        </div>
+              <div className="pt-8 flex justify-end border-t-2 border-dashed border-slate-300">
+                 <button className="bg-black text-white px-8 py-4 font-black uppercase border-2 border-black flex items-center gap-2 hover:bg-slate-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] active:translate-y-[2px] active:shadow-none transition-all">
+                    <Save size={20} /> Save Changes
+                 </button>
+              </div>
+           </div>
+        )}
+
+        {/* Integrations Section */}
+        {activeSection === 'integrations' && (
+           <div className="space-y-8 relative z-10">
+              <h2 className="text-4xl font-black uppercase border-b-4 border-black pb-4">Data Links</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="border-2 border-black p-6 bg-slate-50 relative group shadow-[4px_4px_0px_0px_black] hover:translate-y-[-2px] hover:translate-x-[-2px] transition-all">
+                    <div className="absolute top-4 right-4">
+                       <div className={`w-4 h-4 rounded-full border-2 border-black ${integrations.pipedrive ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    </div>
+                    <Database size={32} className="mb-4" strokeWidth={2} />
+                    <h3 className="font-black text-xl uppercase">Pipedrive CRM</h3>
+                    <p className="font-mono text-xs text-slate-600 mt-2 mb-6 font-bold">Sync contacts, deals, and activities in real-time.</p>
+                    <button className={`w-full font-black uppercase py-3 border-2 border-black transition-all shadow-[2px_2px_0px_0px_black] active:translate-y-[2px] active:shadow-none ${integrations.pipedrive ? 'bg-white text-black hover:bg-red-100 hover:text-red-600 hover:border-red-600' : 'bg-black text-white hover:bg-slate-800'}`}>
+                       {integrations.pipedrive ? 'Disconnect' : 'Connect'}
+                    </button>
+                 </div>
+
+                 <div className="border-2 border-black p-6 bg-slate-100 opacity-60 relative group border-dashed">
+                     <div className="absolute inset-0 flex items-center justify-center font-black uppercase rotate-12 text-2xl text-slate-400 border-4 border-slate-400 m-8 z-20 mix-blend-multiply pointer-events-none">Coming Soon</div>
+                    <Globe size={32} className="mb-4" strokeWidth={2} />
+                    <h3 className="font-black text-xl uppercase text-slate-500">HubSpot CRM</h3>
+                    <p className="font-mono text-xs text-slate-500 mt-2 mb-6 font-bold">Bi-directional sync with HubSpot Marketing Hub.</p>
+                    <button disabled className="w-full font-black uppercase py-3 border-2 border-slate-300 bg-slate-200 text-slate-400 cursor-not-allowed">
+                       Connect
+                    </button>
+                 </div>
+              </div>
+           </div>
+        )}
+        
+        {/* Placeholder for other sections */}
+        {(activeSection === 'notifications' || activeSection === 'security') && (
+           <div className="h-full flex flex-col items-center justify-center text-slate-400 border-4 border-dashed border-slate-300 m-4 bg-slate-50">
+              <Shield size={64} className="mb-4" />
+              <h3 className="font-black text-2xl uppercase">Restricted Area</h3>
+              <p className="font-mono font-bold">Clearance Level 5 required.</p>
+           </div>
+        )}
+
       </div>
     </div>
   );

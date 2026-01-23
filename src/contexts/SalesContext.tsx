@@ -85,8 +85,10 @@ type SalesContextType = {
   updateConfigSettings: (section: keyof ConfigurationSettings, updates: any) => void;
   setLiveNote: (note: string) => void;
   setScriptStep: (step: number) => void;
+  resetData: () => Promise<void>;
 };
 
+// Default values (used as fallback/initial state)
 const defaultStats: Stats = {
   callsToday: 42,
   callsGoal: 60,
@@ -151,21 +153,12 @@ export function SalesProvider({ children }: { children: ReactNode }) {
   const [coachSettings, setCoachSettings] = useState<CoachSettings>(defaultCoachSettings);
   const [configSettings, setConfigSettings] = useState<ConfigurationSettings>(defaultConfigSettings);
   
-  // Live Campaign State
+  // Live Campaign State (Transient, not synced to backend for now)
   const [liveNote, setLiveNote] = useState('');
   const [scriptStep, setScriptStep] = useState(0);
 
-  const [recentActivity, setRecentActivity] = useState<ActivityLog[]>([
-    { id: '1', type: 'meeting', description: 'Demo with Acme Corp', timestamp: '2h ago', score: 92 },
-    { id: '2', type: 'call', description: 'Intro call - Stark Ind', timestamp: '4h ago', score: 64 },
-    { id: '3', type: 'call', description: 'Follow-up / Wayne Ent', timestamp: 'Yesterday', score: 85 },
-  ]);
-  const [objectionCounts, setObjectionCounts] = useState<Record<string, number>>({
-    'Too expensive': 42,
-    'Send me an email': 28,
-    'Not interested': 15,
-    'Using competitor': 12,
-  });
+  const [recentActivity, setRecentActivity] = useState<ActivityLog[]>([]);
+  const [objectionCounts, setObjectionCounts] = useState<Record<string, number>>({});
 
   // API Helper with Fallback
   const apiCall = async (endpoint: string, method: 'GET' | 'POST', body?: any) => {
@@ -196,28 +189,48 @@ export function SalesProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Load stats on mount
-  useEffect(() => {
-    const loadStats = async () => {
-      const data = await apiCall('/stats', 'GET');
-      if (data) {
-        setStats(data);
-      } else {
-        console.log('Using local/default stats');
-      }
-    };
-    loadStats();
-  }, []);
-
-  // Sync stats to server
-  const syncStats = async (newStats: Stats) => {
-    setStats(newStats); // Optimistic update
-    apiCall('/stats', 'POST', newStats).catch(e => console.error('Sync failed', e));
+  // Helper to sync state to backend
+  const sync = (endpoint: string, data: any) => {
+    apiCall(endpoint, 'POST', data).catch(e => console.error(`Sync to ${endpoint} failed`, e));
   };
+
+  // Load all data on mount
+  useEffect(() => {
+    const loadAll = async () => {
+      const [
+        statsData, 
+        userData, 
+        integrationsData, 
+        coachData, 
+        configData, 
+        activityData,
+        objectionData
+      ] = await Promise.all([
+        apiCall('/stats', 'GET'),
+        apiCall('/user', 'GET'),
+        apiCall('/integrations', 'GET'),
+        apiCall('/coachsettings', 'GET'),
+        apiCall('/configsettings', 'GET'),
+        apiCall('/recentactivity', 'GET'),
+        apiCall('/objectioncounts', 'GET')
+      ]);
+
+      if (statsData) setStats(statsData);
+      if (userData) setUser(userData);
+      if (integrationsData) setIntegrations(integrationsData);
+      if (coachData) setCoachSettings(coachData);
+      if (configData) setConfigSettings(configData);
+      if (activityData) setRecentActivity(activityData);
+      if (objectionData) setObjectionCounts(objectionData);
+    };
+
+    loadAll();
+  }, []);
 
   const incrementCalls = () => {
     const newStats = { ...stats, callsToday: stats.callsToday + 1 };
-    syncStats(newStats);
+    setStats(newStats);
+    sync('/stats', newStats);
     
     // Add to activity log
     const newLog: ActivityLog = {
@@ -227,7 +240,9 @@ export function SalesProvider({ children }: { children: ReactNode }) {
       timestamp: 'Just now',
       score: 50 + Math.floor(Math.random() * 40)
     };
-    setRecentActivity(prev => [newLog, ...prev].slice(0, 10));
+    const newActivity = [newLog, ...recentActivity].slice(0, 20);
+    setRecentActivity(newActivity);
+    sync('/recentactivity', newActivity);
   };
 
   const recordConnection = (success: boolean) => {
@@ -236,14 +251,17 @@ export function SalesProvider({ children }: { children: ReactNode }) {
       connected: success ? stats.connected + 1 : stats.connected,
       streak: success ? stats.streak + 1 : 0
     };
-    syncStats(newStats);
+    setStats(newStats);
+    sync('/stats', newStats);
   };
 
   const recordObjection = (objection: string) => {
-    setObjectionCounts(prev => ({
-      ...prev,
-      [objection]: (prev[objection] || 0) + 1
-    }));
+    const newCounts = {
+      ...objectionCounts,
+      [objection]: (objectionCounts[objection] || 0) + 1
+    };
+    setObjectionCounts(newCounts);
+    sync('/objectioncounts', newCounts);
   };
 
   const bookMeeting = () => {
@@ -253,7 +271,9 @@ export function SalesProvider({ children }: { children: ReactNode }) {
       pipelineValue: stats.pipelineValue + 5000,
       streak: stats.streak + 2
     };
-    syncStats(newStats);
+    setStats(newStats);
+    sync('/stats', newStats);
+
     setCurrentLead(prev => ({ ...prev, status: 'meeting' }));
     
     // Update activity log
@@ -264,7 +284,9 @@ export function SalesProvider({ children }: { children: ReactNode }) {
       timestamp: 'Just now',
       score: 95
     };
-    setRecentActivity(prev => [newLog, ...prev].slice(0, 10));
+    const newActivity = [newLog, ...recentActivity].slice(0, 20);
+    setRecentActivity(newActivity);
+    sync('/recentactivity', newActivity);
   };
 
   const nextLead = () => {
@@ -288,22 +310,35 @@ export function SalesProvider({ children }: { children: ReactNode }) {
   };
 
   const toggleIntegration = (key: keyof Integrations) => {
-    setIntegrations(prev => ({ ...prev, [key]: !prev[key] }));
+    const newIntegrations = { ...integrations, [key]: !integrations[key] };
+    setIntegrations(newIntegrations);
+    sync('/integrations', newIntegrations);
   };
 
   const updateUser = (updates: Partial<UserProfile>) => {
-    setUser(prev => ({ ...prev, ...updates }));
+    const newUser = { ...user, ...updates };
+    setUser(newUser);
+    sync('/user', newUser);
   };
 
   const updateCoachSettings = (updates: Partial<CoachSettings>) => {
-    setCoachSettings(prev => ({ ...prev, ...updates }));
+    const newSettings = { ...coachSettings, ...updates };
+    setCoachSettings(newSettings);
+    sync('/coachsettings', newSettings);
   };
 
   const updateConfigSettings = (section: keyof ConfigurationSettings, updates: any) => {
-    setConfigSettings(prev => ({
-      ...prev,
-      [section]: { ...prev[section], ...updates }
-    }));
+    const newSettings = {
+      ...configSettings,
+      [section]: { ...configSettings[section], ...updates }
+    };
+    setConfigSettings(newSettings);
+    sync('/configsettings', newSettings);
+  };
+
+  const resetData = async () => {
+    await apiCall('/reset', 'POST');
+    window.location.reload();
   };
 
   return (
@@ -312,7 +347,7 @@ export function SalesProvider({ children }: { children: ReactNode }) {
       currentLead, 
       user, 
       integrations, 
-      coachSettings,
+      coachSettings, 
       configSettings,
       recentActivity,
       objectionCounts,
@@ -328,7 +363,8 @@ export function SalesProvider({ children }: { children: ReactNode }) {
       updateCoachSettings,
       updateConfigSettings,
       setLiveNote,
-      setScriptStep
+      setScriptStep,
+      resetData
     }}>
       {children}
     </SalesContext.Provider>
