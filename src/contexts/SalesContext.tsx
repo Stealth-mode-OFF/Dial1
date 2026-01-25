@@ -48,7 +48,7 @@ type ActivityLog = {
 
 type SalesContextType = {
   stats: Stats;
-  currentLead: Lead;
+  currentLead: Lead | null;
   user: UserProfile;
   integrations: Integrations;
   recentActivity: ActivityLog[];
