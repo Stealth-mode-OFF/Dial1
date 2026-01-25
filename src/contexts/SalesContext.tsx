@@ -68,7 +68,11 @@ const defaultStats: Stats = {
   connected: 8,
   meetingsBooked: 7,
   pipelineValue: 37450,
+<<<<<<< HEAD
   streak: 8,
+=======
+  streak: 42,
+>>>>>>> ee1060c (Remove all hardcoded fake companies and people; app is now empty and ready for Pipedrive import)
 };
 
 const defaultLead: Lead = {
@@ -172,12 +176,13 @@ export function SalesProvider({ children }: { children: ReactNode }) {
     const newStats = { ...stats, callsToday: stats.callsToday + 1 };
     syncStats(newStats);
     // Add to activity log
-    const newLog: ActivityLog = {
-      id: Date.now().toString(),
-      type: 'call',
-      description: `Call with ${currentLead.name}`,
-      timestamp: 'Just now',
-      score: 50 + Math.floor(Math.random() * 40)
+      const newLog: ActivityLog = {
+        id: Date.now().toString(),
+        type: 'call',
+        description: `Call with ${currentLead.name}`,
+        timestamp: 'Just now',
+        // score: 50 + Math.floor(Math.random() * 40)
+        // REMOVE: No random score, should come from real data
     };
     setRecentActivity(prev => [newLog, ...prev].slice(0, 10));
   };
@@ -219,18 +224,12 @@ export function SalesProvider({ children }: { children: ReactNode }) {
   };
 
   const nextLead = () => {
-    const names = ['Sarah Connor', 'Rick Deckard', 'Ellen Ripley', 'Marty McFly', 'Tony Stark', 'Bruce Wayne', 'Clark Kent', 'Diana Prince'];
-    const titles = ['CTO', 'Director of Engineering', 'VP of Ops', 'Sales Manager', 'CEO', 'Founder', 'Head of IT', 'Operations Lead'];
-    const companies = ['CyberDyne', 'Tyrell Corp', 'Weyland-Yutani', 'Delorean Inc', 'Stark Ind', 'Wayne Ent', 'Daily Planet', 'Themyscira Inc'];
-    
-    const randomIdx = Math.floor(Math.random() * names.length);
-    
-    setCurrentLead({
-      id: Math.random().toString(),
-      name: names[randomIdx],
-      title: titles[randomIdx],
-      company: companies[randomIdx],
-      status: 'new'
+    // REMOVE: No fake names, titles, or companies. App is empty and ready for import.
+    // Reset transient state
+    setLiveNote('');
+    setScriptStep(0);
+    // REMOVE: No random contact generation, should come from real data
+    setCurrentLead(null);
     });
   };
 

@@ -19,6 +19,7 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
   const { stats, integrations } = useSales();
   const [focusMode, setFocusMode] = useState<'volume' | 'quality' | 'closing'>('quality');
   const [isAdjustingFocus, setIsAdjustingFocus] = useState(false);
+  const missionDateLabel = new Intl.DateTimeFormat('en-GB').format(new Date(2026, 0, 23));
 
   const focusConfig = {
     volume: { 
@@ -82,7 +83,7 @@ export function CommandCenter({ onNavigate }: { onNavigate?: (tab: 'live-campaig
                     <div className="flex items-center gap-2 mb-2">
                         <span className="bg-black text-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">Today's Mission</span>
                         <span className="bg-yellow-300 text-black px-2 py-0.5 text-[10px] font-mono font-bold uppercase border-2 border-black transform -rotate-2">
-                            {new Date().toLocaleDateString()}
+                            {missionDateLabel}
                         </span>
                     </div>
                     <h1 className="text-4xl md:text-5xl font-black text-black tracking-tight leading-none mb-1">

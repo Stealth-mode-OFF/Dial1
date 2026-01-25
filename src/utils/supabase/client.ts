@@ -1,15 +1,6 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { supabaseUrl, publicAnonKey } from './info';
+import { createClient } from '@supabase/supabase-js';
+import { projectId, publicAnonKey } from './info';
 
-let supabaseClient: SupabaseClient | null = null;
+const supabaseUrl = `https://${projectId}.supabase.co`;
 
-if (supabaseUrl && publicAnonKey) {
-  supabaseClient = createClient(supabaseUrl, publicAnonKey, {
-    auth: {
-      persistSession: true,
-      detectSessionInUrl: true,
-    },
-  });
-}
-
-export { supabaseClient };
+export const supabase = createClient(supabaseUrl, publicAnonKey);

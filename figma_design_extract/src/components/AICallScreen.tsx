@@ -64,7 +64,7 @@ export function AICallScreen({ contact, contactNumber, totalContacts, campaignNa
           "Soustřeď se na proces, ne na výsledek. Jdeme na to.",
           "Vím, že to v sobě máš. Jen zvedni to sluchátko."
       ];
-      setMentorMessage(greetings[Math.floor(Math.random() * greetings.length)]);
+      // REMOVE: No random greetings, should come from real data
       
       const sessionInterval = setInterval(() => {
           setSessionTime(prev => {
@@ -486,7 +486,7 @@ export function AICallScreen({ contact, contactNumber, totalContacts, campaignNa
             },
             body: JSON.stringify({
                 text: text,
-                voice: contact.id.charCodeAt(0) % 2 === 0 ? 'onyx' : 'shimmer' // Basic gender randomization based on ID parity
+                // REMOVE: No random voice assignment, should come from real data
             })
         });
         
@@ -672,11 +672,11 @@ export function AICallScreen({ contact, contactNumber, totalContacts, campaignNa
     if (result === 'connected') {
         const msgs = ["To je ono! Slyšíš ten rozdíl, když jsi v klidu?", "Výborně. Jsi ve flow. Drž to.", "Mám z tebe radost. Další!"];
         setMentorMood('happy');
-        setMentorMessage(msgs[Math.floor(Math.random() * msgs.length)]);
+        // REMOVE: No random mentor message, should come from real data
     } else if (result === 'no-answer') {
         const msgs = ["Nevadí. Neber si to osobně. Další.", "Ticho na lince? Jejich škoda. Jdeme dál.", "Nezastavuj. To je jen statistika."];
         setMentorMood('neutral');
-        setMentorMessage(msgs[Math.floor(Math.random() * msgs.length)]);
+        // REMOVE: No random mentor message, should come from real data
     } else if (result === 'scheduled') {
         setMentorMood('happy');
         setMentorMessage("Pěkná práce s kalendářem. Tohle je profesionální přístup.");

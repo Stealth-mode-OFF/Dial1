@@ -24,15 +24,15 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   ];
 
   return (
-    <div className="h-full w-20 flex flex-col items-center py-6 gap-6 bg-white border-r-2 border-black z-50">
+    <aside className="h-screen w-[92px] flex flex-col items-center py-6 gap-5 bg-transparent z-50">
       
       {/* Brand Logo - Sticker Style */}
-      <div className="w-12 h-12 bg-black text-white flex items-center justify-center text-xl font-extrabold rotate-3 hover:rotate-0 transition-transform cursor-pointer neobrutal-shadow">
+      <div className="w-14 h-14 bg-black text-white flex items-center justify-center text-xl font-extrabold cursor-pointer border-2 border-black rounded-sm neobrutal-shadow-sm">
         <Zap size={24} fill="currentColor" className="text-yellow-400" />
       </div>
 
       {/* Main Navigation - Floating Dock Items */}
-      <div className="flex-1 flex flex-col gap-4 w-full px-2 mt-8">
+      <nav className="flex-1 flex flex-col gap-4 w-full items-center mt-6">
         {menuItems.map((item) => {
           const isActive = activeTab === item.id;
           return (
@@ -40,11 +40,9 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
               key={item.id}
               onClick={() => setActiveTab(item.id as NavItem)}
               className={`
-                group relative w-full aspect-square flex flex-col items-center justify-center rounded-xl border-2 border-black transition-all duration-200
-                ${isActive 
-                  ? `${item.color} neobrutal-shadow translate-x-[-2px] translate-y-[-2px]` 
-                  : 'bg-white hover:bg-slate-50 hover:neobrutal-shadow hover:translate-x-[-2px] hover:translate-y-[-2px]'
-                }
+                group relative w-16 h-16 flex flex-col items-center justify-center rounded-2xl border-2 border-black transition-colors
+                ${isActive ? `${item.color}` : 'bg-white hover:bg-slate-50'}
+                neobrutal-shadow-sm
               `}
             >
               <item.icon 
@@ -56,23 +54,20 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
             </button>
           );
         })}
-      </div>
+      </nav>
 
       {/* Bottom Settings */}
-      <div className="w-full px-2 pb-2">
+      <div className="w-full flex items-center justify-center pb-2">
         <button
           onClick={() => setActiveTab('configuration')}
           className={`
-            w-full aspect-square flex flex-col items-center justify-center rounded-xl border-2 border-black transition-all duration-200
-            ${activeTab === 'configuration' 
-              ? 'bg-slate-900 text-white neobrutal-shadow translate-x-[-2px] translate-y-[-2px]' 
-              : 'bg-white hover:bg-slate-100'
-            }
+            w-16 h-16 flex flex-col items-center justify-center rounded-2xl border-2 border-black transition-colors neobrutal-shadow-sm
+            ${activeTab === 'configuration' ? 'bg-slate-900 text-white' : 'bg-white hover:bg-slate-100'}
           `}
         >
           <Settings size={22} strokeWidth={2.5} className={activeTab === 'configuration' ? 'animate-spin-slow' : ''} />
         </button>
       </div>
-    </div>
+    </aside>
   );
 }

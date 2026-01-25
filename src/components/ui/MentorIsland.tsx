@@ -183,7 +183,8 @@ export function MentorIsland({ message: initialMessage, mood: initialMood, isVis
                           animate={{ height: [4, 16, 8, 20, 4] }}
                           transition={{ 
                             repeat: Infinity, 
-                            duration: 0.5 + Math.random() * 0.5,
+                            // REMOVE: No random duration, use fixed or config value
+                            duration: 0.75,
                             ease: "easeInOut",
                             delay: i * 0.1
                           }}

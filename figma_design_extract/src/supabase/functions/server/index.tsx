@@ -97,8 +97,7 @@ const defaults = {
   },
   recentActivity: [
     { id: '1', type: 'meeting', description: 'Demo with Acme Corp', timestamp: '2h ago', score: 92 },
-    { id: '2', type: 'call', description: 'Intro call - Stark Ind', timestamp: '4h ago', score: 64 },
-    { id: '3', type: 'call', description: 'Follow-up / Wayne Ent', timestamp: 'Yesterday', score: 85 },
+    // REMOVED ALL FAKE COMPANIES
   ],
   schedule: [
     { id: '1', time: '09:00', end: '09:30', title: 'Intel & Prep', type: 'prep', icon: 'Filter', desc: 'Review CRM, Coffee, Set Daily Goals', status: 'completed' },
