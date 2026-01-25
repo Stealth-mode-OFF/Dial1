@@ -226,7 +226,6 @@ export function SalesProvider({ children }: { children: ReactNode }) {
     setScriptStep(0);
     // REMOVE: No random contact generation, should come from real data
     setCurrentLead(null);
-    });
   };
 
   const toggleIntegration = (key: keyof Integrations) => {
