@@ -9,7 +9,7 @@ import {
   MicOff,
   PhoneCall,
 } from 'lucide-react';
-import { supabaseClient } from '../utils/supabase/client';
+import { supabase as supabaseClient } from '../utils/supabase/client';
 
 interface Contact {
   id: string;
