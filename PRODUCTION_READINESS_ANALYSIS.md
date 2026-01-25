@@ -19,8 +19,8 @@
 ## Go/No-Go Checklist
 - [ ] Re-run `npm install && npm run build` in a networked CI environment to confirm no regressions.
 - [ ] Execute `npm run test:e2e` (or targeted smoke) against staging with Supabase credentials.
-- [ ] Verify Supabase secrets (`OPENAI_API_KEY`, `PIPEDRIVE_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) and CORS origins are set for the target domain.
-- [ ] Deploy `supabase/functions/make-server-139017f8` and run `supabase functions logs ... --follow` during a test call.
+- [ ] Verify Supabase secrets (`OPENAI_API_KEY`, `PIPEDRIVE_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — server-side only; clients should use anon key) and CORS origins are set for the target domain.
+- [ ] Deploy `supabase/functions/make-server-139017f8` and run `supabase functions logs make-server-139017f8 --follow` during a test call.
 - [ ] Add basic monitoring (success/error counters, latency) and on-call alerting for edge function endpoints.
 - [ ] Capture a fresh build artifact size report post-change freeze.
 
