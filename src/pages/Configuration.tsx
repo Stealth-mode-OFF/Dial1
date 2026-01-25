@@ -3,7 +3,7 @@ import { Save, LogOut, Bell, Shield, Database, Smartphone, Globe, User, CheckCir
 import { useSales } from '../contexts/SalesContext';
 import { supabase } from '../utils/supabase/client';
 
-export function Configuration() {
+export default function Configuration() {
   const { user, integrations, updateUser, toggleIntegration } = useSales();
   const [activeSection, setActiveSection] = useState('profile');
   
