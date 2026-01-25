@@ -68,11 +68,7 @@ const defaultStats: Stats = {
   connected: 8,
   meetingsBooked: 7,
   pipelineValue: 37450,
-<<<<<<< HEAD
-  streak: 8,
-=======
   streak: 42,
->>>>>>> ee1060c (Remove all hardcoded fake companies and people; app is now empty and ready for Pipedrive import)
 };
 
 const defaultLead: Lead = {
