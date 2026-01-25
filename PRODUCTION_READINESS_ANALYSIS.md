@@ -13,7 +13,7 @@
 - **Build & Type Safety**: Last recorded Vite build success on 2026-01-15. Local build could not be re-run in this environment because `npm install` fails resolving `@jsr/supabase__supabase-js` (network to npm.jsr.io). No code changes were made that would alter build outcomes.
 - **Testing**: Only Playwright E2E project is wired (`test:e2e`); no unit/integration suites are present. Recommend adding smoke coverage for critical flows (auth, Supabase connectivity, Pipedrive connect/disconnect).
 - **Security**: Supabase anon key reliance noted; RLS described in docs. Ensure secrets are injected only via Supabase dashboard/edge function secrets. Validate CORS allowlist (`ECHO_ALLOWED_ORIGINS`) before go-live.
-- **Performance**: Bundle size ~940KB gzip per `DEPLOYMENT_READY.md`; acceptable but should monitor for cold-start latency on edge functions and consider code-splitting if growth continues.
+- **Performance**: Bundle size ~940KB gzipped per `DEPLOYMENT_READY.md`; acceptable but should monitor for cold-start latency on edge functions and consider code-splitting if growth continues.
 - **Operational Playbooks**: Deployment steps well documented. Observability/alerts not documented (no log shipping/metrics). Add runbooks for edge function failures and frontend error reporting.
 
 ## Go/No-Go Checklist
@@ -25,4 +25,4 @@
 - [ ] Capture a fresh build artifact size report post-change freeze.
 
 ## Recommendation
-Proceed to staging with the above checklist enforced. Production cutover is low risk if Supabase secrets, CORS, and smoke tests pass; add observability before scaling. No code changes were required for this assessment.
+Proceed to staging with the above checklist enforced. Production cutover is low risk if Supabase secrets, CORS, and smoke tests pass. Add basic observability (request/error counters + latency) before scaling and set an explicit follow-up within 1 week of first staging traffic to enable alerts/dashboards. No code changes were required for this assessment.
