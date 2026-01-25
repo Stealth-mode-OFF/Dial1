@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar } from './components/layout/Sidebar';
 import { TopBar } from './components/TopBar';
 import { CommandCenter } from './pages/CommandCenter';
 import { LiveCampaigns } from './pages/LiveCampaigns';
