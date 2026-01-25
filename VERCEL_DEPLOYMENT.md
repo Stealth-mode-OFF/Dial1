@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Node 18+ (Vercel default) and npm available.
-- Supabase project with edge function (`supabase/functions/<your-function-name>`, e.g., `make-server-139017f8`) deployed.
+- Supabase project with edge function (`supabase/functions/<your-function-name>`, e.g., `my-api-function`) deployed.
 - Required secrets available (see Env Vars).
 
 ## Vercel Settings
