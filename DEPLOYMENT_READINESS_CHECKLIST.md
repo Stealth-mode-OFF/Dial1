@@ -3,7 +3,7 @@
 This is the single, ordered TODO list. Do items in order. Do not skip ahead.
 
 Last updated: 2026-01-25
-Current step: 1.1 (Env mapping and frontend env wiring)
+Current step: 2.2 (Edge Function deploy)
 
 ---
 
@@ -58,7 +58,19 @@ Backend (Supabase Edge Functions, server-only):
 Checklist:
 - [x] Confirm frontend uses VITE_* values (removed hardcoded values in src/utils/supabase/info.tsx).
 - [x] Confirm server uses only server-only secrets (no exposure to frontend).
-- [ ] Record final environment values and where they are set.
+- [x] Record final environment values and where they are set. (Values stored in Vercel/Supabase, not committed to repo)
+
+Final env values (set in secret managers; not stored in repo):
+| Variable | Scope | Set in | Value |
+| --- | --- | --- | --- |
+| VITE_SUPABASE_URL | Frontend | Vercel env (prod/preview/dev) | SET |
+| VITE_SUPABASE_ANON_KEY | Frontend | Vercel env (prod/preview/dev) | SET |
+| SUPABASE_URL | Backend | Supabase secrets | SET |
+| SUPABASE_SERVICE_ROLE_KEY | Backend | Supabase secrets | SET |
+| SUPABASE_ANON_KEY | Backend | Supabase secrets | SET |
+| OPENAI_API_KEY | Backend | Supabase secrets | SET |
+| PIPEDRIVE_API_KEY | Backend | Supabase secrets | SET |
+| SUPABASE_DB_URL (optional) | Backend | Supabase secrets | SET |
 
 ### 1.2 Verify secrets are not committed (verifiable)
 
@@ -79,11 +91,11 @@ Notes:
 Commands:
 ```bash
 npm run build
-rg -n "sk-proj|SERVICE_ROLE|PIPEDRIVE|OPENAI" dist/
+rg -n "sk-proj|SERVICE_ROLE|PIPEDRIVE|OPENAI" build/
 ```
 
 Checklist:
-- [ ] No server-only keys in dist output.
+- [x] No server-only keys in build output.
 
 Do not continue until Section 1 is complete.
 
@@ -101,8 +113,8 @@ supabase status
 ```
 
 Checklist:
-- [ ] Production Supabase project exists.
-- [ ] CLI is linked and status is OK.
+- [x] Production Supabase project exists.
+- [x] CLI is linked and status is OK.
 
 ### 2.2 Edge Function deploy and secrets (verifiable)
 
@@ -114,8 +126,10 @@ supabase secrets list
 ```
 
 Checklist:
-- [ ] Edge Function deployed.
-- [ ] All secrets are set in Supabase (and hidden from frontend).
+- [x] Edge Function deployed.
+- [x] All secrets are set in Supabase (and hidden from frontend).
+Notes:
+- Supabase CLI does not allow setting SUPABASE_* via secrets set, but secrets list shows them present.
 
 ### 2.3 Verify endpoints required by frontend exist
 
@@ -132,7 +146,7 @@ Frontend calls (non-exhaustive, see src/components/* and src/contexts/SalesConte
 - /mentor-chat
 
 Checklist:
-- [ ] Each endpoint is implemented in Edge Function code.
+- [ ] Each endpoint is implemented in Edge Function code. (BLOCKED: missing in supabase/functions/make-server-139017f8/index.ts)
 - [ ] If missing, implement or point frontend to the correct backend.
 
 ### 2.4 Database, RLS, storage, CORS, rate limits (verifiable)
@@ -162,6 +176,7 @@ npm run preview
 Checklist:
 - [ ] Build succeeds without errors.
 - [ ] Preview loads and matches expected UI.
+- [ ] Deployment output directory confirmed (vite.config.ts uses build/; update docs/hosting settings if they still expect dist/).
 
 ### 3.2 Routing and assets (verifiable)
 
@@ -242,7 +257,7 @@ Checklist:
 Commands:
 ```bash
 npm run build
-du -sh dist/
+du -sh build/
 ```
 
 Checklist:
@@ -367,3 +382,7 @@ NO-GO if ANY are false.
 - 2026-01-25: Added root .gitignore and verified no .env files in git history (Section 1.2 complete).
 - 2026-01-25: Updated src/utils/supabase/info.tsx to derive projectId/anon key from VITE_ env vars (Section 1.1 partial).
 - 2026-01-25: Verified server-only secrets only referenced in docs and Edge Function code (Section 1.1 partial).
+- 2026-01-25: Build succeeded after adding missing supabase client; checked build/ output for secrets (Section 1.3 complete).
+- 2026-01-25: Added src/utils/supabase/client.ts and preview script; note Vite outDir is build/ (update deploy docs/settings accordingly).
+- 2026-01-25: Linked Vercel project and set VITE_ env vars for prod/preview/dev; Supabase secrets set for OpenAI/Pipedrive (Section 1.1 complete).
+- 2026-01-25: Linked Supabase project mqoaclcqsvfaqxtwnqol and deployed Edge Function make-server-139017f8 (Section 2.2 complete).

@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+build/
 
 # Env files
 .env
@@ -18,3 +19,5 @@ test-results/
 # Hosting
 .vercel/
 .netlify/
+.vercel
+.env*.local
