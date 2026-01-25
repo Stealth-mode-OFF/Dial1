@@ -4,9 +4,9 @@ import { Sidebar } from './components/layout/Sidebar';
 import { TopBar } from './components/TopBar';
 import { CommandCenter } from './components/CommandCenter';
 import { LiveCampaigns } from './components/LiveCampaigns';
-import { Intelligence } from './pages/Intelligence';
-import { MeetCoach } from './pages/MeetCoach';
-import { Configuration } from './pages/Configuration';
+import Intelligence from './pages/Intelligence';
+import MeetCoach from './pages/MeetCoach';
+import Configuration from './pages/Configuration';
 import { SalesProvider } from './contexts/SalesContext';
 import { DebugOverlay } from './components/DebugOverlay';
 
