@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Node 18+ (Vercel default) and npm available.
-- Supabase project with edge function (`supabase/functions/make-server-139017f8`) deployed. If your project uses a different function name, substitute accordingly.
+- Supabase project with edge function (`supabase/functions/<your-function-name>`, e.g., `make-server-139017f8`) deployed.
 - Required secrets available (see Env Vars).
 
 ## Vercel Settings
@@ -33,7 +33,7 @@ Set these in Vercel → Project → Settings → Environment Variables:
 - Check browser console: no uncaught errors.
 
 ## Observability (minimum)
-- Enable edge/function logs in Supabase: `supabase functions logs make-server-139017f8 --follow` (or your function name) during staging smoke test.
+- Enable edge/function logs in Supabase: `supabase functions logs <your-function-name> --follow` during staging smoke test.
 - Add frontend error monitoring (e.g., Sentry) before GA.
 
 ## Rollback
