@@ -2245,14 +2245,30 @@
 }
 
 .neobrutal-border {
-  border: 2px solid #000;
+  border: 3px solid #000;
 }
 
 .bg-grid-pattern {
-  background-color: #f8fafc;
-  background-image: linear-gradient(#e2e8f0 1px, #0000 1px), linear-gradient(90deg, #e2e8f0 1px, #0000 1px);
-  background-size: 20px 20px;
+  /* Slightly bluer graph-paper like the reference screenshots */
+  background-color: #f3f8ff;
+  background-image:
+    linear-gradient(rgba(183, 206, 238, 0.55) 1px, #0000 1px),
+    linear-gradient(90deg, rgba(183, 206, 238, 0.55) 1px, #0000 1px);
+  /* Reference uses 28px graph spacing */
+  background-size: 28px 28px;
 }
+
+/* Pixel-perfect overrides: the reference uses a slightly thicker stroke than Tailwind's border-2 */
+.border-2 { border-width: 3px !important; }
+.border-t-2 { border-top-width: 3px !important; }
+.border-r-2 { border-right-width: 3px !important; }
+.border-b-2 { border-bottom-width: 3px !important; }
+.border-l-2 { border-left-width: 3px !important; }
+
+/* Shadow sizes that match the neo-brutal screenshot style */
+.neobrutal-shadow-sm { box-shadow: 2px 2px #000; }
+.neobrutal-shadow-md { box-shadow: 4px 4px #000; }
+.neobrutal-shadow-lg { box-shadow: 8px 8px #000; }
 
 ::-webkit-scrollbar {
   width: 10px;
@@ -2260,12 +2276,12 @@
 
 ::-webkit-scrollbar-track {
   background: #f1f1f1;
-  border-left: 2px solid #000;
+  border-left: 3px solid #000;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #000;
-  border: 2px solid #000;
+  border: 3px solid #000;
 }
 
 ::-webkit-scrollbar-thumb:hover {

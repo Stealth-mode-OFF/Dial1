@@ -7,6 +7,7 @@ import { Intelligence } from './pages/Intelligence';
 import { MeetCoach } from './pages/MeetCoach';
 import { Configuration } from './pages/Configuration';
 import { SalesProvider } from './contexts/SalesContext';
+import { DebugOverlay } from './components/DebugOverlay';
 
 type NavItem = 'command-center' | 'live-campaigns' | 'intelligence' | 'meet-coach' | 'configuration';
 
@@ -16,6 +17,7 @@ export default function App() {
   return (
     <SalesProvider>
       <div className="flex h-screen bg-grid-pattern font-sans text-slate-900 overflow-hidden relative selection:bg-yellow-200 selection:text-black">
+        <DebugOverlay />
         
         {/* Load Fonts */}
         <style>{`

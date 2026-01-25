@@ -16,7 +16,7 @@ export function TopBar({ onNavigate }: { onNavigate?: (tab: string) => void }) {
           </div>
           <input
             type="text"
-            className="block w-full pl-12 pr-14 py-3 border-2 border-black bg-white rounded-full text-sm font-bold placeholder-slate-400 focus:outline-none focus:ring-0 focus:neobrutal-shadow transition-all font-mono shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]"
+            className="block w-full pl-12 pr-14 py-3 border-2 border-black bg-white rounded-full text-sm font-bold placeholder-slate-400 focus:outline-none focus:ring-0 focus:neobrutal-shadow transition-all font-mono shadow-[4px_4px_0px_0px_black]"
             placeholder="Search contacts, deals, or type commands..."
           />
           <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
@@ -29,7 +29,7 @@ export function TopBar({ onNavigate }: { onNavigate?: (tab: string) => void }) {
       <div className="flex items-center gap-4 ml-6 pointer-events-auto">
         
         {/* System Status Ticket */}
-        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_black]">
+        <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-white border-2 border-black rounded-full neobrutal-shadow-sm">
           <div className={`w-3 h-3 rounded-full border-2 border-black ${integrations.pipedrive ? 'bg-green-400' : 'bg-red-400'}`}></div>
           <span className="text-[10px] font-bold uppercase tracking-wide font-mono">
             SYSTEM: {integrations.pipedrive ? 'ONLINE' : 'OFFLINE'}
@@ -43,9 +43,9 @@ export function TopBar({ onNavigate }: { onNavigate?: (tab: string) => void }) {
         </button>
 
         {/* User Profile - Sticker Vibe */}
-        <button 
-           onClick={() => onNavigate?.('configuration')}
-           className="flex items-center gap-2 pl-2 pr-4 py-1.5 bg-white border-2 border-black rounded-full shadow-[4px_4px_0px_0px_black] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_0px_black] transition-all active:translate-x-0 active:translate-y-0 active:shadow-[2px_2px_0px_0px_black]"
+        <button
+          onClick={() => onNavigate?.('configuration')}
+          className="flex items-center gap-2 pl-2 pr-4 py-1.5 bg-white border-2 border-black rounded-full neobrutal-shadow-sm hover:neobrutal-shadow-md transition-all"
         >
           <div className="h-8 w-8 rounded-full bg-purple-500 border-2 border-black flex items-center justify-center text-white font-bold text-xs">
             {user.avatarInitials}
