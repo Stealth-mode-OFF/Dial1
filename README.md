@@ -1,44 +1,177 @@
-# Echo Dialer MVP Design
+# Supabase CLI
 
-This repository contains the React + TypeScript implementation of the Echo Dialer MVP. It ships with the neo-brutalist Command Center UI, Supabase Edge Function, and helper scripts so you can spin up the full experience locally or deploy it to a hosting platform.
+[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
+](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
+
+[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
+
+This repository contains all the functionality for Supabase CLI.
+
+- [x] Running Supabase locally
+- [x] Managing database migrations
+- [x] Creating and deploying Supabase Functions
+- [x] Generating types directly from your database schema
+- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
 
 ## Getting started
-1. `npm install`
-2. Copy `.env.example` to `.env` and fill in your Supabase + third-party secret values (see the table below).
-3. Run `npm run dev` to launch the Vite dev server (default port 4173). Use `?overlay=1` with the debugging overlay to validate pixel-perfect alignment.
 
-## Environment variables
-| Name | Purpose | Notes |
-| --- | --- | --- |
-| `VITE_SUPABASE_URL` | Frontend Supabase endpoint | Exposed to the browser via Vite (prefixed with `VITE_`). |
-| `VITE_SUPABASE_ANON_KEY` | Frontend anonymous key | Same as the project’s anon/public key. |
-| `SUPABASE_URL` | Backend Supabase endpoint | Used by the Edge Function and CLI scripts. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key | Grants the Edge Function full read/write access to your Supabase project. Keep it secret. |
-| `SUPABASE_ANON_KEY` | General anon key | Re-used by backend scripts for migrations/seeding. |
-| `OPENAI_API_KEY` | OpenAI secret | Used by the Edge Function for AI-powered flows. Do not expose it to the client. |
-| `PIPEDRIVE_API_KEY` | Pipedrive token | Server-only credential for syncing CRM data. |
-| `ECHO_ALLOWED_ORIGINS` | Optional CORS whitelist | Comma-separated origins (e.g., `https://app.example.com,http://localhost:5173`). Defaults to `*` if empty. |
+### Install the CLI
 
-## Backend setup (Supabase)
-1. Install the Supabase CLI and log in (`supabase login`).
-2. Link the project using `supabase link --project-ref [your-ref]`.
-3. Deploy the Edge Function: `supabase functions deploy make-server-139017f8`.
-4. Configure secrets:
-   ```bash
-   supabase secrets set \
-     SUPABASE_URL="https://[project].supabase.co" \
-     SUPABASE_SERVICE_ROLE_KEY="service-role-key" \
-     SUPABASE_ANON_KEY="anon-key" \
-     OPENAI_API_KEY="sk-..." \
-     PIPEDRIVE_API_KEY="your-token"
-   ```
-5. Run `node scripts/setup-backend.mjs` to ensure any migrations execute.
-6. Seed test data with `node scripts/seed-database.mjs` (uses the same `.env` values).
+Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
 
-## Running the app
-- `npm run dev`: start the dev server and navigate to `http://localhost:4173` (or the port printed by Vite).
-- `npm run build`: produce a production bundle that can be deployed to your favorite host.
+```bash
+npm i supabase --save-dev
+```
 
-## Notes
-- The `DebugOverlay` component can be toggled (`Shift+O`) to compare the live UI against the PNGs inside `public/overlays`.
-- Keep sensitive keys (OpenAI, Pipedrive, Supabase service role) on the server/Edge Function; only the `VITE_` variables belong in `.env` files that the client can read.
+When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
+
+```
+NODE_OPTIONS=--no-experimental-fetch yarn add supabase
+```
+
+> **Note**
+For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
+
+<details>
+  <summary><b>macOS</b></summary>
+
+  Available via [Homebrew](https://brew.sh). To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To install the beta release channel:
+  
+  ```sh
+  brew install supabase/tap/supabase-beta
+  brew link --overwrite supabase-beta
+  ```
+  
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Windows</b></summary>
+
+  Available via [Scoop](https://scoop.sh). To install:
+
+  ```powershell
+  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+  scoop install supabase
+  ```
+
+  To upgrade:
+
+  ```powershell
+  scoop update supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Linux</b></summary>
+
+  Available via [Homebrew](https://brew.sh) and Linux packages.
+
+  #### via Homebrew
+
+  To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+
+  #### via Linux packages
+
+  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
+
+  ```sh
+  sudo apk add --allow-untrusted <...>.apk
+  ```
+
+  ```sh
+  sudo dpkg -i <...>.deb
+  ```
+
+  ```sh
+  sudo rpm -i <...>.rpm
+  ```
+
+  ```sh
+  sudo pacman -U <...>.pkg.tar.zst
+  ```
+</details>
+
+<details>
+  <summary><b>Other Platforms</b></summary>
+
+  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
+
+  ```sh
+  go install github.com/supabase/cli@latest
+  ```
+
+  Add a symlink to the binary in `$PATH` for easier access:
+
+  ```sh
+  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
+  ```
+
+  This works on other non-standard Linux distros.
+</details>
+
+<details>
+  <summary><b>Community Maintained Packages</b></summary>
+
+  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
+  To install in your working directory:
+
+  ```bash
+  pkgx install supabase
+  ```
+
+  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
+</details>
+
+### Run the CLI
+
+```bash
+supabase bootstrap
+```
+
+Or using npx:
+
+```bash
+npx supabase bootstrap
+```
+
+The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
+
+## Docs
+
+Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
+
+## Breaking changes
+
+We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
+
+However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
+
+## Developing
+
+To run from source:
+
+```sh
+# Go >= 1.22
+go run . help
+```
