@@ -6,7 +6,7 @@
  *
  * For handover: All live coaching logic and UI is in LiveMeetCoach.
  */
-import { LiveMeetCoach } from '../components/LiveMeetCoach';
+import LiveMeetCoach from '../components/LiveMeetCoach';
 
 export default function MeetCoach() {
   return <LiveMeetCoach />;

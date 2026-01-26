@@ -48,7 +48,7 @@ type ActivityLog = {
 
 type SalesContextType = {
   stats: Stats;
-  currentLead: Lead;
+  currentLead: Lead | null;
   user: UserProfile;
   integrations: Integrations;
   recentActivity: ActivityLog[];
@@ -68,11 +68,7 @@ const defaultStats: Stats = {
   connected: 8,
   meetingsBooked: 7,
   pipelineValue: 37450,
-<<<<<<< HEAD
-  streak: 8,
-=======
   streak: 42,
->>>>>>> ee1060c (Remove all hardcoded fake companies and people; app is now empty and ready for Pipedrive import)
 };
 
 const defaultLead: Lead = {
@@ -230,7 +226,6 @@ export function SalesProvider({ children }: { children: ReactNode }) {
     setScriptStep(0);
     // REMOVE: No random contact generation, should come from real data
     setCurrentLead(null);
-    });
   };
 
   const toggleIntegration = (key: keyof Integrations) => {

@@ -1,12 +1,12 @@
 
 import React, { useState } from 'react';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar } from './components/layout/Sidebar';
 import { TopBar } from './components/TopBar';
-import { CommandCenter } from './pages/CommandCenter';
-import { LiveCampaigns } from './pages/LiveCampaigns';
-import { Intelligence } from './pages/Intelligence';
-import { MeetCoach } from './pages/MeetCoach';
-import { Configuration } from './pages/Configuration';
+import { CommandCenter } from './components/CommandCenter';
+import { LiveCampaigns } from './components/LiveCampaigns';
+import Intelligence from './pages/Intelligence';
+import MeetCoach from './pages/MeetCoach';
+import Configuration from './pages/Configuration';
 import { SalesProvider } from './contexts/SalesContext';
 import { DebugOverlay } from './components/DebugOverlay';
 
