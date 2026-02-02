@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, Command, Search } from 'lucide-react';
+import { Bell, RefreshCw, Search } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 
 type NavItem = 'command-center' | 'live-campaigns' | 'intelligence' | 'meet-coach' | 'configuration';
@@ -8,172 +8,60 @@ interface TopBarProps {
   onNavigate?: (tab: NavItem) => void;
 }
 
+const formatSyncTime = (iso: string | null) => {
+  if (!iso) return 'Not synced yet';
+  const date = new Date(iso);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
 export function TopBar({ onNavigate }: TopBarProps) {
-  const { user } = useSales();
-  const firstName = user?.name?.split(' ')?.[0] || user?.name || 'Alex';
-  const role = (user?.role || 'Senior AE').toUpperCase();
+  const { user, refresh, isLoading, lastUpdated, isConfigured, error } = useSales();
+  const initials = user.avatarInitials || 'ME';
 
   return (
-    <div
-      style={{
-        padding: '22px 24px 14px 24px',
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        gap: 18,
-        background: 'var(--figma-white)',
-        borderBottom: 'var(--figma-border)',
-        boxShadow: 'var(--figma-shadow)',
-        zIndex: 20,
-      }}
-    >
-      <div style={{ width: '100%', maxWidth: 640 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: 'var(--figma-white)',
-            border: 'var(--figma-border)',
-            borderRadius: 12,
-            boxShadow: 'var(--figma-shadow)',
-            padding: '0 16px',
-            height: 52,
-            fontFamily: 'var(--figma-font-body)',
-            fontWeight: 700,
-            fontSize: 16,
-            letterSpacing: '0.01em',
-            position: 'relative',
-          }}
-        >
-          <Search size={20} style={{ color: 'var(--figma-black)', marginRight: 10 }} />
+    <div className="app-topbar">
+      <div className="flex items-center justify-between gap-6 flex-wrap w-full">
+        <div className="app-search">
+          <Search size={18} />
           <input
+            className="app-input"
+            placeholder="Search contacts, deals, or notes"
             type="text"
-            placeholder="Search contacts, deals, or type commands..."
-            style={{
-              flex: 1,
-              background: 'transparent',
-              outline: 'none',
-              fontSize: 15,
-              fontFamily: 'var(--figma-font-body)',
-              fontWeight: 700,
-              color: 'var(--figma-black)',
-              border: 'none',
-            }}
           />
-          <div
-            aria-label="Keyboard shortcut"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              background: 'var(--figma-black)',
-              color: 'var(--figma-white)',
-              borderRadius: 6,
-              padding: '2px 8px',
-              fontWeight: 900,
-              fontSize: 13,
-              marginLeft: 10,
-              gap: 4,
-            }}
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          <span className="app-pill">
+            {isConfigured ? 'Supabase connected' : 'Connect Supabase'}
+          </span>
+          <button className="app-button secondary" onClick={() => void refresh()} disabled={isLoading}>
+            <RefreshCw size={16} />
+            {isLoading ? 'Refreshing' : 'Sync'}
+          </button>
+          <button className="app-button secondary" aria-label="Notifications">
+            <Bell size={16} />
+          </button>
+          <button
+            className="app-button secondary"
+            onClick={() => onNavigate?.('configuration')}
+            aria-label="User settings"
           >
-            <Command size={14} />
-            <span>K</span>
-          </div>
+            <span className="app-ring" aria-hidden="true">
+              {initials}
+            </span>
+            <span className="text-left leading-tight">
+              <span className="block text-sm font-semibold">
+                {user.name || 'Set your name'}
+              </span>
+              <span className="block text-xs app-muted">{user.role || 'Sales role'}</span>
+            </span>
+          </button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: 'var(--figma-black)',
-            color: 'var(--figma-white)',
-            borderRadius: 8,
-            fontFamily: 'var(--figma-font-body)',
-            fontWeight: 900,
-            fontSize: 13,
-            letterSpacing: '0.08em',
-            padding: '0 12px',
-            height: 34,
-            boxShadow: 'var(--figma-shadow)',
-            position: 'relative',
-          }}
-        >
-          <span
-            style={{
-              display: 'inline-block',
-              width: 10,
-              height: 10,
-              background: 'var(--figma-green)',
-              borderRadius: '50%',
-              marginRight: 8,
-            }}
-            aria-hidden="true"
-          />
-          <span>SYSTEM: ONLINE</span>
-        </div>
-
-        <button
-          aria-label="Notifications"
-          style={{
-            background: 'var(--figma-white)',
-            border: 'var(--figma-border)',
-            borderRadius: '50%',
-            width: 40,
-            height: 40,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-            boxShadow: 'var(--figma-shadow)',
-          }}
-        >
-          <Bell size={20} style={{ color: 'var(--figma-black)' }} />
-          <span style={{ position: 'absolute', top: 6, right: 6, width: 12, height: 12, background: 'var(--figma-red)', borderRadius: '50%', border: '2px solid var(--figma-white)' }}></span>
-        </button>
-
-        <button
-          aria-label="User menu"
-          onClick={() => onNavigate?.('configuration')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: 'var(--figma-white)',
-            border: 'var(--figma-border)',
-            borderRadius: 8,
-            boxShadow: 'var(--figma-shadow)',
-            padding: '0 10px 0 0',
-            height: 44,
-            fontFamily: 'var(--figma-font-body)',
-            fontWeight: 900,
-            fontSize: 13,
-            letterSpacing: '0.08em',
-            gap: 10,
-          }}
-        >
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: '50%',
-              background: 'var(--figma-purple)',
-              border: '2px solid var(--figma-black)',
-              boxShadow: 'var(--figma-shadow)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 900,
-              fontSize: 16,
-              color: 'var(--figma-black)',
-            }}
-          >
-            {user?.avatarInitials || 'AS'}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1, alignItems: 'flex-start', paddingRight: 4 }}>
-            <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--figma-black)' }}>{firstName}</div>
-            <div style={{ fontSize: 10, fontFamily: 'var(--figma-font-body)', fontWeight: 700, opacity: 0.7 }}>{role}</div>
-          </div>
-        </button>
+      <div className="w-full flex items-center justify-between text-xs app-muted">
+        <span>Last sync: {formatSyncTime(lastUpdated)}</span>
+        {error ? <span>Data warning: {error}</span> : <span>All systems normal</span>}
       </div>
     </div>
   );

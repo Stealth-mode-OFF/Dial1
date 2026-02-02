@@ -1,270 +1,386 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { supabaseClient } from '../utils/supabase/client';
+import { isSupabaseConfigured } from '../utils/supabase/info';
 
-type Stats = {
+export type Stats = {
   callsToday: number;
-  callsGoal: number;
-  connected: number;
+  connectRate: number;
   meetingsBooked: number;
   pipelineValue: number;
-  streak: number;
-  // Optional analytics fields (when Supabase analytics is wired)
-  totalCalls?: number;
-  connectRate?: number;
-  revenue?: number;
-  dailyVolume?: Array<{ time: string; value: number }>;
-  dispositionBreakdown?: Array<{ name: string; value: number }>;
+  activeLeads: number;
 };
 
-type Lead = {
+export type Contact = {
   id: string;
   name: string;
-  title: string;
-  company: string;
-  status: 'new' | 'called' | 'connected' | 'meeting' | 'refused';
+  title?: string;
+  company?: string;
+  phone?: string;
+  email?: string;
+  status?: string;
+  lastTouch?: string;
+  source?: string;
+  location?: string;
+  score?: number;
 };
 
-type UserProfile = {
+export type CallRecord = {
+  id: string;
+  createdAt?: string;
+  contactId?: string;
+  status?: string;
+  outcome?: string;
+  connected?: boolean;
+  durationSec?: number;
+  notes?: string;
+};
+
+export type Deal = {
+  id: string;
+  value?: number;
+  status?: string;
+  stage?: string;
+};
+
+export type UserProfile = {
   name: string;
   role: string;
   avatarInitials: string;
-  status: 'online' | 'away' | 'busy';
-  energyLevel: number;
 };
 
-type Integrations = {
-  pipedrive: boolean;
-  googleMeet: boolean;
-  slack: boolean;
-};
-
-type ActivityLog = {
-  id: string;
-  type: 'call' | 'meeting' | 'email';
-  description: string;
-  timestamp: string;
-  score?: number; // 0-100
+export type UserSettings = {
+  dailyCallGoal?: number;
 };
 
 type SalesContextType = {
+  isConfigured: boolean;
+  isLoading: boolean;
+  error: string | null;
+  lastUpdated: string | null;
   stats: Stats;
-  currentLead: Lead;
+  contacts: Contact[];
+  calls: CallRecord[];
+  deals: Deal[];
+  activeContact: Contact | null;
+  setActiveContactId: (id: string | null) => void;
+  refresh: () => Promise<void>;
   user: UserProfile;
-  integrations: Integrations;
-  recentActivity: ActivityLog[];
-  objectionCounts: Record<string, number>;
-  incrementCalls: () => void;
-  recordConnection: (success: boolean) => void;
-  recordObjection: (objection: string) => void;
-  bookMeeting: () => void;
-  nextLead: () => void;
-  toggleIntegration: (key: keyof Integrations) => void;
   updateUser: (updates: Partial<UserProfile>) => void;
+  settings: UserSettings;
+  updateSettings: (updates: Partial<UserSettings>) => void;
 };
+
+const SalesContext = createContext<SalesContextType | undefined>(undefined);
+
+const STORAGE_USER_KEY = 'echo.user';
+const STORAGE_SETTINGS_KEY = 'echo.settings';
 
 const defaultStats: Stats = {
-  callsToday: 45,
-  callsGoal: 60,
-  connected: 8,
-  meetingsBooked: 7,
-  pipelineValue: 37450,
-<<<<<<< HEAD
-  streak: 8,
-=======
-  streak: 42,
->>>>>>> ee1060c (Remove all hardcoded fake companies and people; app is now empty and ready for Pipedrive import)
-};
-
-const defaultLead: Lead = {
-  id: '1',
-  name: 'John Doe',
-  title: 'VP of Sales',
-  company: 'TechCorp',
-  status: 'new',
+  callsToday: 0,
+  connectRate: 0,
+  meetingsBooked: 0,
+  pipelineValue: 0,
+  activeLeads: 0,
 };
 
 const defaultUser: UserProfile = {
-  name: 'Alex Salesman',
-  role: 'Senior AE',
-  avatarInitials: 'AS',
-  status: 'online',
-  energyLevel: 85,
+  name: '',
+  role: '',
+  avatarInitials: '',
 };
 
-const defaultIntegrations: Integrations = {
-  pipedrive: true,
-  googleMeet: true,
-  slack: false,
+const defaultSettings: UserSettings = {
+  dailyCallGoal: 0,
 };
 
-/**
- * SalesContext
- *
- * Provides user, stats, and objection data for the app.
- * Used by all main screens and components.
- *
- * For handover: Update this context for new user/stats fields as needed.
- */
-const SalesContext = createContext<SalesContextType | undefined>(undefined);
+const normalizeContact = (row: Record<string, any>, index: number): Contact => {
+  const name =
+    row.name ||
+    row.full_name ||
+    row.contact_name ||
+    [row.first_name, row.last_name].filter(Boolean).join(' ');
+  const company = row.company || row.organization || row.org_name || row.company_name || '';
+  const id = String(row.id || row.contact_id || row.uuid || row.email || row.phone || index);
+  return {
+    id,
+    name: name || 'Unnamed contact',
+    title: row.title || row.role || row.job_title || '',
+    company,
+    phone: row.phone || row.mobile || row.phone_number || '',
+    email: row.email || '',
+    status: row.status || row.stage || '',
+    lastTouch: row.last_touch || row.last_contacted_at || row.updated_at || row.created_at || '',
+    source: row.source || row.source_name || '',
+    location: row.location || row.city || row.region || '',
+    score: row.score || row.lead_score || undefined,
+  };
+};
 
-export function SalesProvider({ children }: { children: ReactNode }) {
+const normalizeCall = (row: Record<string, any>, index: number): CallRecord => {
+  const status = row.status || row.disposition || row.outcome || '';
+  const connected =
+    row.connected === true ||
+    row.is_connected === true ||
+    (typeof status === 'string' &&
+      ['connected', 'answered', 'completed', 'meeting'].some((key) => status.toLowerCase().includes(key)));
+  const outcome = row.outcome || row.disposition || row.status || '';
+  return {
+    id: String(row.id || row.call_id || row.uuid || index),
+    createdAt: row.created_at || row.createdAt || row.timestamp || '',
+    contactId: row.contact_id || row.contactId || '',
+    status,
+    outcome,
+    connected,
+    durationSec: row.duration_sec || row.duration || row.call_duration || undefined,
+    notes: row.notes || row.summary || '',
+  };
+};
+
+const normalizeDeal = (row: Record<string, any>, index: number): Deal => ({
+  id: String(row.id || row.deal_id || row.uuid || index),
+  value: toNumber(row.value ?? row.amount ?? row.pipeline_value ?? row.deal_value),
+  status: row.status || row.stage || '',
+  stage: row.stage || row.phase || '',
+});
+
+const toNumber = (value: unknown): number => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+};
+
+const loadFromStorage = <T,>(key: string, fallback: T): T => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return { ...fallback, ...JSON.parse(raw) } as T;
+  } catch {
+    return fallback;
+  }
+};
+
+const saveToStorage = (key: string, value: unknown) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore write errors (privacy mode, quota, etc.)
+  }
+};
+
+const initialsFromName = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || '');
+  return letters.join('') || '';
+};
+
+export function SalesProvider({ children }: { children: React.ReactNode }) {
   const [stats, setStats] = useState<Stats>(defaultStats);
-  const [currentLead, setCurrentLead] = useState<Lead>(defaultLead);
-  const [user, setUser] = useState<UserProfile>(defaultUser);
-  const [integrations, setIntegrations] = useState<Integrations>(defaultIntegrations);
-  const [recentActivity, setRecentActivity] = useState<ActivityLog[]>([
-    { id: '1', type: 'meeting', description: 'Demo with Acme Corp', timestamp: '2h ago', score: 92 },
-    { id: '2', type: 'call', description: 'Intro call - Stark Ind', timestamp: '4h ago', score: 64 },
-    { id: '3', type: 'call', description: 'Follow-up / Wayne Ent', timestamp: 'Yesterday', score: 85 },
-  ]);
-  const [objectionCounts, setObjectionCounts] = useState<Record<string, number>>({
-    'Too expensive': 42,
-    'Send me an email': 28,
-    'Not interested': 15,
-    'Using competitor': 12,
-  });
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [calls, setCalls] = useState<CallRecord[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [activeContactId, setActiveContactId] = useState<string | null>(null);
+  const [user, setUser] = useState<UserProfile>(() => loadFromStorage(STORAGE_USER_KEY, defaultUser));
+  const [settings, setSettings] = useState<UserSettings>(() =>
+    loadFromStorage(STORAGE_SETTINGS_KEY, defaultSettings),
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  // API Helper with Fallback
-  const apiCall = async (endpoint: string, method: 'GET' | 'POST', body?: any) => {
-    if (!projectId) {
-      console.warn('Missing Supabase Project ID, running in local mode');
-      return null;
+  useEffect(() => {
+    saveToStorage(STORAGE_USER_KEY, user);
+  }, [user]);
+
+  useEffect(() => {
+    saveToStorage(STORAGE_SETTINGS_KEY, settings);
+  }, [settings]);
+
+  const refresh = async () => {
+    if (!supabaseClient || !isSupabaseConfigured) {
+      setError(null);
+      setContacts([]);
+      setCalls([]);
+      setDeals([]);
+      setStats(defaultStats);
+      setIsLoading(false);
+      return;
     }
 
-    try {
-      const url = `https://${projectId}.supabase.co/functions/v1/make-server-139017f8${endpoint}`;
-      
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${publicAnonKey}`
-        },
-        body: body ? JSON.stringify(body) : undefined
-      });
-      
-      if (!res.ok) {
-        throw new Error(`API Error ${res.status}: ${res.statusText}`);
+    setIsLoading(true);
+    setError(null);
+    const errors: string[] = [];
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const startIso = startOfDay.toISOString();
+
+    const contactsPromise = supabaseClient
+      .from('contacts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    const callsPromise = supabaseClient
+      .from('calls')
+      .select('*')
+      .gte('created_at', startIso)
+      .limit(500);
+
+    const dealsPromise = supabaseClient
+      .from('deals')
+      .select('*')
+      .limit(200);
+
+    const [contactsRes, callsRes, dealsRes] = await Promise.allSettled([
+      contactsPromise,
+      callsPromise,
+      dealsPromise,
+    ]);
+
+    const nextContacts: Contact[] = [];
+    const nextCalls: CallRecord[] = [];
+    const nextDeals: Deal[] = [];
+
+    if (contactsRes.status === 'fulfilled') {
+      if (contactsRes.value.error) {
+        errors.push('Contacts unavailable');
+      } else {
+        const rows = contactsRes.value.data || [];
+        rows.forEach((row, index) => nextContacts.push(normalizeContact(row as Record<string, any>, index)));
       }
-      return await res.json();
-    } catch (error) {
-      console.error('API Call Failed, falling back to local state:', error);
-      return null;
+    } else {
+      errors.push('Contacts unavailable');
     }
+
+    if (callsRes.status === 'fulfilled') {
+      if (callsRes.value.error) {
+        // If created_at filter fails, attempt fallback without filter
+        const fallback = await supabaseClient.from('calls').select('*').limit(200);
+        if (fallback.error) {
+          errors.push('Calls unavailable');
+        } else {
+          const rows = fallback.data || [];
+          rows.forEach((row, index) => nextCalls.push(normalizeCall(row as Record<string, any>, index)));
+        }
+      } else {
+        const rows = callsRes.value.data || [];
+        rows.forEach((row, index) => nextCalls.push(normalizeCall(row as Record<string, any>, index)));
+      }
+    } else {
+      errors.push('Calls unavailable');
+    }
+
+    if (dealsRes.status === 'fulfilled') {
+      if (dealsRes.value.error) {
+        errors.push('Deals unavailable');
+      } else {
+        const rows = dealsRes.value.data || [];
+        rows.forEach((row, index) => nextDeals.push(normalizeDeal(row as Record<string, any>, index)));
+      }
+    } else {
+      errors.push('Deals unavailable');
+    }
+
+    const callsToday = nextCalls.length;
+    const connected = nextCalls.filter((call) => call.connected).length;
+    const meetingsBooked = nextCalls.filter((call) => {
+      const outcome = (call.outcome || call.status || '').toLowerCase();
+      return ['meeting', 'demo', 'appointment'].some((key) => outcome.includes(key));
+    }).length;
+    const pipelineValue = nextDeals.reduce((sum, deal) => sum + (deal.value || 0), 0);
+    const activeLeads = nextContacts.filter((contact) => {
+      const status = (contact.status || '').toLowerCase();
+      return !status || ['queued', 'new', 'open', 'active'].some((key) => status.includes(key));
+    }).length;
+
+    setContacts(nextContacts);
+    setCalls(nextCalls);
+    setDeals(nextDeals);
+    setStats({
+      callsToday,
+      connectRate: callsToday ? Math.round((connected / callsToday) * 100) : 0,
+      meetingsBooked,
+      pipelineValue,
+      activeLeads,
+    });
+    setLastUpdated(new Date().toISOString());
+    setError(errors.length ? errors.join(' • ') : null);
+    setIsLoading(false);
   };
 
-  // Load stats on mount
   useEffect(() => {
-    const loadStats = async () => {
-      const data = await apiCall('/stats', 'GET');
-      if (data) {
-        setStats(data);
-      } else {
-        console.log('Using local/default stats');
-      }
-    };
-    loadStats();
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync stats to server
-  const syncStats = async (newStats: Stats) => {
-    setStats(newStats); // Optimistic update
-    apiCall('/stats', 'POST', newStats).catch(e => console.error('Sync failed', e));
-  };
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const interval = window.setInterval(() => {
+      void refresh();
+    }, 60000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const incrementCalls = () => {
-    const newStats = { ...stats, callsToday: stats.callsToday + 1 };
-    syncStats(newStats);
-    // Add to activity log
-      const newLog: ActivityLog = {
-        id: Date.now().toString(),
-        type: 'call',
-        description: `Call with ${currentLead.name}`,
-        timestamp: 'Just now',
-        // score: 50 + Math.floor(Math.random() * 40)
-        // REMOVE: No random score, should come from real data
-    };
-    setRecentActivity(prev => [newLog, ...prev].slice(0, 10));
-  };
-
-  const recordConnection = (success: boolean) => {
-    const newStats = {
-      ...stats,
-      connected: success ? stats.connected + 1 : stats.connected,
-      streak: success ? stats.streak + 1 : 0
-    };
-    syncStats(newStats);
-  };
-
-  const recordObjection = (objection: string) => {
-    setObjectionCounts(prev => ({
-      ...prev,
-      [objection]: (prev[objection] || 0) + 1
-    }));
-  };
-
-  const bookMeeting = () => {
-    const newStats = {
-      ...stats,
-      meetingsBooked: stats.meetingsBooked + 1,
-      pipelineValue: stats.pipelineValue + 5000,
-      streak: stats.streak + 2
-    };
-    syncStats(newStats);
-    setCurrentLead(prev => ({ ...prev, status: 'meeting' }));
-    // Update activity log
-    const newLog: ActivityLog = {
-      id: Date.now().toString(),
-      type: 'meeting',
-      description: `Booked meeting with ${currentLead.name}`,
-      timestamp: 'Just now',
-      score: 95
-    };
-    setRecentActivity(prev => [newLog, ...prev].slice(0, 10));
-  };
-
-  const nextLead = () => {
-    // REMOVE: No fake names, titles, or companies. App is empty and ready for import.
-    // Reset transient state
-    setLiveNote('');
-    setScriptStep(0);
-    // REMOVE: No random contact generation, should come from real data
-    setCurrentLead(null);
+  const updateUser = (updates: Partial<UserProfile>) => {
+    setUser((prev) => {
+      const next = { ...prev, ...updates };
+      const initials = updates.avatarInitials || initialsFromName(next.name || '');
+      return {
+        ...next,
+        avatarInitials: initials || next.avatarInitials || '',
+      };
     });
   };
 
-  const toggleIntegration = (key: keyof Integrations) => {
-    setIntegrations(prev => ({ ...prev, [key]: !prev[key] }));
+  const updateSettings = (updates: Partial<UserSettings>) => {
+    setSettings((prev) => ({ ...prev, ...updates }));
   };
 
-  const updateUser = (updates: Partial<UserProfile>) => {
-    setUser(prev => ({ ...prev, ...updates }));
-  };
+  const activeContact = useMemo(() => {
+    if (!activeContactId) return contacts[0] || null;
+    return contacts.find((contact) => contact.id === activeContactId) || contacts[0] || null;
+  }, [activeContactId, contacts]);
 
-  return (
-    <SalesContext.Provider value={{ 
-      stats, 
-      currentLead, 
-      user, 
-      integrations, 
-      recentActivity,
-      objectionCounts,
-      incrementCalls, 
-      recordConnection, 
-      recordObjection,
-      bookMeeting, 
-      nextLead,
-      toggleIntegration,
-      updateUser
-    }}>
-      {children}
-    </SalesContext.Provider>
+  const value = useMemo<SalesContextType>(
+    () => ({
+      isConfigured: isSupabaseConfigured,
+      isLoading,
+      error,
+      lastUpdated,
+      stats,
+      contacts,
+      calls,
+      deals,
+      activeContact,
+      setActiveContactId,
+      refresh,
+      user,
+      updateUser,
+      settings,
+      updateSettings,
+    }),
+    [
+      isLoading,
+      error,
+      lastUpdated,
+      stats,
+      contacts,
+      calls,
+      deals,
+      activeContact,
+      user,
+      settings,
+    ],
   );
+
+  return <SalesContext.Provider value={value}>{children}</SalesContext.Provider>;
 }
 
 export function useSales() {
   const context = useContext(SalesContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useSales must be used within a SalesProvider');
   }
   return context;

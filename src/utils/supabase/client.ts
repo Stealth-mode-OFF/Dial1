@@ -1,6 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
-import { projectId, publicAnonKey } from './info';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { isSupabaseConfigured, publicAnonKey, supabaseUrl } from './info';
 
-const supabaseUrl = `https://${projectId}.supabase.co`;
+function createSupabaseClient(): SupabaseClient | null {
+  if (!isSupabaseConfigured) return null;
+  return createClient(supabaseUrl, publicAnonKey);
+}
 
-export const supabase = createClient(supabaseUrl, publicAnonKey);
+export const supabaseClient = createSupabaseClient();
+export const supabase = supabaseClient;
