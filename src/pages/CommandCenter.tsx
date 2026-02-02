@@ -1,144 +1,97 @@
 import React from 'react';
-import { ArrowUpRight, CalendarCheck, PhoneCall, Target, TrendingUp } from 'lucide-react';
+import { CalendarCheck, PhoneCall, Target } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 
 const formatNumber = (value: number) => new Intl.NumberFormat().format(value || 0);
 
-const formatRelative = (value?: string) => {
-  if (!value) return 'Unknown time';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Unknown time';
-  const diff = Math.max(0, Date.now() - date.getTime());
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-};
+export default function CommandCenter({ onStartDialer }: { onStartDialer?: () => void }) {
+  const { stats, contacts, isLoading, isConfigured, settings } = useSales();
 
-export default function CommandCenter() {
-  const { stats, contacts, calls, isLoading, isConfigured, settings } = useSales();
-
-  const queue = contacts.slice(0, 6);
-  const recentCalls = [...calls]
-    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-    .slice(0, 5);
-
+  const nextLead = contacts[0];
   const goal = settings.dailyCallGoal || 0;
   const goalPct = goal > 0 ? Math.min(100, Math.round((stats.callsToday / goal) * 100)) : 0;
 
   return (
-    <div className="app-section app-grid">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="app-title text-3xl">Command Center</h1>
-          <p className="app-subtitle">Real-time pulse of your outbound motion.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="app-badge">
-            <TrendingUp size={14} /> Live pipeline
-          </span>
-          <button className="app-button secondary">
-            <ArrowUpRight size={16} /> New sprint
-          </button>
-        </div>
+    <div className="app-page">
+      <header>
+        <h1 className="app-title text-3xl">Today</h1>
+        <p className="app-subtitle">One clean view of what matters right now.</p>
       </header>
 
-      {!isConfigured && (
-        <div className="app-card app-section">
-          <h2 className="app-title text-xl">Connect your data</h2>
-          <p className="app-subtitle mt-2">
-            Add your Supabase credentials to start pulling live contacts, calls, and deals.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <span className="app-pill">VITE_SUPABASE_URL</span>
-            <span className="app-pill">VITE_SUPABASE_ANON_KEY</span>
-            <span className="app-pill">VITE_SUPABASE_PROJECT_ID (optional)</span>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={<PhoneCall size={18} />}
-          label="Calls today"
-          value={formatNumber(stats.callsToday)}
-          detail={goal ? `${goalPct}% of goal` : 'Set daily goal'}
-        />
-        <StatCard
-          icon={<Target size={18} />}
-          label="Connect rate"
-          value={`${stats.connectRate}%`}
-          detail="Answered vs. total"
-        />
-        <StatCard
-          icon={<CalendarCheck size={18} />}
-          label="Meetings booked"
-          value={formatNumber(stats.meetingsBooked)}
-          detail="From call outcomes"
-        />
-        <StatCard
-          icon={<TrendingUp size={18} />}
-          label="Pipeline value"
-          value={formatNumber(stats.pipelineValue)}
-          detail="Open deals"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="app-card app-section lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="app-title text-xl">Priority queue</h2>
-              <p className="app-subtitle">Next best leads, sorted by recency.</p>
+      <div className="app-page-body">
+        {!isConfigured && (
+          <div className="app-card app-section">
+            <h2 className="app-title text-lg">Connect live data</h2>
+            <p className="app-subtitle mt-2">
+              Add your Supabase keys to load real contacts, calls, and deals.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="app-pill">VITE_SUPABASE_URL</span>
+              <span className="app-pill">VITE_SUPABASE_ANON_KEY</span>
             </div>
-            <span className="app-pill">{queue.length} ready</span>
           </div>
+        )}
 
-          <div className="grid gap-3">
-            {isLoading && <div className="app-subtitle">Loading contacts...</div>}
-            {!isLoading && queue.length === 0 && (
-              <div className="app-subtitle">No contacts yet. Import contacts to build your queue.</div>
-            )}
-            {queue.map((contact) => (
-              <div key={contact.id} className="flex items-center justify-between border-b border-black/10 pb-3">
-                <div>
-                  <div className="font-semibold">{contact.name}</div>
-                  <div className="text-sm app-muted">
-                    {contact.title || 'Role'} {contact.company ? `· ${contact.company}` : ''}
-                  </div>
-                </div>
-                <div className="text-sm app-muted">{contact.status || 'Queued'}</div>
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <StatCard
+            icon={<PhoneCall size={18} />}
+            label="Calls today"
+            value={formatNumber(stats.callsToday)}
+            detail={goal ? `${goalPct}% of goal` : 'Set a daily goal'}
+          />
+          <StatCard
+            icon={<Target size={18} />}
+            label="Connect rate"
+            value={`${stats.connectRate}%`}
+            detail="Answered vs. total"
+          />
+          <StatCard
+            icon={<CalendarCheck size={18} />}
+            label="Meetings booked"
+            value={formatNumber(stats.meetingsBooked)}
+            detail="Logged outcomes"
+          />
         </div>
 
-        <div className="app-card app-section">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="app-title text-xl">Recent activity</h2>
-              <p className="app-subtitle">Most recent call updates.</p>
-            </div>
-            <span className="app-pill">{recentCalls.length} entries</span>
-          </div>
-          <div className="grid gap-3">
-            {recentCalls.length === 0 && (
-              <div className="app-subtitle">No calls logged today.</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="app-card app-section">
+            <h2 className="app-title text-xl">Next lead</h2>
+            <p className="app-subtitle mt-1">Focus on one conversation at a time.</p>
+
+            {isLoading && <div className="app-subtitle mt-4">Loading contact…</div>}
+            {!isLoading && !nextLead && (
+              <div className="app-subtitle mt-4">No contacts yet. Import to start dialing.</div>
             )}
-            {recentCalls.map((call) => (
-              <div key={call.id} className="app-card soft px-3 py-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold">{call.outcome || call.status || 'Call update'}</div>
-                  <div className="text-xs app-muted">{formatRelative(call.createdAt)}</div>
+
+            {nextLead && (
+              <div className="mt-4 app-card soft p-4">
+                <div className="text-lg font-semibold">{nextLead.name}</div>
+                <div className="text-sm app-muted mt-1">
+                  {nextLead.title || 'Role'}
+                  {nextLead.company ? ` · ${nextLead.company}` : ''}
                 </div>
-                <div className="text-xs app-muted mt-1">
-                  {call.notes ? call.notes : call.connected ? 'Connected' : 'Attempted'}
+                <div className="text-sm app-muted mt-2">
+                  {nextLead.phone || nextLead.email || 'Add contact details'}
                 </div>
+                <button className="app-button mt-4" onClick={onStartDialer}>
+                  Start call
+                </button>
               </div>
-            ))}
+            )}
+          </div>
+
+          <div className="app-card app-section">
+            <h2 className="app-title text-xl">Focus reminder</h2>
+            <p className="app-subtitle mt-1">
+              Keep the call simple: confirm fit, surface pain, book next step.
+            </p>
+            <div className="mt-4 grid gap-3">
+              {['Confirm the ICP in 1 question', 'Ask 1 pain question', 'Book 15-minute follow-up'].map((item) => (
+                <div key={item} className="app-card soft px-4 py-3 text-sm">
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

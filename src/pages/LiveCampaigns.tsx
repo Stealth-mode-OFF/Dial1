@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ClipboardCheck, Mic, PhoneCall, Search, StopCircle } from 'lucide-react';
+import { ClipboardCheck, PhoneCall, Search, StopCircle } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 
 const formatDuration = (seconds: number) => {
@@ -46,11 +46,11 @@ export default function LiveCampaigns() {
   };
 
   return (
-    <div className="app-section app-grid">
+    <div className="app-page">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="app-title text-3xl">Live Dialer</h1>
-          <p className="app-subtitle">Run focused call blocks with a live queue.</p>
+          <p className="app-subtitle">One lead, one outcome, then move on.</p>
         </div>
         <div className="flex items-center gap-3">
           <span className="app-pill">Session {isLive ? 'Live' : 'Ready'}</span>
@@ -61,8 +61,8 @@ export default function LiveCampaigns() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <aside className="app-card app-section lg:col-span-4">
+      <div className="app-page-body grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <aside className="app-card app-section app-panel lg:col-span-4">
           <div className="flex items-center justify-between">
             <h2 className="app-title text-lg">Lead queue</h2>
             <span className="app-pill">{filtered.length} leads</span>
@@ -76,7 +76,7 @@ export default function LiveCampaigns() {
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
-          <div className="mt-4 grid gap-3">
+          <div className="mt-4 grid gap-3 app-scroll">
             {isLoading && <div className="app-subtitle">Loading queue...</div>}
             {!isLoading && filtered.length === 0 && (
               <div className="app-subtitle">No queued contacts found.</div>
@@ -101,7 +101,7 @@ export default function LiveCampaigns() {
           </div>
         </aside>
 
-        <section className="app-card app-section lg:col-span-8">
+        <section className="app-card app-section app-panel lg:col-span-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="app-title text-2xl">
@@ -120,30 +120,13 @@ export default function LiveCampaigns() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
-            <div className="app-card soft p-4">
-              <p className="text-xs uppercase app-muted">Focus</p>
-              <p className="text-sm font-semibold mt-2">Ask 2 discovery questions before pitching.</p>
-            </div>
-            <div className="app-card soft p-4">
-              <p className="text-xs uppercase app-muted">Next step</p>
-              <p className="text-sm font-semibold mt-2">Secure a 15-minute follow-up call.</p>
-            </div>
-            <div className="app-card soft p-4">
-              <p className="text-xs uppercase app-muted">Last touch</p>
-              <p className="text-sm font-semibold mt-2">
-                {activeContact?.lastTouch ? new Date(activeContact.lastTouch).toLocaleDateString() : 'No recent activity'}
-              </p>
-            </div>
-          </div>
-
           <div className="mt-6">
             <div className="flex items-center justify-between">
               <h3 className="app-title text-lg">Call notes</h3>
               {savedAt && <span className="app-subtitle">Saved at {savedAt}</span>}
             </div>
             <textarea
-              className="app-card soft w-full mt-3 p-4 min-h-[160px]"
+              className="app-card soft w-full mt-3 p-4 app-notes"
               placeholder="Capture outcomes, objections, and next steps..."
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
@@ -152,9 +135,17 @@ export default function LiveCampaigns() {
               <button className="app-button" onClick={handleSaveNotes}>
                 <ClipboardCheck size={16} /> Save notes
               </button>
-              <button className="app-button secondary">
-                <Mic size={16} /> Transcribe
-              </button>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <h3 className="app-title text-lg">Log outcome</h3>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {['Meeting set', 'Follow-up', 'No answer', 'Not a fit'].map((label) => (
+                <button key={label} className="app-button secondary">
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
         </section>

@@ -4,11 +4,10 @@ import {
   LayoutDashboard,
   PhoneCall,
   Settings,
-  Sparkles,
   Zap,
 } from 'lucide-react';
 
-type NavItem = 'command-center' | 'live-campaigns' | 'intelligence' | 'meet-coach' | 'configuration';
+type NavItem = 'command-center' | 'live-campaigns' | 'intelligence' | 'configuration';
 
 interface SidebarProps {
   activeTab: NavItem;
@@ -19,7 +18,6 @@ const navItems: Array<{ id: NavItem; label: string; icon: React.ElementType }> =
   { id: 'command-center', label: 'Command Center', icon: LayoutDashboard },
   { id: 'live-campaigns', label: 'Dialer', icon: PhoneCall },
   { id: 'intelligence', label: 'Intelligence', icon: BarChart3 },
-  { id: 'meet-coach', label: 'Coach', icon: Sparkles },
 ];
 
 export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
