@@ -146,6 +146,41 @@ Note: A `.env.local` file with placeholder keys (`VITE_SUPABASE_PROJECT_ID` and 
 
 ## 🧪 Testování
 
+### 🎯 Manual Testing Framework (NEW!)
+
+**Kompletní manuální testování všech integrací:**
+
+```bash
+# Test Supabase connection
+npm run test:supabase
+
+# Test Pipedrive API
+npm run test:pipedrive
+
+# Test all connections
+npm run test:connections
+
+# Interactive testing assistant
+npm run test:manual
+```
+
+**📖 Dokumentace pro manuální testování:**
+
+- **[START_HERE_TESTING.md](../START_HERE_TESTING.md)** ⭐ - Začněte zde!
+- **[QUICK_TEST_CHECKLIST.md](../QUICK_TEST_CHECKLIST.md)** - Rychlý test (30 min)
+- **[MANUAL_TEST_EXECUTION_REPORT.md](../MANUAL_TEST_EXECUTION_REPORT.md)** - Kompletní test (2 hodiny)
+- **[TESTING_INDEX.md](../TESTING_INDEX.md)** - Přehled všech testů
+
+**Pokrytí manuálních testů:**
+- ✅ Import of Leads (Pipedrive sync)
+- ✅ Dialing (call workflow)
+- ✅ Pipedrive Connection
+- ✅ Supabase Connection
+- ✅ Google Meet Connection
+- ✅ Done Activities Checks
+
+---
+
 ### E2E Testy (Playwright)
 
 ```bash
