@@ -57,6 +57,7 @@
             "@types/react": "^18.3.12",
             "@types/react-dom": "^18.3.1",
             "@vitejs/plugin-react-swc": "^3.10.2",
+            "dotenv": "^16.3.1",
             "typescript": "^5.9.3",
             "vite": "^6.4.1"
       },
@@ -65,6 +66,10 @@
             "build": "vite build",
             "typecheck": "tsc -p tsconfig.json --noEmit",
             "test:e2e": "playwright test --project=chromium",
-            "health": "node scripts/health-check.js"
+            "health": "node scripts/health-check.js",
+            "test:supabase": "node scripts/test-supabase.mjs",
+            "test:pipedrive": "node scripts/test-pipedrive.mjs",
+            "test:connections": "node scripts/test-supabase.mjs && node scripts/test-pipedrive.mjs",
+            "test:manual": "bash scripts/manual-test.sh"
       }
 }
