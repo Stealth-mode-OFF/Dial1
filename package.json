@@ -50,7 +50,8 @@
             "recharts": "^2.15.2",
             "sonner": "^2.0.3",
             "tailwind-merge": "*",
-            "vaul": "^1.1.2"
+            "vaul": "^1.1.2",
+            "vercel": "^50.9.6"
       },
       "devDependencies": {
             "@types/node": "^20.10.0",
