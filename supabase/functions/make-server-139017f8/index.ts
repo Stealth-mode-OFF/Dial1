@@ -922,9 +922,10 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const rawContactId = body?.contact_id?.toString();
   const include = Array.isArray(body?.include) ? body.include.map((s: any) => s?.toString()) : ["cold_call_prep_card"];
+  const language = body?.language?.toString() || "cs";
   if (!rawContactId) return c.json({ error: "Missing contact_id" }, 400);
 
-  const selectFields = "id, name, company, linkedin_url, manual_notes, company_website";
+  const selectFields = "id, name, title, company, linkedin_url, manual_notes, company_website";
   let contactId = rawContactId;
   let contact: any | null = null;
 
@@ -1019,7 +1020,7 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
     hypothesis_ids: hypothesisIds,
   });
 
-  const coldCall = include.includes("cold_call_prep_card")
+  const fallbackColdCall = include.includes("cold_call_prep_card")
     ? {
         opener_variants: [
           line("op1", `Hi ${contact.name}, did I catch you at an okay time for a quick question?`, [], [h1]),
@@ -1083,7 +1084,7 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
       }
     : null;
 
-  const meetingPack = include.includes("meeting_booking_pack")
+  const fallbackMeetingPack = include.includes("meeting_booking_pack")
     ? {
         discovery_questions: [
           line("mq1", "Co vás přimělo řešit demo nebo změnu právě teď?", [], [h1]),
@@ -1109,7 +1110,7 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
       }
     : null;
 
-  const spinPack = include.includes("spin_demo_pack")
+  const fallbackSpinPack = include.includes("spin_demo_pack")
     ? {
         spin: {
           situation: [line("s1", "How do you currently run feedback cycles across the team?", [], [h1])],
@@ -1124,6 +1125,166 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
           proof_moments: [line("pm1", "Ask what proof would convince them (participation, honesty, follow-through).", [], [h1])],
           close: [line("c1", "Agree on the smallest next step and who must be involved.", [], [h1])],
         },
+        insufficient_evidence: insufficientEvidence,
+        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+      }
+    : null;
+
+  const sanitizeText = (text: string) =>
+    text
+      .replace(/\d+/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const normalizeLines = (lines: any[], prefix: string, fallback: any[]) => {
+    const fallbackLines = Array.isArray(fallback) ? fallback : [];
+    if (!Array.isArray(lines) || lines.length === 0) return fallbackLines;
+    const evidenceIds = new Set((approvedFacts || []).map((f: any) => f?.evidence_id).filter(Boolean));
+    const hypothesisIds = new Set([h1]);
+    return lines
+      .map((line: any, idx: number) => {
+        const text = sanitizeText(line?.text?.toString() || "");
+        if (!text) return fallbackLines[idx] || null;
+        const rawEvidence = Array.isArray(line?.evidence_ids) ? line.evidence_ids : [];
+        const rawHypothesis = Array.isArray(line?.hypothesis_ids) ? line.hypothesis_ids : [];
+        const evidence = rawEvidence.filter((id: string) => evidenceIds.has(id));
+        const hypothesis = rawHypothesis.filter((id: string) => hypothesisIds.has(id));
+        if (evidence.length === 0 && hypothesis.length === 0) hypothesis.push(h1);
+        return {
+          id: line?.id?.toString() || `${prefix}${idx + 1}`,
+          text,
+          evidence_ids: evidence,
+          hypothesis_ids: hypothesis,
+        };
+      })
+      .filter(Boolean);
+  };
+
+  const normalizeObjections = (items: any[], prefix: string, fallback: any[]) => {
+    const fallbackItems = Array.isArray(fallback) ? fallback : [];
+    if (!Array.isArray(items) || items.length === 0) return fallbackItems;
+    const evidenceIds = new Set((approvedFacts || []).map((f: any) => f?.evidence_id).filter(Boolean));
+    const hypothesisIds = new Set([h1]);
+    return items
+      .map((item: any, idx: number) => {
+        const trigger = sanitizeText(item?.trigger?.toString() || "");
+        const response = sanitizeText(item?.response?.toString() || "");
+        if (!response) return fallbackItems[idx] || null;
+        const rawEvidence = Array.isArray(item?.evidence_ids) ? item.evidence_ids : [];
+        const rawHypothesis = Array.isArray(item?.hypothesis_ids) ? item.hypothesis_ids : [];
+        const evidence = rawEvidence.filter((id: string) => evidenceIds.has(id));
+        const hypothesis = rawHypothesis.filter((id: string) => hypothesisIds.has(id));
+        if (evidence.length === 0 && hypothesis.length === 0) hypothesis.push(h1);
+        return {
+          id: item?.id?.toString() || `${prefix}${idx + 1}`,
+          trigger,
+          response,
+          evidence_ids: evidence,
+          hypothesis_ids: hypothesis,
+        };
+      })
+      .filter(Boolean);
+  };
+
+  const normalizeThreeAct = (payload: any, prefix: string, fallback: any) => {
+    if (!payload) return fallback || null;
+    const result = {
+      act1: normalizeLines(payload.act1, `${prefix}a1-`, fallback?.act1 || []),
+      act2: normalizeLines(payload.act2, `${prefix}a2-`, fallback?.act2 || []),
+      act3: normalizeLines(payload.act3, `${prefix}a3-`, fallback?.act3 || []),
+      proof_moments: normalizeLines(payload.proof_moments, `${prefix}pm-`, fallback?.proof_moments || []),
+      close: normalizeLines(payload.close, `${prefix}c-`, fallback?.close || []),
+    };
+    return result;
+  };
+
+  const normalizeSpin = (payload: any, prefix: string, fallback: any) => {
+    if (!payload) return fallback || null;
+    return {
+      situation: normalizeLines(payload.situation, `${prefix}s-`, fallback?.situation || []),
+      problem: normalizeLines(payload.problem, `${prefix}p-`, fallback?.problem || []),
+      implication: normalizeLines(payload.implication, `${prefix}i-`, fallback?.implication || []),
+      need_payoff: normalizeLines(payload.need_payoff, `${prefix}n-`, fallback?.need_payoff || []),
+    };
+  };
+
+  let aiPack: any = null;
+  let modelUsed = "deterministic_v0";
+  let promptVersion = "deterministic";
+
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (apiKey) {
+    try {
+      const openai = new OpenAI({ apiKey });
+      const model = Deno.env.get("PACKS_MODEL") || "gpt-4o-mini";
+      const intel = await kv.get(userKey(userId, `intel:${contactId}`));
+      const facts = (approvedFacts || []).map((f: any) => ({
+        evidence_id: f.evidence_id,
+        claim: f.claim,
+        evidence_snippet: f.evidence_snippet,
+        source_url: f.source_url,
+      }));
+
+      const systemPrompt = `You are a senior B2B sales strategist. Output strict JSON only.\n\nRules:\n- Use language: ${language}.\n- No digits anywhere in text output.\n- Each line must include hypothesis_ids with the provided hypothesis id.\n- evidence_ids may only use the provided evidence ids.\n- Keep each line under 140 characters.\n- Do not invent facts or numbers; if unsure, ask discovery questions.\n\nReturn JSON with only the requested pack objects: cold_call_prep_card, meeting_booking_pack, spin_demo_pack.`;
+
+      const userPrompt = `Contact:\n${JSON.stringify(
+        {
+          id: contactId,
+          name: contact.name,
+          title: contact.title || null,
+          company: contact.company || null,
+          linkedin_url: contact.linkedin_url || null,
+          company_website: contact.company_website || null,
+          manual_notes: contact.manual_notes || null,
+        },
+        null,
+        2,
+      )}\n\nCached intel (optional):\n${JSON.stringify(intel || {}, null, 2)}\n\nApproved facts:\n${JSON.stringify(facts, null, 2)}\n\nHypothesis id: ${h1}\nInclude packs: ${include.join(", ")}\n\nExpected JSON shape example:\n{\n  "cold_call_prep_card": {\n    "opener_variants": [{"id":"op1","text":"...","evidence_ids":[],"hypothesis_ids":["${h1}"]}],\n    "discovery_questions": [{"id":"dq1","text":"...","evidence_ids":[],"hypothesis_ids":["${h1}"]}],\n    "objections": [{"id":"obj1","trigger":"...","response":"...","evidence_ids":[],"hypothesis_ids":["${h1}"]}]\n  }\n}\nOnly include pack objects requested.`;
+
+      const completion = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.4,
+      });
+
+      aiPack = safeJsonParse(completion.choices?.[0]?.message?.content, null);
+      modelUsed = model;
+      promptVersion = "pack_ai_v1";
+    } catch (e) {
+      console.error("Pack generation OpenAI error:", e);
+      aiPack = null;
+    }
+  }
+
+  const coldCall = include.includes("cold_call_prep_card")
+    ? {
+        opener_variants: normalizeLines(aiPack?.cold_call_prep_card?.opener_variants, "op", fallbackColdCall?.opener_variants || []),
+        discovery_questions: normalizeLines(aiPack?.cold_call_prep_card?.discovery_questions, "dq", fallbackColdCall?.discovery_questions || []),
+        objections: normalizeObjections(aiPack?.cold_call_prep_card?.objections, "obj", fallbackColdCall?.objections || []),
+        insufficient_evidence: insufficientEvidence,
+        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+      }
+    : null;
+
+  const meetingPack = include.includes("meeting_booking_pack")
+    ? {
+        discovery_questions: normalizeLines(aiPack?.meeting_booking_pack?.discovery_questions, "mq", fallbackMeetingPack?.discovery_questions || []),
+        meeting_asks: normalizeLines(aiPack?.meeting_booking_pack?.meeting_asks, "ma", fallbackMeetingPack?.meeting_asks || []),
+        agenda: normalizeLines(aiPack?.meeting_booking_pack?.agenda, "ag", fallbackMeetingPack?.agenda || []),
+        next_step_conditions: normalizeLines(aiPack?.meeting_booking_pack?.next_step_conditions, "ns", fallbackMeetingPack?.next_step_conditions || []),
+        insufficient_evidence: insufficientEvidence,
+        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+      }
+    : null;
+
+  const spinPack = include.includes("spin_demo_pack")
+    ? {
+        spin: normalizeSpin(aiPack?.spin_demo_pack?.spin, "sp", fallbackSpinPack?.spin || null),
+        three_act_demo: normalizeThreeAct(aiPack?.spin_demo_pack?.three_act_demo, "ta", fallbackSpinPack?.three_act_demo || null),
         insufficient_evidence: insufficientEvidence,
         insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
       }
@@ -1156,8 +1317,8 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
     owner_user_id: userId,
     correlation_id: correlationId,
     purpose: include.length > 1 ? "full_pack" : include[0],
-    model: "deterministic_v0",
-    prompt_version: "none",
+    model: modelUsed,
+    prompt_version: promptVersion,
     input: { contact_id: contactId, include },
     output: envelope,
     validator_output: qualityReport,
