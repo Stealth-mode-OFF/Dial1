@@ -258,15 +258,6 @@ body {
 .rail.collapsed .theme-btn {
   width: 100%;
 }
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(61, 217, 163, 0.18), rgba(74, 130, 255, 0.15));
-  color: #dff7ff;
-  font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.2px;
-  box-shadow: var(--shadow-soft);
-}
 
 .rail-nav {
   display: flex;
