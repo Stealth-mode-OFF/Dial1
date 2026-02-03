@@ -472,8 +472,8 @@ export function DemoWorkspace() {
   }, [lastCaption, liveCoachingEnabled]);
 
   return (
-    <div className="workspace" data-testid="demo-workspace">
-      <div className="panel stack">
+    <div className="demo-grid" data-testid="demo-workspace">
+      <div className="panel demo-card">
         <div className="panel-head">
           <div>
             <p className="eyebrow">Google Meet</p>
@@ -482,24 +482,24 @@ export function DemoWorkspace() {
           <span className="pill subtle">{extensionStatus.connected ? 'Ext: zapnuto' : 'Ext: vypnuto'}</span>
         </div>
 
-          <div className={`banner ${connectionStatus.tone}`}>
-            {connectionStatus.text}
-            {!extensionStatus.connected && (
-              <div className="muted text-xs mt-2">
-                Jak opravit: otevři `meet.google.com` v aktivní kartě, reloadni stránku a ujisti se, že extension je zapnutá.
-              </div>
-            )}
-            {extensionStatus.connected && meetActive && (!meetEvents.length || captionStale) && (
-              <div className="muted text-xs mt-2">
-                Jak opravit: zapni v Google Meet titulky (CC). Bez nich nepřijdou data.
-              </div>
-            )}
-            {callIdLooksLikeUrl && (
-              <div className="muted text-xs mt-2">
-                Příklad správného Call ID: `mse-ebhc-zgp` (bez `https://`).
-              </div>
-            )}
-          </div>
+        <div className={`banner ${connectionStatus.tone}`}>
+          {connectionStatus.text}
+          {!extensionStatus.connected && (
+            <div className="muted text-xs mt-2">
+              Jak opravit: otevři `meet.google.com` v aktivní kartě, reloadni stránku a ujisti se, že extension je zapnutá.
+            </div>
+          )}
+          {extensionStatus.connected && meetActive && (!meetEvents.length || captionStale) && (
+            <div className="muted text-xs mt-2">
+              Jak opravit: zapni v Google Meet titulky (CC). Bez nich nepřijdou data.
+            </div>
+          )}
+          {callIdLooksLikeUrl && (
+            <div className="muted text-xs mt-2">
+              Příklad správného Call ID: `mse-ebhc-zgp` (bez `https://`).
+            </div>
+          )}
+        </div>
         {lastCaptionAgo !== null && (
           <div className="muted text-xs">Poslední titulek: před {lastCaptionAgo}s</div>
         )}
@@ -582,7 +582,7 @@ export function DemoWorkspace() {
         {meetError && <div className="status-line small">{meetError}</div>}
       </div>
 
-      <div className="panel focus">
+      <div className="panel demo-card">
         <div className="panel-head">
           <div>
             <p className="eyebrow">Real-time coaching</p>
@@ -613,132 +613,141 @@ export function DemoWorkspace() {
 
         {focusMode === 'objection' && objectionPack && (
           <div className="coach-box mt-2">
-          <div className="muted text-xs">Toolkit námitek</div>
+            <div className="muted text-xs">Toolkit námitek</div>
             <p className="say-next">{objectionPack.rebuttal || '—'}</p>
             <p className="muted text-sm mt-2">{objectionPack.redirect_question || ''}</p>
             <p className="muted text-sm mt-1">{objectionPack.close_retry || ''}</p>
           </div>
         )}
-
-        <div className="panel soft mt-3">
-          <div className="panel-head tight">
-            <span className="eyebrow">Živý přepis</span>
-            <span className="pill subtle">{meetEvents.length} řádků</span>
-          </div>
-          <div ref={listRef} className="list" style={{ maxHeight: 320 }}>
-            {meetEvents.length === 0 && <div className="muted text-sm">Čekám na titulky z Meet…</div>}
-            {meetEvents.map((evt) => (
-              <div key={evt.id} className="list-row">
-                <div>
-                  <div className="muted text-xs">
-                    {evt.speakerName || evt.speaker || 'Speaker'} ·{' '}
-                    {new Date(evt.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                  <div className="text-sm">{evt.text}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          {lastCaption && <div className="muted text-xs mt-2">Poslední: {lastCaption}</div>}
-        </div>
       </div>
 
-      <div className="panel stack">
+      <div className="panel demo-card">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Zaměření</p>
-            <h2>SPIN & custom</h2>
+            <p className="eyebrow">Živý přepis</p>
+            <h2>Titulky z Meet</h2>
+          </div>
+          <span className="pill subtle">{meetEvents.length} řádků</span>
+        </div>
+        <div ref={listRef} className="list" style={{ maxHeight: 360 }}>
+          {meetEvents.length === 0 && <div className="muted text-sm">Čekám na titulky z Meet…</div>}
+          {meetEvents.map((evt) => (
+            <div key={evt.id} className="list-row">
+              <div>
+                <div className="muted text-xs">
+                  {evt.speakerName || evt.speaker || 'Speaker'} ·{' '}
+                  {new Date(evt.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div className="text-sm">{evt.text}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {lastCaption && <div className="muted text-xs mt-2">Poslední: {lastCaption}</div>}
+      </div>
+
+      <div className="panel demo-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Call outcome</p>
+            <h2>Pipedrive log</h2>
           </div>
           <span className={`pill ${pipedriveConfigured ? 'success' : 'warning'}`}>
             {pipedriveConfigured ? 'Pipedrive OK' : 'Pipedrive není připojený'}
           </span>
         </div>
-
-        <div className="panel soft">
-          <div className="panel-head tight">
-            <span className="eyebrow">Call outcome → Pipedrive</span>
-            <span className="pill subtle">Log</span>
-          </div>
-          <div className="muted text-xs">Pipedrive Person ID (číselné) nebo Lead ID (lead:123)</div>
-          <input
-            value={logContactId}
-            onChange={(e) => setLogContactId(e.target.value)}
-            placeholder="např. 1234567"
-          />
-          <div className="muted text-xs mt-2">Jméno kontaktu (volitelné)</div>
-          <input
-            value={logContactName}
-            onChange={(e) => setLogContactName(e.target.value)}
-            placeholder="Jan Novák"
-          />
-          <div className="muted text-xs mt-2">Firma (volitelné)</div>
-          <input
-            value={logCompanyName}
-            onChange={(e) => setLogCompanyName(e.target.value)}
-            placeholder="ACME s.r.o."
-          />
-          <div className="muted text-xs mt-2">Outcome</div>
-          <select value={logDisposition} onChange={(e) => setLogDisposition(e.target.value)}>
-            <option value="connected">Connected</option>
-            <option value="meeting">Meeting</option>
-            <option value="callback">Callback</option>
-            <option value="not-interested">Not interested</option>
-            <option value="no-answer">No answer</option>
-            <option value="sent">Sent email</option>
-          </select>
-          <div className="muted text-xs mt-2">Poznámky</div>
-          <textarea
-            className="notes"
-            value={logNotes}
-            onChange={(e) => setLogNotes(e.target.value)}
-            placeholder="Stručné poznámky z hovoru…"
-          />
-          <div className="muted text-xs mt-2">
-            Příklad: Person ID najdeš v URL Pipedrive jako `/person/123456`. Lead zapiš jako `lead:123456`.
-          </div>
-          <div className="button-row mt-2">
-            <button className="btn outline sm" onClick={() => void submitOutcome()} disabled={logSaving} type="button">
-              {logSaving ? 'Zapisuji…' : 'Zapsat do Pipedrive'}
-            </button>
-          </div>
-          {logStatus && <div className="status-line small">{logStatus}</div>}
+        <div className="muted text-xs">Pipedrive Person ID (číselné) nebo Lead ID (lead:123)</div>
+        <input
+          value={logContactId}
+          onChange={(e) => setLogContactId(e.target.value)}
+          placeholder="např. 1234567"
+        />
+        <div className="muted text-xs mt-2">Jméno kontaktu (volitelné)</div>
+        <input
+          value={logContactName}
+          onChange={(e) => setLogContactName(e.target.value)}
+          placeholder="Jan Novák"
+        />
+        <div className="muted text-xs mt-2">Firma (volitelné)</div>
+        <input
+          value={logCompanyName}
+          onChange={(e) => setLogCompanyName(e.target.value)}
+          placeholder="ACME s.r.o."
+        />
+        <div className="muted text-xs mt-2">Outcome</div>
+        <select value={logDisposition} onChange={(e) => setLogDisposition(e.target.value)}>
+          <option value="connected">Connected</option>
+          <option value="meeting">Meeting</option>
+          <option value="callback">Callback</option>
+          <option value="not-interested">Not interested</option>
+          <option value="no-answer">No answer</option>
+          <option value="sent">Sent email</option>
+        </select>
+        <div className="muted text-xs mt-2">Poznámky</div>
+        <textarea
+          className="notes"
+          value={logNotes}
+          onChange={(e) => setLogNotes(e.target.value)}
+          placeholder="Stručné poznámky z hovoru…"
+        />
+        <div className="muted text-xs mt-2">
+          Příklad: Person ID najdeš v URL Pipedrive jako `/person/123456`. Lead zapiš jako `lead:123456`.
         </div>
+        <div className="button-row mt-2">
+          <button className="btn outline sm" onClick={() => void submitOutcome()} disabled={logSaving} type="button">
+            {logSaving ? 'Zapisuji…' : 'Zapsat do Pipedrive'}
+          </button>
+        </div>
+        {logStatus && <div className="status-line small">{logStatus}</div>}
+      </div>
 
-        <div className="panel soft">
-          <div className="panel-head tight">
-            <span className="eyebrow">Prep & intel</span>
-            <span className="pill subtle">AI</span>
+      <div className="panel demo-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Prep & intel</p>
+            <h2>AI předpříprava</h2>
           </div>
-          <div className="muted text-xs">Kontakt</div>
-          <input
-            value={prepContact}
-            onChange={(e) => setPrepContact(e.target.value)}
-            placeholder="Jméno kontaktu"
-          />
-          <div className="muted text-xs mt-2">Firma</div>
-          <input
-            value={prepCompany}
-            onChange={(e) => setPrepCompany(e.target.value)}
-            placeholder="Firma / sektor"
-          />
-          <div className="muted text-xs mt-2">Cíl hovoru</div>
-          <input
-            value={prepGoal}
-            onChange={(e) => setPrepGoal(e.target.value)}
-            placeholder="Např. Book demo"
-          />
-          <div className="button-row wrap mt-2">
-            <button className="btn outline sm" onClick={() => void runPrep('script')} disabled={prepBusy} type="button">
-              {prepBusy ? 'Připravuji…' : 'Call opener'}
-            </button>
-            <button className="btn ghost sm" onClick={() => void runPrep('research')} disabled={prepBusy} type="button">
-              Research
-            </button>
-          </div>
-          {prepStatus && <div className="status-line small">{prepStatus}</div>}
-          <pre className="output-box">{prepOutput || 'Prep output se zobrazí zde.'}</pre>
-          <div className="muted text-xs mt-2">
-            Pokud AI neodpovídá: zkontroluj `OPENAI_API_KEY` v Supabase secrets a redeploy edge functions.
+          <span className="pill subtle">AI</span>
+        </div>
+        <div className="muted text-xs">Kontakt</div>
+        <input
+          value={prepContact}
+          onChange={(e) => setPrepContact(e.target.value)}
+          placeholder="Jméno kontaktu"
+        />
+        <div className="muted text-xs mt-2">Firma</div>
+        <input
+          value={prepCompany}
+          onChange={(e) => setPrepCompany(e.target.value)}
+          placeholder="Firma / sektor"
+        />
+        <div className="muted text-xs mt-2">Cíl hovoru</div>
+        <input
+          value={prepGoal}
+          onChange={(e) => setPrepGoal(e.target.value)}
+          placeholder="Např. Book demo"
+        />
+        <div className="button-row wrap mt-2">
+          <button className="btn outline sm" onClick={() => void runPrep('script')} disabled={prepBusy} type="button">
+            {prepBusy ? 'Připravuji…' : 'Call opener'}
+          </button>
+          <button className="btn ghost sm" onClick={() => void runPrep('research')} disabled={prepBusy} type="button">
+            Research
+          </button>
+        </div>
+        {prepStatus && <div className="status-line small">{prepStatus}</div>}
+        <pre className="output-box">{prepOutput || 'Prep output se zobrazí zde.'}</pre>
+        <div className="muted text-xs mt-2">
+          Pokud AI neodpovídá: zkontroluj `OPENAI_API_KEY` v Supabase secrets a redeploy edge functions.
+        </div>
+      </div>
+
+      <div className="panel demo-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Zaměření</p>
+            <h2>SPIN & custom</h2>
+            <p className="muted text-sm">Rychlé přepínání mezi SPIN, námitkami a closingem.</p>
           </div>
         </div>
 

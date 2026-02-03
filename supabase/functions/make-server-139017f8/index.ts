@@ -3038,8 +3038,12 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
       duration,
     };
 
-    // Save log
-    await kv.set(userKey(userId, `log:${logId}`), log);
+    // Save log (non-blocking for Pipedrive sync)
+    try {
+      await kv.set(userKey(userId, `log:${logId}`), log);
+    } catch (e) {
+      console.error("KV log save failed (non-blocking):", e);
+    }
 
     // --- PIPEDRIVE SYNC START ---
     const pipedriveKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
