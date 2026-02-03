@@ -20,7 +20,7 @@ app.use(
   "/*",
   cors({
     origin: allowedOrigins.length > 0 ? allowedOrigins : "*",
-    allowHeaders: ["Content-Type", "Authorization", "X-Echo-User"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Echo-User", "X-Correlation-Id"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
@@ -76,6 +76,138 @@ const getAdminClient = () => {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 };
 
+const getCorrelationId = (c: any) => {
+  const header = c.req.header("x-correlation-id");
+  const trimmed = header?.toString().trim();
+  if (trimmed) return trimmed;
+  return crypto.randomUUID();
+};
+
+const sha256Hex = async (input: string) => {
+  const bytes = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+};
+
+const auditEvent = async (
+  admin: any,
+  ownerUserId: string,
+  correlationId: string,
+  step: "ingest" | "extract" | "review" | "generate" | "export",
+  eventType: string,
+  payload: Record<string, unknown> = {},
+) => {
+  try {
+    await admin.from("audit_events").insert({
+      owner_user_id: ownerUserId,
+      correlation_id: correlationId,
+      step,
+      event_type: eventType,
+      payload,
+    });
+  } catch (e) {
+    console.error("audit_events insert failed (non-blocking):", e);
+  }
+};
+
+const requireAdmin = (c: any) => {
+  const admin = getAdminClient();
+  if (!admin) return { admin: null, error: c.json({ error: "Supabase service role not configured" }, 500) };
+  return { admin, error: null };
+};
+
+const parseJsonStrict = async (res: Response) => {
+  const text = await res.text();
+  try {
+    return { ok: true as const, value: text ? JSON.parse(text) : null, raw: text };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : String(e), raw: text };
+  }
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const normalizeUrl = (url: string) => {
+  const u = new URL(url);
+  u.hash = "";
+  return u.toString();
+};
+
+const normalizeBaseUrl = (baseUrl: string) => {
+  const u = new URL(baseUrl);
+  u.hash = "";
+  u.search = "";
+  if (!u.pathname.endsWith("/")) u.pathname = "/";
+  return u.toString();
+};
+
+const htmlToText = (html: string) => {
+  const withoutScripts = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ");
+  const stripped = withoutScripts.replace(/<[^>]+>/g, " ");
+  return stripped.replace(/\s+/g, " ").trim();
+};
+
+type RobotsRule = { type: "allow" | "disallow"; value: string };
+
+const parseRobotsForUserAgent = (robotsTxt: string, agent: string) => {
+  const lines = robotsTxt.split("\n").map((l) => l.trim());
+  const groups: Array<{ agents: string[]; rules: RobotsRule[] }> = [];
+  let current: { agents: string[]; rules: RobotsRule[] } | null = null;
+
+  for (const raw of lines) {
+    const line = raw.split("#")[0].trim();
+    if (!line) continue;
+    const [kRaw, vRaw] = line.split(":");
+    if (!kRaw || vRaw === undefined) continue;
+    const key = kRaw.trim().toLowerCase();
+    const value = vRaw.trim();
+
+    if (key === "user-agent") {
+      if (!current) {
+        current = { agents: [], rules: [] };
+        groups.push(current);
+      }
+      current.agents.push(value.toLowerCase());
+      continue;
+    }
+
+    if (key === "allow" || key === "disallow") {
+      if (!current) {
+        current = { agents: ["*"], rules: [] };
+        groups.push(current);
+      }
+      current.rules.push({ type: key as RobotsRule["type"], value });
+      continue;
+    }
+  }
+
+  const agentLc = agent.toLowerCase();
+  const matchingGroups = groups.filter((g) => g.agents.some((a) => a === "*" || agentLc.includes(a)));
+  const rules = matchingGroups.flatMap((g) => g.rules);
+  return rules;
+};
+
+const isPathAllowedByRobots = (path: string, rules: RobotsRule[]) => {
+  // Simplified: longest match wins; Allow overrides Disallow if same length.
+  let best: { type: "allow" | "disallow"; len: number } | null = null;
+  for (const r of rules) {
+    const v = r.value || "";
+    if (!v) continue;
+    if (!path.startsWith(v)) continue;
+    const len = v.length;
+    if (!best || len > best.len || (len === best.len && r.type === "allow" && best.type === "disallow")) {
+      best = { type: r.type, len };
+    }
+  }
+  if (!best) return true;
+  return best.type === "allow";
+};
+
 const getPipedriveKey = async (userId: string) => {
   try {
     const data = await kv.get(userKey(userId, "integration:pipedrive"));
@@ -96,6 +228,1187 @@ app.use("*", async (c, next) => {
 
   c.set("userId", userId);
   await next();
+});
+
+// --- EVIDENCE (ANTI-HALLUCINATION) ---
+app.post(`${BASE_PATH}/evidence/ingest/user-note`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const contactId = body?.contact_id?.toString();
+  const noteText = body?.note_text?.toString();
+  const noteKind = body?.note_kind?.toString() || "manual_notes";
+  if (!contactId) return c.json({ error: "Missing contact_id" }, 400);
+  if (!noteText) return c.json({ error: "Missing note_text" }, 400);
+
+  const sourceUrl = `internal://contacts/${contactId}/note/${crypto.randomUUID()}`;
+  const contentSha256 = await sha256Hex(noteText);
+
+  const { data, error: insertError } = await admin
+    .from("evidence_documents")
+    .insert({
+      owner_user_id: userId,
+      correlation_id: correlationId,
+      source_type: "user_note",
+      source_url: sourceUrl,
+      canonical_url: null,
+      source_title: noteKind,
+      http_status: null,
+      content_type: "text/plain",
+      language: null,
+      captured_at: new Date().toISOString(),
+      fetched_at: new Date().toISOString(),
+      content_text: noteText,
+      content_sha256: contentSha256,
+      robots_policy: null,
+      request_meta: { note_kind: noteKind },
+      contact_id: contactId,
+    })
+    .select("id, captured_at, source_url, content_sha256, correlation_id")
+    .single();
+
+  if (insertError) return c.json({ error: insertError.message }, 500);
+  await auditEvent(admin, userId, correlationId, "ingest", "user_note_ingested", {
+    document_id: data.id,
+    contact_id: contactId,
+    note_kind: noteKind,
+  });
+
+  return c.json({
+    correlation_id: correlationId,
+    document_id: data.id,
+    captured_at: data.captured_at,
+    source_url: data.source_url,
+    content_sha256: data.content_sha256,
+  });
+});
+
+app.post(`${BASE_PATH}/evidence/ingest/internal-product-note`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const sourceUrl = body?.source_url?.toString();
+  const contentText = body?.content_text?.toString();
+  if (!sourceUrl) return c.json({ error: "Missing source_url" }, 400);
+  if (!contentText) return c.json({ error: "Missing content_text" }, 400);
+
+  const contentSha256 = await sha256Hex(contentText);
+
+  const { data, error: insertError } = await admin
+    .from("evidence_documents")
+    .insert({
+      owner_user_id: userId,
+      correlation_id: correlationId,
+      source_type: "internal_product_note",
+      source_url: sourceUrl,
+      canonical_url: sourceUrl,
+      source_title: "Internal product note",
+      http_status: null,
+      content_type: "text/plain",
+      language: null,
+      captured_at: new Date().toISOString(),
+      fetched_at: new Date().toISOString(),
+      content_text: contentText,
+      content_sha256: contentSha256,
+      robots_policy: null,
+      request_meta: null,
+      contact_id: null,
+    })
+    .select("id, captured_at, source_url, content_sha256, correlation_id")
+    .single();
+
+  if (insertError) return c.json({ error: insertError.message }, 500);
+  await auditEvent(admin, userId, correlationId, "ingest", "internal_product_note_ingested", {
+    document_id: data.id,
+    source_url: sourceUrl,
+  });
+
+  return c.json({
+    correlation_id: correlationId,
+    document_id: data.id,
+    captured_at: data.captured_at,
+    source_url: data.source_url,
+    content_sha256: data.content_sha256,
+  });
+});
+
+app.post(`${BASE_PATH}/evidence/ingest/url`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const contactId = body?.contact_id?.toString();
+  const url = body?.url?.toString();
+  const sourceType = body?.source_type?.toString() || "company_website";
+  if (!contactId) return c.json({ error: "Missing contact_id" }, 400);
+  if (!url) return c.json({ error: "Missing url" }, 400);
+  if (sourceType !== "company_website") return c.json({ error: "Only source_type=company_website supported here" }, 400);
+
+  const normalizedUrl = normalizeUrl(url);
+  const ua = "EchoEvidenceBot/1.0";
+  const startedAt = new Date().toISOString();
+
+  let httpStatus: number | null = null;
+  let contentType: string | null = null;
+  let language: string | null = null;
+  let canonicalUrl: string | null = null;
+  let contentText = "";
+  let robotsPolicy: any = null;
+
+  try {
+    const u = new URL(normalizedUrl);
+    const robotsUrl = `${u.origin}/robots.txt`;
+    const robotsRes = await fetch(robotsUrl, { headers: { "User-Agent": ua }, redirect: "follow" });
+    const robotsTxt = robotsRes.ok ? await robotsRes.text() : "";
+    const rules = robotsTxt ? parseRobotsForUserAgent(robotsTxt, ua) : [];
+    const allowed = isPathAllowedByRobots(u.pathname, rules);
+    robotsPolicy = { robots_url: robotsUrl, ok: robotsRes.ok, rules, allowed };
+    if (!allowed) {
+      return c.json({ error: "Blocked by robots.txt", robots_policy: robotsPolicy }, 403);
+    }
+
+    const res = await fetch(normalizedUrl, {
+      headers: { "User-Agent": ua, Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1" },
+      redirect: "follow",
+    });
+
+    httpStatus = res.status;
+    canonicalUrl = res.url || normalizedUrl;
+    contentType = res.headers.get("content-type");
+    const raw = await res.text();
+    const text = contentType?.includes("text/html") ? htmlToText(raw) : raw.trim();
+    contentText = text;
+
+    if (contentType?.includes("text/html")) {
+      const langMatch = raw.match(/<html[^>]*\blang\s*=\s*["']([^"']+)["']/i);
+      language = langMatch?.[1]?.toLowerCase() || null;
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
+  }
+
+  const contentSha256 = await sha256Hex(contentText);
+
+  const { data, error: insertError } = await admin
+    .from("evidence_documents")
+    .insert({
+      owner_user_id: userId,
+      correlation_id: correlationId,
+      source_type: "company_website",
+      source_url: normalizedUrl,
+      canonical_url: canonicalUrl,
+      source_title: null,
+      http_status: httpStatus,
+      content_type: contentType,
+      language,
+      captured_at: startedAt,
+      fetched_at: startedAt,
+      content_text: contentText,
+      content_sha256: contentSha256,
+      robots_policy: robotsPolicy,
+      request_meta: { user_agent: ua },
+      contact_id: contactId,
+    })
+    .select("id, captured_at, canonical_url, http_status, language, content_sha256")
+    .single();
+
+  if (insertError) return c.json({ error: insertError.message }, 500);
+
+  await auditEvent(admin, userId, correlationId, "ingest", "url_ingested", {
+    document_id: data.id,
+    contact_id: contactId,
+    source_url: normalizedUrl,
+    canonical_url: canonicalUrl,
+    http_status: httpStatus,
+  });
+
+  return c.json({
+    correlation_id: correlationId,
+    document_id: data.id,
+    canonical_url: data.canonical_url,
+    captured_at: data.captured_at,
+    http_status: data.http_status,
+    language: data.language,
+    content_sha256: data.content_sha256,
+  });
+});
+
+app.post(`${BASE_PATH}/evidence/ingest/company-site-allowlist`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const contactId = body?.contact_id?.toString();
+  const baseUrl = body?.base_url?.toString();
+  if (!contactId) return c.json({ error: "Missing contact_id" }, 400);
+  if (!baseUrl) return c.json({ error: "Missing base_url" }, 400);
+
+  const base = new URL(normalizeBaseUrl(baseUrl));
+  const allowPaths = ["/", "/about", "/team", "/kontakt", "/contact", "/kariera", "/careers", "/blog", "/press", "/news", "/company"];
+  const ua = "EchoEvidenceBot/1.0";
+
+  // robots once per domain
+  const robotsUrl = `${base.origin}/robots.txt`;
+  const robotsRes = await fetch(robotsUrl, { headers: { "User-Agent": ua }, redirect: "follow" });
+  const robotsTxt = robotsRes.ok ? await robotsRes.text() : "";
+  const rules = robotsTxt ? parseRobotsForUserAgent(robotsTxt, ua) : [];
+
+  const documents: any[] = [];
+  const skipped: any[] = [];
+
+  for (const p of allowPaths.slice(0, 8)) {
+    const url = new URL(p, base.origin);
+    if (!isPathAllowedByRobots(url.pathname, rules)) {
+      skipped.push({ url: url.toString(), reason: "robots_disallow" });
+      continue;
+    }
+
+    try {
+      const res = await fetch(url.toString(), {
+        headers: { "User-Agent": ua, Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1" },
+        redirect: "follow",
+      });
+
+      const httpStatus = res.status;
+      const canonicalUrl = res.url || url.toString();
+      const contentType = res.headers.get("content-type");
+      const raw = await res.text();
+      const contentText = contentType?.includes("text/html") ? htmlToText(raw) : raw.trim();
+      const langMatch = contentType?.includes("text/html")
+        ? raw.match(/<html[^>]*\blang\s*=\s*["']([^"']+)["']/i)
+        : null;
+      const language = langMatch?.[1]?.toLowerCase() || null;
+      const contentSha256 = await sha256Hex(contentText);
+
+      const { data, error: insertError } = await admin
+        .from("evidence_documents")
+        .insert({
+          owner_user_id: userId,
+          correlation_id: correlationId,
+          source_type: "company_website",
+          source_url: url.toString(),
+          canonical_url: canonicalUrl,
+          source_title: null,
+          http_status: httpStatus,
+          content_type: contentType,
+          language,
+          captured_at: new Date().toISOString(),
+          fetched_at: new Date().toISOString(),
+          content_text: contentText,
+          content_sha256: contentSha256,
+          robots_policy: { robots_url: robotsUrl, ok: robotsRes.ok, rules, allowed: true },
+          request_meta: { user_agent: ua, seed: "allowlist" },
+          contact_id: contactId,
+        })
+        .select("id, source_url, http_status")
+        .single();
+
+      if (insertError) {
+        skipped.push({ url: url.toString(), reason: insertError.message });
+      } else {
+        documents.push({ document_id: data.id, source_url: url.toString(), http_status: data.http_status });
+      }
+    } catch (e) {
+      skipped.push({ url: url.toString(), reason: e instanceof Error ? e.message : String(e) });
+    }
+
+    await sleep(1100);
+  }
+
+  await auditEvent(admin, userId, correlationId, "ingest", "company_site_allowlist_ingested", {
+    contact_id: contactId,
+    base_url: base.toString(),
+    document_count: documents.length,
+    skipped_count: skipped.length,
+  });
+
+  return c.json({ correlation_id: correlationId, documents, skipped });
+});
+
+app.post(`${BASE_PATH}/evidence/ingest/ares-record`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const contactId = body?.contact_id?.toString();
+  const sourceUrl = body?.source_url?.toString();
+  const contentText = body?.content_text?.toString();
+  if (!contactId) return c.json({ error: "Missing contact_id" }, 400);
+  if (!sourceUrl) return c.json({ error: "Missing source_url" }, 400);
+  if (!contentText) return c.json({ error: "Missing content_text" }, 400);
+
+  const contentSha256 = await sha256Hex(contentText);
+
+  const { data, error: insertError } = await admin
+    .from("evidence_documents")
+    .insert({
+      owner_user_id: userId,
+      correlation_id: correlationId,
+      source_type: "ares_record",
+      source_url: sourceUrl,
+      canonical_url: sourceUrl,
+      source_title: "ARES record",
+      http_status: null,
+      content_type: "application/json",
+      language: "cs",
+      captured_at: new Date().toISOString(),
+      fetched_at: new Date().toISOString(),
+      content_text: contentText,
+      content_sha256: contentSha256,
+      robots_policy: null,
+      request_meta: { provided_by: "client" },
+      contact_id: contactId,
+    })
+    .select("id, captured_at, source_url")
+    .single();
+
+  if (insertError) return c.json({ error: insertError.message }, 500);
+  await auditEvent(admin, userId, correlationId, "ingest", "ares_record_ingested", {
+    document_id: data.id,
+    contact_id: contactId,
+    source_url: sourceUrl,
+  });
+
+  return c.json({ correlation_id: correlationId, document_id: data.id, captured_at: data.captured_at, source_url: data.source_url });
+});
+
+app.post(`${BASE_PATH}/evidence/extract`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const documentId = body?.document_id?.toString();
+  const model = body?.model?.toString() || "gpt-4o-mini";
+  const promptVersion = body?.prompt_version?.toString() || "extractor_v1";
+  if (!documentId) return c.json({ error: "Missing document_id" }, 400);
+
+  const { data: doc, error: docError } = await admin
+    .from("evidence_documents")
+    .select("id, owner_user_id, source_url, captured_at, content_text, language, correlation_id")
+    .eq("id", documentId)
+    .eq("owner_user_id", userId)
+    .single();
+
+  if (docError || !doc) return c.json({ error: "Document not found" }, 404);
+
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) return c.json({ error: "OPENAI_API_KEY not configured" }, 500);
+
+  const extractionRunId = crypto.randomUUID();
+  await admin.from("evidence_extraction_runs").insert({
+    id: extractionRunId,
+    owner_user_id: userId,
+    correlation_id: correlationId,
+    document_id: documentId,
+    model,
+    prompt_version: promptVersion,
+    extractor_version: "v1",
+    status: "failed",
+    error: "not_started",
+  });
+
+  await auditEvent(admin, userId, correlationId, "extract", "extraction_started", {
+    document_id: documentId,
+    extraction_run_id: extractionRunId,
+    model,
+    prompt_version: promptVersion,
+  });
+
+  const openai = new OpenAI({ apiKey });
+  const system = [
+    "You are a strict evidence extractor.",
+    "Return ONLY JSON (no markdown) as an array of objects with keys:",
+    "claim, evidence_snippet, confidence.",
+    "Rules:",
+    "- Extract ONLY claims explicitly present in the provided text.",
+    "- evidence_snippet MUST be a verbatim excerpt from the provided text.",
+    "- No inference. No synthesis. No invented numbers or entities.",
+    "- confidence must be one of: high, medium, low.",
+    "- If nothing extractable, return []",
+  ].join("\n");
+
+  const user = [
+    `SOURCE_URL: ${doc.source_url}`,
+    `CAPTURED_AT: ${doc.captured_at}`,
+    doc.language ? `LANGUAGE_HINT: ${doc.language}` : "",
+    "",
+    "PAGE_TEXT:",
+    doc.content_text,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      temperature: 0,
+    });
+
+    const raw = completion.choices?.[0]?.message?.content ?? "";
+    const extracted = JSON.parse(raw);
+    if (!Array.isArray(extracted)) throw new Error("Extractor output is not an array");
+
+    const claimsToInsert: any[] = [];
+    for (const item of extracted) {
+      const claim = item?.claim?.toString().trim();
+      const evidenceSnippet = item?.evidence_snippet?.toString();
+      const confidence = item?.confidence?.toString();
+      if (!claim || !evidenceSnippet || !confidence) throw new Error("Missing claim fields in extractor output");
+      if (!["high", "medium", "low"].includes(confidence)) throw new Error("Invalid confidence value");
+      if (!doc.content_text.includes(evidenceSnippet)) {
+        throw new Error("evidence_snippet not found verbatim in document content");
+      }
+
+      const claimHash = await sha256Hex(
+        `${claim}\n---\n${doc.source_url}\n---\n${evidenceSnippet}`.toLowerCase().trim(),
+      );
+
+      claimsToInsert.push({
+        owner_user_id: userId,
+        correlation_id: correlationId,
+        document_id: documentId,
+        extraction_run_id: extractionRunId,
+        claim,
+        source_url: doc.source_url,
+        evidence_snippet: evidenceSnippet,
+        captured_at: doc.captured_at,
+        confidence,
+        language: doc.language || null,
+        subject_name: null,
+        claim_tags: [],
+        claim_hash: claimHash,
+      });
+    }
+
+    if (claimsToInsert.length > 0) {
+      const { error: insertClaimsError } = await admin.from("evidence_claims").insert(claimsToInsert);
+      if (insertClaimsError) throw new Error(insertClaimsError.message);
+    }
+
+    await admin
+      .from("evidence_extraction_runs")
+      .update({ status: "success", error: null })
+      .eq("id", extractionRunId)
+      .eq("owner_user_id", userId);
+
+    await auditEvent(admin, userId, correlationId, "extract", "extraction_succeeded", {
+      document_id: documentId,
+      extraction_run_id: extractionRunId,
+      claim_count: claimsToInsert.length,
+    });
+
+    const { data: insertedClaims } = await admin
+      .from("evidence_claims")
+      .select("id, claim, confidence")
+      .eq("extraction_run_id", extractionRunId)
+      .eq("owner_user_id", userId);
+
+    return c.json({
+      correlation_id: correlationId,
+      extraction_run_id: extractionRunId,
+      claims: (insertedClaims || []).map((row: any) => ({
+        evidence_id: row.id,
+        claim: row.claim,
+        confidence: row.confidence,
+      })),
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    await admin
+      .from("evidence_extraction_runs")
+      .update({ status: "failed", error: message })
+      .eq("id", extractionRunId)
+      .eq("owner_user_id", userId);
+
+    await auditEvent(admin, userId, correlationId, "extract", "extraction_failed", {
+      document_id: documentId,
+      extraction_run_id: extractionRunId,
+      error: message,
+    });
+
+    return c.json({ error: message }, 500);
+  }
+});
+
+app.get(`${BASE_PATH}/evidence/claims`, async (c) => {
+  const userId = getUserId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const contactId = c.req.query("contact_id")?.toString();
+  const status = c.req.query("status")?.toString();
+
+  let q = admin
+    .from("v_evidence_claims_with_review")
+    .select(
+      "evidence_id, claim, source_url, evidence_snippet, captured_at, confidence, document_id, contact_id, review_status, approved_claim, reviewed_at, reviewed_by",
+    )
+    .eq("owner_user_id", userId)
+    .order("captured_at", { ascending: false });
+
+  if (contactId) q = q.eq("contact_id", contactId);
+  if (status) q = q.eq("review_status", status);
+
+  const { data, error: listError } = await q;
+  if (listError) return c.json({ error: listError.message }, 500);
+
+  return c.json({
+    claims: (data || []).map((row: any) => ({
+      evidence_id: row.evidence_id,
+      claim: row.claim,
+      source_url: row.source_url,
+      evidence_snippet: row.evidence_snippet,
+      captured_at: row.captured_at,
+      confidence: row.confidence,
+      document_id: row.document_id,
+      contact_id: row.contact_id,
+      status: row.review_status,
+      approved_claim: row.approved_claim,
+      reviewed_at: row.reviewed_at,
+      reviewed_by: row.reviewed_by,
+    })),
+  });
+});
+
+app.post(`${BASE_PATH}/evidence/claims/:evidenceId/review`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const evidenceId = c.req.param("evidenceId");
+  const body = await c.req.json().catch(() => ({}));
+  const status = body?.status?.toString();
+  const approvedClaim = body?.approved_claim?.toString();
+  const reviewerNotes = body?.reviewer_notes?.toString();
+
+  if (!["approved", "rejected", "needs_review"].includes(status)) return c.json({ error: "Invalid status" }, 400);
+
+  const { data: claimRow, error: claimError } = await admin
+    .from("evidence_claims")
+    .select("id, owner_user_id")
+    .eq("id", evidenceId)
+    .eq("owner_user_id", userId)
+    .single();
+  if (claimError || !claimRow) return c.json({ error: "Claim not found" }, 404);
+
+  const { error: insertError } = await admin.from("evidence_claim_reviews").insert({
+    owner_user_id: userId,
+    claim_id: evidenceId,
+    status,
+    approved_claim: approvedClaim || null,
+    reviewer_notes: reviewerNotes || null,
+    reviewed_at: new Date().toISOString(),
+    reviewed_by: userId,
+  });
+  if (insertError) return c.json({ error: insertError.message }, 500);
+
+  await auditEvent(admin, userId, correlationId, "review", "claim_reviewed", {
+    evidence_id: evidenceId,
+    status,
+  });
+
+  return c.json({ ok: true, evidence_id: evidenceId, status });
+});
+
+app.get(`${BASE_PATH}/facts`, async (c) => {
+  const userId = getUserId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const contactId = c.req.query("contact_id")?.toString();
+
+  let q = admin
+    .from("v_approved_facts")
+    .select("evidence_id, claim, source_url, evidence_snippet, captured_at, confidence, contact_id, approved_at, approved_by")
+    .eq("owner_user_id", userId)
+    .order("approved_at", { ascending: false });
+
+  if (contactId) q = q.eq("contact_id", contactId);
+
+  const { data, error: listError } = await q;
+  if (listError) return c.json({ error: listError.message }, 500);
+
+  return c.json({ facts: data || [] });
+});
+
+const validateGeneratedPack = (envelope: any) => {
+  const errors: string[] = [];
+  const evidenceIds = new Set<string>((envelope?.approved_facts || []).map((f: any) => f?.evidence_id).filter(Boolean));
+  const hypothesisIds = new Set<string>((envelope?.hypotheses || []).map((h: any) => h?.hypothesis_id).filter(Boolean));
+
+  const checkLines = (lines: any[], path: string) => {
+    if (!Array.isArray(lines)) return;
+    for (const line of lines) {
+      const text = line?.text?.toString() || "";
+      const eids = Array.isArray(line?.evidence_ids) ? line.evidence_ids : [];
+      const hids = Array.isArray(line?.hypothesis_ids) ? line.hypothesis_ids : [];
+      if (eids.length === 0 && hids.length === 0) errors.push(`${path}: line missing evidence_ids/hypothesis_ids`);
+      for (const id of eids) if (!evidenceIds.has(id)) errors.push(`${path}: unknown evidence_id ${id}`);
+      for (const id of hids) if (!hypothesisIds.has(id)) errors.push(`${path}: unknown hypothesis_id ${id}`);
+      if (/\d/.test(text)) {
+        const referencedSnippets = (envelope?.approved_facts || [])
+          .filter((f: any) => eids.includes(f?.evidence_id))
+          .map((f: any) => f?.evidence_snippet?.toString() || "");
+        const digitToken = text.match(/\d+/)?.[0];
+        if (digitToken && referencedSnippets.length > 0 && !referencedSnippets.some((s: string) => s.includes(digitToken))) {
+          errors.push(`${path}: numeric token "${digitToken}" not present in any referenced evidence_snippet`);
+        }
+      }
+    }
+  };
+
+  const packs = [
+    ["cold_call_prep_card", envelope?.cold_call_prep_card],
+    ["meeting_booking_pack", envelope?.meeting_booking_pack],
+    ["spin_demo_pack", envelope?.spin_demo_pack],
+  ] as const;
+
+  for (const [name, obj] of packs) {
+    if (!obj) continue;
+    checkLines(obj.opener_variants, `${name}.opener_variants`);
+    checkLines(obj.discovery_questions, `${name}.discovery_questions`);
+    if (Array.isArray(obj.objections)) {
+      for (const o of obj.objections) {
+        checkLines([{ text: o?.response, evidence_ids: o?.evidence_ids, hypothesis_ids: o?.hypothesis_ids }], `${name}.objections`);
+      }
+    }
+    checkLines(obj.meeting_asks, `${name}.meeting_asks`);
+    checkLines(obj.agenda, `${name}.agenda`);
+    checkLines(obj.next_step_conditions, `${name}.next_step_conditions`);
+    if (obj.spin) {
+      checkLines(obj.spin.situation, `${name}.spin.situation`);
+      checkLines(obj.spin.problem, `${name}.spin.problem`);
+      checkLines(obj.spin.implication, `${name}.spin.implication`);
+      checkLines(obj.spin.need_payoff, `${name}.spin.need_payoff`);
+    }
+    if (obj.three_act_demo) {
+      checkLines(obj.three_act_demo.act1, `${name}.three_act_demo.act1`);
+      checkLines(obj.three_act_demo.act2, `${name}.three_act_demo.act2`);
+      checkLines(obj.three_act_demo.act3, `${name}.three_act_demo.act3`);
+      checkLines(obj.three_act_demo.proof_moments, `${name}.three_act_demo.proof_moments`);
+      checkLines(obj.three_act_demo.close, `${name}.three_act_demo.close`);
+    }
+  }
+
+  return { ok: errors.length === 0, errors };
+};
+
+app.post(`${BASE_PATH}/packs/generate`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const contactId = body?.contact_id?.toString();
+  const include = Array.isArray(body?.include) ? body.include.map((s: any) => s?.toString()) : ["cold_call_prep_card"];
+  if (!contactId) return c.json({ error: "Missing contact_id" }, 400);
+
+  const { data: contact, error: contactError } = await admin
+    .from("contacts")
+    .select("id, name, company, linkedin_url, manual_notes, company_website")
+    .eq("id", contactId)
+    .single();
+  if (contactError || !contact) return c.json({ error: "Contact not found" }, 404);
+
+  const { data: approvedFacts, error: factsError } = await admin
+    .from("v_approved_facts")
+    .select("evidence_id, claim, source_url, evidence_snippet, captured_at, confidence")
+    .eq("owner_user_id", userId)
+    .eq("contact_id", contactId);
+  if (factsError) return c.json({ error: factsError.message }, 500);
+
+  const hypotheses: any[] = [];
+  const h1 = crypto.randomUUID();
+  const insufficientEvidence = (approvedFacts || []).length === 0;
+  if (insufficientEvidence) {
+    hypotheses.push({
+      hypothesis_id: h1,
+      hypothesis: "Insufficient evidence to state company specifics; validate current feedback/pulse workflow and ownership.",
+      based_on_evidence_ids: [],
+      how_to_verify:
+        "Ask: Do you run regular employee pulse checks today? If yes, how (tool/process) and who owns follow-up actions?",
+      priority: "high",
+    });
+  }
+
+  const line = (id: string, text: string, evidenceIds: string[] = [], hypothesisIds: string[] = []) => ({
+    id,
+    text,
+    evidence_ids: evidenceIds,
+    hypothesis_ids: hypothesisIds,
+  });
+
+  const coldCall = include.includes("cold_call_prep_card")
+    ? {
+        opener_variants: [
+          line("op1", `Hi ${contact.name}, did I catch you at an okay time for a quick question?`, [], [h1]),
+          line("op2", `If now is bad, should I call back later or is there someone else who owns team feedback?`, [], [h1]),
+          line("op3", `I’ll be brief—can I ask how you currently collect employee feedback across the team?`, [], [h1]),
+        ],
+        discovery_questions: [
+          line("dq1", "How do you currently collect employee feedback (format, cadence, audience)?", [], [h1]),
+          line("dq2", "What happens after feedback comes in—who reviews it and who owns the action plan?", [], [h1]),
+          line("dq3", "Where do you see the biggest drop-off today: participation, trust/anonymity, or follow-through?", [], [h1]),
+          line("dq4", "When you get a signal, how quickly can managers act on it?", [], [h1]),
+          line("dq5", "What would make feedback feel safer and more honest for people here?", [], [h1]),
+          line("dq6", "If we could improve one outcome this quarter from employee feedback, what should it be?", [], [h1]),
+        ],
+        objections: [
+          {
+            id: "obj1",
+            trigger: "We already do surveys.",
+            response: "Makes sense—what do you like about your current approach, and what do you wish worked better (participation, trust, or follow-up actions)?",
+            evidence_ids: [],
+            hypothesis_ids: [h1],
+          },
+          {
+            id: "obj2",
+            trigger: "No time.",
+            response: "Understood. If I keep it focused: could we quickly check whether the bottleneck is getting honest input or turning input into action?",
+            evidence_ids: [],
+            hypothesis_ids: [h1],
+          },
+          {
+            id: "obj3",
+            trigger: "Not my area.",
+            response: "Totally fair—who would be the right person for employee feedback and engagement so I don’t waste your time?",
+            evidence_ids: [],
+            hypothesis_ids: [h1],
+          },
+          {
+            id: "obj4",
+            trigger: "Send info.",
+            response: "Happy to. Before I do, what would you want it to answer: participation rates, anonymity, or action planning follow-through?",
+            evidence_ids: [],
+            hypothesis_ids: [h1],
+          },
+          {
+            id: "obj5",
+            trigger: "Budget is tight.",
+            response: "Understood. What would need to be true for this to be worth considering—saving manager time, reducing churn, or faster issue detection?",
+            evidence_ids: [],
+            hypothesis_ids: [h1],
+          },
+          {
+            id: "obj6",
+            trigger: "Not a priority.",
+            response: "Got it. What is a priority right now, and is there any part of feedback/engagement impacting it?",
+            evidence_ids: [],
+            hypothesis_ids: [h1],
+          },
+        ],
+        insufficient_evidence: insufficientEvidence,
+        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+      }
+    : null;
+
+  const meetingPack = include.includes("meeting_booking_pack")
+    ? {
+        meeting_asks: [
+          line("ma1", "If this is relevant, would you be open to a short follow-up to map your current feedback loop end-to-end?", [], [h1]),
+          line("ma2", "If we find a clear bottleneck, would it make sense to include the person who owns the follow-through?", [], [h1]),
+        ],
+        agenda: [
+          line("ag1", "Current process: how feedback is collected and from whom.", [], [h1]),
+          line("ag2", "Trust/anonymity: what blocks honesty today.", [], [h1]),
+          line("ag3", "Action planning: how signals become actions and accountability.", [], [h1]),
+        ],
+        next_step_conditions: [
+          line("ns1", "If feedback is collected but actions stall, we focus on action planning and ownership.", [], [h1]),
+          line("ns2", "If participation or honesty is low, we focus on anonymity and manager enablement.", [], [h1]),
+        ],
+        insufficient_evidence: insufficientEvidence,
+        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+      }
+    : null;
+
+  const spinPack = include.includes("spin_demo_pack")
+    ? {
+        spin: {
+          situation: [line("s1", "How do you currently run feedback cycles across the team?", [], [h1])],
+          problem: [line("p1", "Where does it break down today: participation, honesty, or follow-through?", [], [h1])],
+          implication: [line("i1", "When follow-through stalls, what does that impact most (retention, delivery, morale)?", [], [h1])],
+          need_payoff: [line("n1", "If you could get faster, safer signals and clearer actions, what would change first?", [], [h1])],
+        },
+        three_act_demo: {
+          act1: [line("a1", "Confirm current workflow and who owns each step.", [], [h1])],
+          act2: [line("a2", "Show how signals become a prioritized action plan with accountability.", [], [h1])],
+          act3: [line("a3", "Align on success criteria and decision path for a small rollout.", [], [h1])],
+          proof_moments: [line("pm1", "Ask what proof would convince them (participation, honesty, follow-through).", [], [h1])],
+          close: [line("c1", "Agree on the smallest next step and who must be involved.", [], [h1])],
+        },
+        insufficient_evidence: insufficientEvidence,
+        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+      }
+    : null;
+
+  const envelope = {
+    correlation_id: correlationId,
+    contact_id: contactId,
+    approved_facts: (approvedFacts || []).map((f: any) => ({
+      evidence_id: f.evidence_id,
+      claim: f.claim,
+      source_url: f.source_url,
+      evidence_snippet: f.evidence_snippet,
+      captured_at: f.captured_at,
+      confidence: f.confidence,
+    })),
+    hypotheses,
+    cold_call_prep_card: coldCall,
+    meeting_booking_pack: meetingPack,
+    spin_demo_pack: spinPack,
+  };
+
+  const validation = validateGeneratedPack(envelope);
+  const qualityReport = { passes: validation.ok, failed_checks: validation.errors };
+  if (!validation.ok) return c.json({ error: "Pack validation failed", details: qualityReport }, 500);
+
+  const generationRunId = crypto.randomUUID();
+  await admin.from("generation_runs").insert({
+    id: generationRunId,
+    owner_user_id: userId,
+    correlation_id: correlationId,
+    purpose: include.length > 1 ? "full_pack" : include[0],
+    model: "deterministic_v0",
+    prompt_version: "none",
+    input: { contact_id: contactId, include },
+    output: envelope,
+    validator_output: qualityReport,
+    status: "success",
+    error: null,
+  });
+
+  const { data: savedPack, error: packError } = await admin
+    .from("sales_packs")
+    .insert({
+      owner_user_id: userId,
+      correlation_id: correlationId,
+      contact_id: contactId,
+      pack_version: 1,
+      approved_facts: envelope.approved_facts,
+      hypotheses: envelope.hypotheses,
+      cold_call_prep_card: coldCall,
+      meeting_booking_pack: meetingPack,
+      spin_demo_pack: spinPack,
+      quality_report: qualityReport,
+      generation_run_id: generationRunId,
+    })
+    .select("id")
+    .single();
+
+  if (packError) return c.json({ error: packError.message }, 500);
+
+  await auditEvent(admin, userId, correlationId, "generate", "pack_generated", {
+    pack_id: savedPack.id,
+    contact_id: contactId,
+    include,
+    insufficient_evidence: insufficientEvidence,
+  });
+
+  return c.json({
+    correlation_id: correlationId,
+    generation_run_id: generationRunId,
+    pack_id: savedPack.id,
+    status: "success",
+    quality_report: qualityReport,
+  });
+});
+
+app.get(`${BASE_PATH}/packs/:packId`, async (c) => {
+  const userId = getUserId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const packId = c.req.param("packId");
+  const { data, error: packError } = await admin
+    .from("sales_packs")
+    .select("id, correlation_id, contact_id, approved_facts, hypotheses, company_dossier, lead_dossier, cold_call_prep_card, meeting_booking_pack, spin_demo_pack, quality_report, created_at")
+    .eq("id", packId)
+    .eq("owner_user_id", userId)
+    .single();
+
+  if (packError || !data) return c.json({ error: "Pack not found" }, 404);
+  return c.json(data);
+});
+
+// --- REAL-TIME WHISPERING: OBJECTIONS (DETERMINISTIC + EVIDENCE-GATED) ---
+type ObjectionPlay = {
+  id: string;
+  category: string;
+  core_fear: string;
+  surface_objections: string[];
+  detection_signals: string[];
+  validated_response: string;
+  implication_question: string;
+  reframe: string;
+  need_payoff: string;
+  next_step: string;
+};
+
+const OBJECTION_DATASET_V1 = {
+  version: "1.0",
+  domain: "B2B HR-Tech SaaS",
+  product: "Echo Pulse",
+  global_response_rules: {
+    never_do: ["defend_price", "argue", "overexplain_features", "rush_to_close"],
+    always_do: ["validate_emotion", "reframe_context", "expand_implication", "offer_low_risk_next_step"],
+    preferred_outcome: "pilot_or_next_step",
+    primary_value_frame: ["early_signal", "decision_clarity", "risk_reduction", "time_savings_for_leadership"],
+  },
+  objection_space: [
+    {
+      id: "FIN_01",
+      category: "financial",
+      core_fear: "poor_roi",
+      surface_objections: ["je to drahé", "nemáme na to rozpočet", "nevidím návratnost", "musím to obhájit vedení"],
+      detection_signals: ["řeší cenu dřív než problém", "ptá se na slevy", "odkládá rozhodnutí kvůli rozpočtu"],
+      validated_response: "Rozumím, dává smysl se dívat na návratnost.",
+      implication_question: "Když dnes odejde dobrý člověk a vy to zjistíte pozdě, kolik vás to stojí?",
+      reframe: "Nechci obhajovat cenu. Chci jen zjistit, jestli vám chybí včasný signál rizika.",
+      need_payoff: "Pokud byste měl včasný signál, můžete reagovat dřív, než je rozhodnutí drahé.",
+      next_step: "pilot_small_team",
+    },
+    {
+      id: "DATA_01",
+      category: "data_privacy",
+      core_fear: "loss_of_trust",
+      surface_objections: ["bojíme se GDPR", "lidi se neotevřou", "půjde poznat, kdo co řekl"],
+      detection_signals: ["opakované otázky na anonymitu", "zapojení IT / právníka", "opatrný tón"],
+      validated_response: "Tohle je naprosto legitimní obava.",
+      implication_question: "Jakou pravdu dnes dostáváte od lidí, když nemají bezpečný kanál?",
+      reframe: "Bez důvěry a bezpečí dostanete jen oficiální verzi reality.",
+      need_payoff: "Cíl je bezpečný signál na úrovni týmu, ne individuální výpovědi.",
+      next_step: "explain_aggregation_logic",
+    },
+    {
+      id: "SQ_01",
+      category: "status_quo",
+      core_fear: "change_risk",
+      surface_objections: ["už máme průzkumy", "komunikace funguje", "už to nějak řešíme"],
+      detection_signals: ["obhajoba současného stavu", "srovnávání s jiným nástrojem"],
+      validated_response: "To je dobře, že se tomu věnujete.",
+      implication_question: "Jak rychle se dnes dozvíte, že se v jednom týmu něco láme?",
+      reframe: "Nejde o nahrazení. Jde o frekvenci a včasnost signálu.",
+      need_payoff: "Když víte dřív, máte víc možností jak reagovat.",
+      next_step: "contrast_annual_vs_pulse",
+    },
+    {
+      id: "EMO_01",
+      category: "emotional_fear",
+      core_fear: "loss_of_control",
+      surface_objections: ["otevře to moc problémů", "nechci Pandořinu skříňku", "nebudeme to stíhat řešit"],
+      detection_signals: ["nejistota v hlase", "téma kapacity", "uhýbání od rozhodnutí"],
+      validated_response: "Tohle slyším často a je to pochopitelné.",
+      implication_question: "Co se stane, když se o těch věcech dozvíte až ve chvíli, kdy je pozdě?",
+      reframe: "Ty problémy často už existují; rozdíl je, jestli o nich víte včas a v jakém rozsahu.",
+      need_payoff: "Bezpečný rozsah a prioritizace je důležitější než otevřít všechno najednou.",
+      next_step: "define_safe_scope",
+    },
+    {
+      id: "AUTH_01",
+      category: "authority",
+      core_fear: "internal_conflict",
+      surface_objections: ["manažeři to nevezmou", "ukáže to slabiny vedení", "nebude to citlivé téma?"],
+      detection_signals: ["řešení reakce manažerů", "opatrnost kolem leadershipu"],
+      validated_response: "Tohle je citlivé téma v každé firmě.",
+      implication_question: "Jak se dnes tyhle věci řeší bez dat?",
+      reframe: "Data pomáhají odosobnit diskusi a snížit politiku.",
+      need_payoff: "Manažeři dostanou šanci reagovat dřív a cíleněji.",
+      next_step: "manager_framing",
+    },
+    {
+      id: "TIME_01",
+      category: "timing",
+      core_fear: "decision_avoidance",
+      surface_objections: ["teď se to nehodí", "ozveme se později", "není na to čas"],
+      detection_signals: ["odkládání bez jasného důvodu", "vágní odpovědi"],
+      validated_response: "Chápu, že teď řešíte spoustu věcí.",
+      implication_question: "Co by se muselo stát, abyste si za tři měsíce řekl, že jste to měli řešit dřív?",
+      reframe: "Právě při změnách se signály nejčastěji ztrácí.",
+      need_payoff: "Časově omezený pilot nevyžaduje velké rozhodnutí.",
+      next_step: "time_boxed_pilot",
+    },
+  ] as ObjectionPlay[],
+};
+
+const stripDiacritics = (input: string) =>
+  input
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+
+const scoreObjection = (text: string, play: ObjectionPlay) => {
+  const t = stripDiacritics(text);
+  let score = 0;
+  for (const s of play.surface_objections) {
+    const key = stripDiacritics(s);
+    if (key && t.includes(key)) score += 3;
+  }
+  // lightweight keyword boosts
+  const boosts: Record<string, string[]> = {
+    FIN_01: ["cena", "rozpocet", "drah", "sleva", "navratnost", "roi"],
+    DATA_01: ["gdpr", "anonym", "anonymit", "duvera", "pravnik", "it"],
+    SQ_01: ["uz", "pruzkum", "survey", "spokoj", "funguje", "mame"],
+    EMO_01: ["pandor", "problem", "kapacit", "nestih", "moc", "control"],
+    AUTH_01: ["manazer", "vedeni", "leadership", "polit", "citliv", "slabin"],
+    TIME_01: ["pozdeji", "ted", "nyni", "cas", "nehodi", "potom", "pristi"],
+  };
+  for (const kw of boosts[play.id] || []) {
+    if (t.includes(kw)) score += 1;
+  }
+  return score;
+};
+
+const classifyObjection = (text: string) => {
+  const plays = OBJECTION_DATASET_V1.objection_space;
+  let best: { play: ObjectionPlay; score: number } | null = null;
+  for (const p of plays) {
+    const s = scoreObjection(text, p);
+    if (!best || s > best.score) best = { play: p, score: s };
+  }
+  const score = best?.score || 0;
+  const confidence = score >= 5 ? "high" : score >= 3 ? "medium" : "low";
+  return { play: best?.play || plays[0], score, confidence };
+};
+
+app.post(`${BASE_PATH}/whisper/objection`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const contactId = body?.contact_id?.toString();
+  const prospectText = body?.prospect_text?.toString();
+  if (!contactId) return c.json({ error: "Missing contact_id" }, 400);
+  if (!prospectText) return c.json({ error: "Missing prospect_text" }, 400);
+
+  const { play, confidence } = classifyObjection(prospectText);
+
+  // Approved internal product facts can be used, but only if they exist and are referenced via evidence_ids.
+  const { data: internalFacts } = await admin
+    .from("v_approved_facts")
+    .select("evidence_id, claim, source_url, evidence_snippet, captured_at, confidence")
+    .eq("owner_user_id", userId)
+    .is("contact_id", null)
+    .like("source_url", "internal://%");
+
+  const productEvidenceIds: string[] = [];
+  const productFactSnippets: string[] = [];
+  for (const f of internalFacts || []) {
+    if (!f?.evidence_id) continue;
+    productEvidenceIds.push(f.evidence_id);
+    productFactSnippets.push(f.evidence_snippet || "");
+  }
+
+  const insufficientEvidence = productEvidenceIds.length === 0;
+  const hypotheses: any[] = [];
+
+  const mkHyp = (hypothesis: string, howToVerify: string, basedOn: string[] = []) => {
+    const id = crypto.randomUUID();
+    hypotheses.push({
+      hypothesis_id: id,
+      hypothesis,
+      based_on_evidence_ids: basedOn,
+      how_to_verify: howToVerify,
+      priority: "high",
+    });
+    return id;
+  };
+
+  const hValidate = mkHyp(
+    "Tato námitka je primárně o základním strachu (core fear), ne o konkrétní formulaci. Potřebujeme potvrdit kontext.",
+    "Zeptej se: Když říkáte (…), co je pro vás hlavní obava – rozpočet, důvěra/anonymita, kapacita řešit věci, nebo timing?",
+    [],
+  );
+
+  const hProduct = insufficientEvidence
+    ? mkHyp(
+        "Produktové tvrzení nelze použít jako fakt bez schválené evidence. Drž se otázek a nízkorizikového next stepu.",
+        "Neříkej žádné konkrétní produktové parametry. Vytěž jen proces, dopady a domluv pilot.",
+        [],
+      )
+    : null;
+
+  const line = (id: string, text: string, evidenceIds: string[] = [], hypothesisIds: string[] = []) => ({
+    id,
+    text,
+    evidence_ids: evidenceIds,
+    hypothesis_ids: hypothesisIds,
+  });
+
+  const whisper = {
+    validate: line("validate", play.validated_response, [], [hValidate]),
+    reframe: line("reframe", play.reframe, [], [hValidate, ...(hProduct ? [hProduct] : [])]),
+    implication_question: line("implication_q", play.implication_question, [], [hValidate]),
+    next_step: line(
+      "next_step",
+      play.next_step === "pilot_small_team"
+        ? "Navrhuju malý pilot v jednom týmu a na konci jen vyhodnotit, jestli to stojí za rozšíření."
+        : play.next_step === "time_boxed_pilot"
+          ? "Navrhuju časově omezený pilot (např. 2–3 týdny) v jednom týmu a pak rozhodnutí na datech."
+          : play.next_step === "define_safe_scope"
+            ? "Navrhuju bezpečný rozsah: jeden tým, jedna oblast, a jasně co se s výstupy bude dít."
+            : play.next_step === "explain_aggregation_logic"
+              ? "Můžeme projít, jak přesně by byla anonymita zajištěná a jaké agregace byste potřebovali."
+              : play.next_step === "manager_framing"
+                ? "Můžeme si sladit, jak to odkomunikovat manažerům tak, aby to brali jako podporu, ne kontrolu."
+                : "Můžeme udělat malý další krok a ověřit relevanci na konkrétním týmu.",
+      [],
+      [hValidate, ...(hProduct ? [hProduct] : [])],
+    ),
+  };
+
+  const envelope = {
+    correlation_id: correlationId,
+    contact_id: contactId,
+    objection_id: play.id,
+    category: play.category,
+    core_fear: play.core_fear,
+    confidence,
+    policy: OBJECTION_DATASET_V1.global_response_rules,
+    product_evidence_available: !insufficientEvidence,
+    hypotheses,
+    whisper,
+  };
+
+  // Gate: every whisper line must have hypothesis_ids or evidence_ids
+  const requiredLines = [whisper.validate, whisper.reframe, whisper.implication_question, whisper.next_step];
+  for (const l of requiredLines) {
+    const eids = Array.isArray(l.evidence_ids) ? l.evidence_ids : [];
+    const hids = Array.isArray(l.hypothesis_ids) ? l.hypothesis_ids : [];
+    if (eids.length === 0 && hids.length === 0) return c.json({ error: "Whisper validation failed" }, 500);
+  }
+
+  await auditEvent(admin, userId, correlationId, "generate", "whisper_generated", {
+    contact_id: contactId,
+    objection_id: play.id,
+    confidence,
+    product_evidence_available: !insufficientEvidence,
+  });
+
+  return c.json(envelope);
 });
 
 // --- INTEGRATIONS: PIPEDRIVE ---

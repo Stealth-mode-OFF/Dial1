@@ -3,6 +3,7 @@ import {
   Activity,
   Bolt,
   BookOpen,
+  FileText,
   Headphones,
   PhoneCall,
   RefreshCw,
@@ -13,37 +14,54 @@ import { DialerWorkspace } from './pages/DialerWorkspace';
 import { AnalyticsWorkspace } from './pages/AnalyticsWorkspace';
 import { CoachWorkspace } from './pages/CoachWorkspace';
 import { KnowledgeWorkspace } from './pages/KnowledgeWorkspace';
+import { EvidenceWorkspace } from './pages/EvidenceWorkspace';
 import { SettingsWorkspace } from './pages/SettingsWorkspace';
 import { useSales } from './contexts/SalesContext';
 
-type View = 'dialer' | 'coach' | 'analytics' | 'knowledge' | 'settings';
+type View = 'dialer' | 'coach' | 'analytics' | 'knowledge' | 'evidence' | 'settings';
 
 const NAV: Array<{ id: View; label: string; icon: React.ElementType }> = [
   { id: 'dialer', label: 'Dialer', icon: PhoneCall },
   { id: 'coach', label: 'Coaching', icon: Headphones },
   { id: 'analytics', label: 'Analytics', icon: TrendingUp },
   { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
+  { id: 'evidence', label: 'Evidence', icon: FileText },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 export default function App() {
   const [view, setView] = useState<View>('dialer');
+  const [railExpanded, setRailExpanded] = useState(false);
   const { stats, isConfigured, pipedriveConfigured, lastUpdated, error, refresh, isLoading } = useSales();
 
   const viewLabel = useMemo(() => NAV.find((n) => n.id === view)?.label || '', [view]);
 
   return (
     <div className="shell">
-      <aside className="rail">
+      <aside
+        className={`rail ${railExpanded ? 'expanded' : 'collapsed'}`}
+        onMouseEnter={() => setRailExpanded(true)}
+        onMouseLeave={() => setRailExpanded(false)}
+        onFocusCapture={() => setRailExpanded(true)}
+        onBlurCapture={(e) => {
+          const next = e.relatedTarget as Node | null;
+          if (!next || !e.currentTarget.contains(next)) setRailExpanded(false);
+        }}
+      >
         <div className="brand">
-          <Bolt size={18} /> Echo
+          <Bolt size={18} /> <span className="brand-label">Echo</span>
         </div>
         <nav className="rail-nav">
           {NAV.map((item) => {
             const Icon = item.icon;
             const active = item.id === view;
             return (
-              <button key={item.id} className={`rail-btn ${active ? 'active' : ''}`} onClick={() => setView(item.id)}>
+              <button
+                key={item.id}
+                className={`rail-btn ${active ? 'active' : ''}`}
+                onClick={() => setView(item.id)}
+                type="button"
+              >
                 <Icon size={18} />
                 <span>{item.label}</span>
               </button>
@@ -100,6 +118,7 @@ export default function App() {
           {view === 'coach' && <CoachWorkspace />}
           {view === 'analytics' && <AnalyticsWorkspace />}
           {view === 'knowledge' && <KnowledgeWorkspace />}
+          {view === 'evidence' && <EvidenceWorkspace />}
           {view === 'settings' && <SettingsWorkspace />}
         </section>
       </main>

@@ -78,6 +78,70 @@ export type KnowledgeModule = { id: string; title: string; content: string; tags
 
 export type Campaign = { id: string; name: string; description?: string; contacts?: EchoContact[] };
 
+export type EvidenceClaim = {
+  evidence_id: string;
+  claim: string;
+  source_url: string;
+  evidence_snippet: string;
+  captured_at: string;
+  confidence: 'high' | 'medium' | 'low';
+  document_id: string;
+  contact_id: string | null;
+  status: 'needs_review' | 'approved' | 'rejected';
+  approved_claim?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+};
+
+export type ApprovedFact = {
+  evidence_id: string;
+  claim: string;
+  source_url: string;
+  evidence_snippet: string;
+  captured_at: string;
+  confidence: 'high' | 'medium' | 'low';
+  contact_id?: string | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
+};
+
+export type PackGenerateResult = {
+  correlation_id: string;
+  generation_run_id: string;
+  pack_id: string;
+  status: 'success' | 'failed';
+  quality_report: { passes: boolean; failed_checks: string[] };
+};
+
+export type WhisperObjectionResult = {
+  correlation_id: string;
+  contact_id: string;
+  objection_id: string;
+  category: string;
+  core_fear: string;
+  confidence: 'high' | 'medium' | 'low';
+  product_evidence_available: boolean;
+  hypotheses: Array<{
+    hypothesis_id: string;
+    hypothesis: string;
+    based_on_evidence_ids: string[];
+    how_to_verify: string;
+    priority: 'high' | 'medium' | 'low';
+  }>;
+  whisper: {
+    validate: { id: string; text: string; evidence_ids: string[]; hypothesis_ids: string[] };
+    reframe: { id: string; text: string; evidence_ids: string[]; hypothesis_ids: string[] };
+    implication_question: { id: string; text: string; evidence_ids: string[]; hypothesis_ids: string[] };
+    next_step: { id: string; text: string; evidence_ids: string[]; hypothesis_ids: string[] };
+  };
+  policy: {
+    never_do: string[];
+    always_do: string[];
+    preferred_outcome: string;
+    primary_value_frame: string[];
+  };
+};
+
 export const echoApi = {
   getPipedriveStatus: () => apiFetch<{ configured: boolean }>('integrations/pipedrive'),
   savePipedriveKey: (apiKey: string) =>
@@ -115,6 +179,68 @@ export const echoApi = {
         body: JSON.stringify(payload),
       }),
     remove: (id: string) => apiFetch<{ success: boolean }>(`knowledge/${id}`, { method: 'DELETE' }),
+  },
+
+  evidence: {
+    ingestUserNote: (payload: { contact_id: string; note_text: string; note_kind?: string }) =>
+      apiFetch<{ correlation_id: string; document_id: string }>('evidence/ingest/user-note', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    ingestUrl: (payload: { contact_id: string; url: string; source_type?: 'company_website' }) =>
+      apiFetch<{ correlation_id: string; document_id: string }>('evidence/ingest/url', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    ingestCompanySiteAllowlist: (payload: { contact_id: string; base_url: string }) =>
+      apiFetch<{ correlation_id: string; documents: Array<{ document_id: string }>; skipped: Array<{ url: string; reason: string }> }>(
+        'evidence/ingest/company-site-allowlist',
+        { method: 'POST', body: JSON.stringify(payload) },
+      ),
+    ingestAresRecord: (payload: { contact_id: string; source_url: string; content_text: string }) =>
+      apiFetch<{ correlation_id: string; document_id: string }>('evidence/ingest/ares-record', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    ingestInternalProductNote: (payload: { source_url: string; content_text: string }) =>
+      apiFetch<{ correlation_id: string; document_id: string }>('evidence/ingest/internal-product-note', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    extract: (payload: { document_id: string; model?: string; prompt_version?: string }) =>
+      apiFetch<{ correlation_id: string; extraction_run_id: string; claims: Array<{ evidence_id: string }> }>(
+        'evidence/extract',
+        { method: 'POST', body: JSON.stringify(payload) },
+      ),
+    listClaims: (params: { contact_id?: string; status?: string } = {}) => {
+      const search = new URLSearchParams();
+      if (params.contact_id) search.set('contact_id', params.contact_id);
+      if (params.status) search.set('status', params.status);
+      const suffix = search.toString() ? `?${search.toString()}` : '';
+      return apiFetch<{ claims: EvidenceClaim[] }>(`evidence/claims${suffix}`);
+    },
+    reviewClaim: (evidenceId: string, payload: { status: 'approved' | 'rejected' | 'needs_review'; approved_claim?: string; reviewer_notes?: string }) =>
+      apiFetch<{ ok: boolean }>(`evidence/claims/${evidenceId}/review`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    listFacts: (params: { contact_id?: string } = {}) => {
+      const search = new URLSearchParams();
+      if (params.contact_id) search.set('contact_id', params.contact_id);
+      const suffix = search.toString() ? `?${search.toString()}` : '';
+      return apiFetch<{ facts: ApprovedFact[] }>(`facts${suffix}`);
+    },
+  },
+
+  packs: {
+    generate: (payload: { contact_id: string; include: string[]; language?: string }) =>
+      apiFetch<PackGenerateResult>('packs/generate', { method: 'POST', body: JSON.stringify(payload) }),
+    get: (packId: string) => apiFetch<any>(`packs/${packId}`),
+  },
+
+  whisper: {
+    objection: (payload: { contact_id: string; prospect_text: string }) =>
+      apiFetch<WhisperObjectionResult>('whisper/objection', { method: 'POST', body: JSON.stringify(payload) }),
   },
 
   ai: {
