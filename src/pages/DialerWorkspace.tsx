@@ -311,84 +311,6 @@ export function DialerWorkspace() {
             </div>
             {status && <div className="status-line">{status}</div>}
           </div>
-
-          <div className="panel soft">
-            <div className="panel-head tight">
-              <span className="eyebrow">Coach</span>
-              <button className="btn ghost sm" onClick={askCoach} disabled={aiLoading} type="button">
-                <Sparkles size={14} /> Ask
-              </button>
-            </div>
-            <div className="stage-row">
-              <select value={stage} onChange={(e) => setStage(e.target.value)}>
-                {['situation', 'problem', 'implication', 'need_payoff', 'close'].map((stage) => (
-                  <option key={stage}>{stage}</option>
-                ))}
-              </select>
-            </div>
-            <div className="coach-box focus">
-              <p className="muted text-sm">Say next</p>
-              <p className="say-next">{coachTip || 'Ask for the next best line.'}</p>
-            </div>
-
-            <details className="details">
-              <summary className="details-summary">Battle card</summary>
-              <div className="details-body">
-                <button className="btn ghost sm" onClick={fetchBattleCard} disabled={aiLoading} type="button">
-                  <Flame size={14} /> Generate
-                </button>
-                {battleCard ? (
-                  <div className="battle-grid">
-                    <div className="tagline">
-                      {battleCard.detected_sector} {battleCard.sector_emoji}
-                    </div>
-                    <p className="muted">{battleCard.strategy_insight}</p>
-                    <ul className="list-disc ml-4 mt-2">
-                      {(battleCard.objections || []).map((item: any, idx: number) => (
-                        <li key={idx}>
-                          <strong>{item.trigger}:</strong> {item.rebuttal}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <p className="muted text-sm">Generate to see objections + rebuttals.</p>
-                )}
-              </div>
-            </details>
-
-            <details className="details">
-              <summary className="details-summary">Whisper (objections)</summary>
-              <div className="details-body">
-                <textarea
-                  className="notes"
-                  value={whisperInput}
-                  onChange={(e) => setWhisperInput(e.target.value)}
-                  placeholder="Paste the prospect’s objection (exact words)."
-                />
-                <button className="btn outline" onClick={() => void runWhisper()} disabled={whisperLoading || !activeContact} type="button">
-                  <Wand2 size={14} /> Whisper
-                </button>
-                {whisper && (
-                  <div className="coach-box">
-                    <p className="muted text-sm">
-                      {whisper.objection_id} · {whisper.core_fear} · {whisper.confidence}
-                      {whisper.product_evidence_available ? ' · product evidence OK' : ' · no product evidence'}
-                    </p>
-                    <div className="muted text-sm">Validate</div>
-                    <p className="say-next">{whisper.whisper?.validate?.text}</p>
-                    <div className="muted text-sm">Reframe</div>
-                    <p className="say-next">{whisper.whisper?.reframe?.text}</p>
-                    <div className="muted text-sm">Implication</div>
-                    <p className="say-next">{whisper.whisper?.implication_question?.text}</p>
-                    <div className="muted text-sm">Next step</div>
-                    <p className="say-next">{whisper.whisper?.next_step?.text}</p>
-                  </div>
-                )}
-                {!whisper && <p className="muted text-sm">Outputs are hypothesis-gated unless you approve product evidence in Evidence.</p>}
-              </div>
-            </details>
-          </div>
         </div>
       </div>
 
@@ -413,15 +335,8 @@ export function DialerWorkspace() {
           </button>
         </div>
         <div className="panel soft">
-          <p className="eyebrow">Checklist</p>
-          <div className="grid checklist">
-            {['Confirm need', 'Surface metrics', 'Offer next step', 'Send recap'].map((item) => (
-              <div key={item} className="chip">
-                <ChevronDown size={14} /> {item}
-              </div>
-            ))}
-          </div>
-          <div className="muted text-xs mt-3">Tip: push for concrete time/date before hanging up.</div>
+          <p className="eyebrow">Focus</p>
+          <div className="muted text-sm">Dialer stays for calling + logging. Use Intel for prep, objections, and packs.</div>
         </div>
       </div>
     </div>

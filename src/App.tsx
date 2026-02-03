@@ -13,19 +13,19 @@ import {
 import { DialerWorkspace } from './pages/DialerWorkspace';
 import { AnalyticsWorkspace } from './pages/AnalyticsWorkspace';
 import { CoachWorkspace } from './pages/CoachWorkspace';
+import { IntelWorkspace } from './pages/IntelWorkspace';
 import { KnowledgeWorkspace } from './pages/KnowledgeWorkspace';
-import { EvidenceWorkspace } from './pages/EvidenceWorkspace';
 import { SettingsWorkspace } from './pages/SettingsWorkspace';
 import { useSales } from './contexts/SalesContext';
 
-type View = 'dialer' | 'coach' | 'analytics' | 'knowledge' | 'evidence' | 'settings';
+type View = 'dialer' | 'intel' | 'coach' | 'analytics' | 'knowledge' | 'settings';
 
 const NAV: Array<{ id: View; label: string; icon: React.ElementType }> = [
   { id: 'dialer', label: 'Dialer', icon: PhoneCall },
+  { id: 'intel', label: 'Intel', icon: FileText },
   { id: 'coach', label: 'Coaching', icon: Headphones },
   { id: 'analytics', label: 'Analytics', icon: TrendingUp },
   { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
-  { id: 'evidence', label: 'Evidence', icon: FileText },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -75,7 +75,7 @@ export default function App() {
           <div>
             <p className="eyebrow">Echo OS</p>
             <h1>{viewLabel}</h1>
-            <p className="muted">Dialer + coaching + logging, fully backed by the edge function.</p>
+            {view !== 'dialer' && <p className="muted">Dialer + coaching + logging, fully backed by the edge function.</p>}
           </div>
           <div className="chip-row">
             <span className={`pill ${isConfigured ? 'success' : 'warning'}`}>
@@ -94,31 +94,33 @@ export default function App() {
         </header>
 
         {error && <div className="banner warning">{error}</div>}
-        <div className="banner info">
-          <div className="stat">
-            <span className="label">Calls today</span>
-            <strong>{stats.callsToday}</strong>
+        {view !== 'dialer' && (
+          <div className="banner info">
+            <div className="stat">
+              <span className="label">Calls today</span>
+              <strong>{stats.callsToday}</strong>
+            </div>
+            <div className="stat">
+              <span className="label">Connect rate</span>
+              <strong>{stats.connectRate}%</strong>
+            </div>
+            <div className="stat">
+              <span className="label">Meetings</span>
+              <strong>{stats.meetingsBooked}</strong>
+            </div>
+            <div className="stat">
+              <span className="label">Active leads</span>
+              <strong>{stats.activeLeads}</strong>
+            </div>
           </div>
-          <div className="stat">
-            <span className="label">Connect rate</span>
-            <strong>{stats.connectRate}%</strong>
-          </div>
-          <div className="stat">
-            <span className="label">Meetings</span>
-            <strong>{stats.meetingsBooked}</strong>
-          </div>
-          <div className="stat">
-            <span className="label">Active leads</span>
-            <strong>{stats.activeLeads}</strong>
-          </div>
-        </div>
+        )}
 
         <section className="screen">
           {view === 'dialer' && <DialerWorkspace />}
+          {view === 'intel' && <IntelWorkspace />}
           {view === 'coach' && <CoachWorkspace />}
           {view === 'analytics' && <AnalyticsWorkspace />}
           {view === 'knowledge' && <KnowledgeWorkspace />}
-          {view === 'evidence' && <EvidenceWorkspace />}
           {view === 'settings' && <SettingsWorkspace />}
         </section>
       </main>
