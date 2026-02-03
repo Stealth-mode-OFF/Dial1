@@ -22,26 +22,26 @@
 /* ========== Neobrutalist Theme ========== */
 [data-theme="neobrutalist"] {
   --bg: #fffef8;
-  --bg-2: #f5f4ee;
+  --bg-2: #f8f7f2;
   --panel: #ffffff;
-  --panel-soft: #fafaf5;
-  --border: #111111;
-  --text: #111111;
-  --muted: #555555;
-  --accent: #111111;
+  --panel-soft: #fdfcf8;
+  --border: #222222;
+  --text: #1a1a1a;
+  --muted: #666666;
+  --accent: #0066cc;
   --accent-2: #ff6b35;
-  --danger: #e63946;
-  --radius: 0px;
-  --shadow: 4px 4px 0 #111111;
-  --shadow-soft: 2px 2px 0 #111111;
-  --glass: rgba(255, 255, 255, 0.9);
-  --ring: 0 0 0 3px #111111;
+  --danger: #dc2626;
+  --radius: 4px;
+  --shadow: 3px 3px 0 #222222;
+  --shadow-soft: 2px 2px 0 #333333;
+  --glass: rgba(255, 255, 255, 0.95);
+  --ring: 0 0 0 2px #0066cc;
 }
 
 [data-theme="neobrutalist"] body {
   background:
-    repeating-linear-gradient(0deg, transparent, transparent 21px, #c8daf8 21px, #c8daf8 22px),
-    repeating-linear-gradient(90deg, transparent, transparent 21px, #c8daf8 21px, #c8daf8 22px),
+    repeating-linear-gradient(0deg, transparent, transparent 23px, #d4e4f7 23px, #d4e4f7 24px),
+    repeating-linear-gradient(90deg, transparent, transparent 23px, #d4e4f7 23px, #d4e4f7 24px),
     #fffef8;
 }
 
@@ -50,89 +50,205 @@
 [data-theme="neobrutalist"] .list-item,
 [data-theme="neobrutalist"] .list-row {
   border-width: 2px;
-  border-color: #111111;
+  border-color: #222222;
+  background: #ffffff;
+  box-shadow: 3px 3px 0 #222222;
+}
+
+[data-theme="neobrutalist"] .panel.soft {
+  background: #fdfcf8;
+  box-shadow: 2px 2px 0 #333333;
 }
 
 [data-theme="neobrutalist"] .btn {
   border-width: 2px;
-  border-color: #111111;
+  border-color: #222222;
   font-weight: 600;
+  background: #ffffff;
 }
 
 [data-theme="neobrutalist"] .btn:hover {
   transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0 #111111;
+  box-shadow: 4px 4px 0 #222222;
 }
 
 [data-theme="neobrutalist"] .btn.primary {
-  background: #111111;
-  color: #fffef8;
+  background: #0066cc;
+  color: #ffffff;
+  border-color: #004d99;
+}
+
+[data-theme="neobrutalist"] .btn.outline {
+  background: #ffffff;
+  color: #0066cc;
+  border-color: #0066cc;
+}
+
+[data-theme="neobrutalist"] .btn.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+[data-theme="neobrutalist"] .btn.ghost:hover {
+  background: #f0f0e8;
+  border-color: #222222;
+}
+
+[data-theme="neobrutalist"] .btn.active {
+  background: #e8f4ff;
+  border-color: #0066cc;
 }
 
 [data-theme="neobrutalist"] .pill {
   border-width: 2px;
-  border-color: #111111;
-  background: #fffef8;
+  border-color: #222222;
+  background: #ffffff;
+  font-weight: 600;
 }
 
 [data-theme="neobrutalist"] .pill.success {
-  background: #a8e6cf;
-  color: #111111;
+  background: #d1fae5;
+  border-color: #059669;
+  color: #065f46;
 }
 
 [data-theme="neobrutalist"] .pill.warning {
-  background: #ffd93d;
-  color: #111111;
+  background: #fef3c7;
+  border-color: #d97706;
+  color: #92400e;
+}
+
+[data-theme="neobrutalist"] .pill.subtle {
+  background: #f5f5f0;
+  border-color: #999999;
+  color: #666666;
 }
 
 [data-theme="neobrutalist"] .rail {
   background: #fffef8;
-  border-right: 2px solid #111111;
+  border-right: 2px solid #222222;
 }
 
 [data-theme="neobrutalist"] .rail-btn {
   border: 2px solid transparent;
+  font-weight: 600;
+}
+
+[data-theme="neobrutalist"] .rail-btn:hover {
+  background: #f5f5f0;
+  border-color: #cccccc;
 }
 
 [data-theme="neobrutalist"] .rail-btn.active {
-  border-color: #111111;
-  background: #f0f0e8;
+  border-color: #0066cc;
+  background: #e8f4ff;
+  color: #0066cc;
 }
 
 [data-theme="neobrutalist"] .brand {
-  background: #111111;
-  color: #fffef8;
-  border: 2px solid #111111;
+  background: #0066cc;
+  color: #ffffff;
+  border: 2px solid #004d99;
+  box-shadow: 2px 2px 0 #222222;
 }
 
 [data-theme="neobrutalist"] .eyebrow {
-  color: #111111;
+  color: #0066cc;
+  font-weight: 700;
+}
+
+[data-theme="neobrutalist"] h1,
+[data-theme="neobrutalist"] h2,
+[data-theme="neobrutalist"] h3 {
+  color: #1a1a1a;
+  font-weight: 700;
 }
 
 [data-theme="neobrutalist"] input,
 [data-theme="neobrutalist"] textarea,
 [data-theme="neobrutalist"] select {
   border-width: 2px;
-  border-color: #111111;
-  background: #fffef8;
+  border-color: #222222;
+  background: #ffffff;
+  font-size: 14px;
+}
+
+[data-theme="neobrutalist"] input:focus,
+[data-theme="neobrutalist"] textarea:focus,
+[data-theme="neobrutalist"] select:focus {
+  border-color: #0066cc;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
 }
 
 [data-theme="neobrutalist"] .step {
   border-width: 2px;
+  border-color: #cccccc;
+  background: #ffffff;
 }
 
 [data-theme="neobrutalist"] .step.active {
-  border-color: #111111;
-  background: #f0f0e8;
+  border-color: #0066cc;
+  background: #e8f4ff;
+  color: #0066cc;
+}
+
+[data-theme="neobrutalist"] .step.done {
+  border-color: #059669;
+  background: #d1fae5;
+  color: #065f46;
 }
 
 [data-theme="neobrutalist"] .coach-box {
   border-width: 2px;
+  border-color: #222222;
+  background: #ffffff;
 }
 
 [data-theme="neobrutalist"] .coach-box.focus {
-  background: #e8f5e9;
-  border-color: #111111;
+  background: #e8f4ff;
+  border-color: #0066cc;
+}
+
+[data-theme="neobrutalist"] .theme-switcher {
+  background: #f5f5f0;
+  border: 2px solid #222222;
+}
+
+[data-theme="neobrutalist"] .theme-btn {
+  border: 2px solid transparent;
+}
+
+[data-theme="neobrutalist"] .theme-btn.active {
+  background: #0066cc;
+  color: #ffffff;
+  border-color: #004d99;
+}
+
+[data-theme="neobrutalist"] .theme-btn:hover:not(.active) {
+  background: #e8f4ff;
+}
+
+[data-theme="neobrutalist"] .topbar h1 {
+  font-size: 26px;
+}
+
+[data-theme="neobrutalist"] .banner.info {
+  background: #f8f7f2;
+}
+
+[data-theme="neobrutalist"] .banner .label {
+  color: #666666;
+  font-weight: 600;
+}
+
+[data-theme="neobrutalist"] .status-line {
+  color: #0066cc;
+}
+
+[data-theme="neobrutalist"] .tagline {
+  background: #fef3c7;
+  border: 2px solid #d97706;
+  color: #92400e;
 }
 
 * {

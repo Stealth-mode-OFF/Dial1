@@ -10,7 +10,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { BookDemoWorkspace } from './pages/BookDemoWorkspace';
-import { DialerWorkspace } from './pages/DialerWorkspace';
+import { DemoWorkspace } from './pages/DemoWorkspace';
 import { OpsWorkspace } from './pages/OpsWorkspace';
 import { useSales } from './contexts/SalesContext';
 
@@ -178,7 +178,7 @@ export default function App() {
 
         <section className="screen">
           {view === 'book_demo' && <BookDemoWorkspace />}
-          {view === 'demo' && <DialerWorkspace />}
+          {view === 'demo' && <DemoWorkspace />}
           {view === 'ops' && <OpsWorkspace />}
         </section>
       </main>
