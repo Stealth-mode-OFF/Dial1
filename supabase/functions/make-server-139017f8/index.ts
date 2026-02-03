@@ -920,16 +920,76 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
   if (error) return error;
 
   const body = await c.req.json().catch(() => ({}));
-  const contactId = body?.contact_id?.toString();
+  const rawContactId = body?.contact_id?.toString();
   const include = Array.isArray(body?.include) ? body.include.map((s: any) => s?.toString()) : ["cold_call_prep_card"];
-  if (!contactId) return c.json({ error: "Missing contact_id" }, 400);
+  if (!rawContactId) return c.json({ error: "Missing contact_id" }, 400);
 
-  const { data: contact, error: contactError } = await admin
+  const selectFields = "id, name, company, linkedin_url, manual_notes, company_website";
+  let contactId = rawContactId;
+  let contact: any | null = null;
+
+  const { data: contactById } = await admin
     .from("contacts")
-    .select("id, name, company, linkedin_url, manual_notes, company_website")
-    .eq("id", contactId)
+    .select(selectFields)
+    .eq("id", rawContactId)
     .single();
-  if (contactError || !contact) return c.json({ error: "Contact not found" }, 404);
+  if (contactById) {
+    contact = contactById;
+    contactId = contactById.id;
+  }
+
+  if (!contact) {
+    const { data: contactByExternal } = await admin
+      .from("contacts")
+      .select(selectFields)
+      .eq("external_id", rawContactId)
+      .limit(1);
+    const contactExternal = Array.isArray(contactByExternal) ? contactByExternal[0] : null;
+    if (contactExternal) {
+      contact = contactExternal;
+      contactId = contactExternal.id;
+    }
+  }
+
+  if (!contact) {
+    const personId = Number(rawContactId);
+    const pipedriveKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+    if (Number.isFinite(personId) && pipedriveKey) {
+      try {
+        const res = await fetch(`https://api.pipedrive.com/v1/persons/${personId}?api_token=${pipedriveKey}`, {
+          headers: { Accept: "application/json" },
+        });
+        const personJson = await res.json().catch(() => null);
+        const person = personJson?.data;
+        if (res.ok && person) {
+          const upsertPayload = {
+            name: person.name || "Unnamed contact",
+            title: person.title || null,
+            company: person.org_name || null,
+            phone: person.phone?.[0]?.value || null,
+            email: person.email?.[0]?.value || null,
+            status: person.active_flag ? "active" : null,
+            source: "pipedrive_person",
+            external_id: String(personId),
+            last_touch: person.update_time || null,
+          };
+          const { data: upserted, error: upsertError } = await admin
+            .from("contacts")
+            .upsert(upsertPayload, { onConflict: "source,external_id" })
+            .select(selectFields)
+            .single();
+          if (!upsertError && upserted) {
+            contact = upserted;
+            contactId = upserted.id;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to upsert Pipedrive person for pack generation:", e);
+      }
+    }
+  }
+
+  if (!contact) return c.json({ error: "Contact not found" }, 404);
 
   const { data: approvedFacts, error: factsError } = await admin
     .from("v_approved_facts")
@@ -941,16 +1001,16 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
   const hypotheses: any[] = [];
   const h1 = crypto.randomUUID();
   const insufficientEvidence = (approvedFacts || []).length === 0;
-  if (insufficientEvidence) {
-    hypotheses.push({
-      hypothesis_id: h1,
-      hypothesis: "Insufficient evidence to state company specifics; validate current feedback/pulse workflow and ownership.",
-      based_on_evidence_ids: [],
-      how_to_verify:
-        "Ask: Do you run regular employee pulse checks today? If yes, how (tool/process) and who owns follow-up actions?",
-      priority: "high",
-    });
-  }
+  hypotheses.push({
+    hypothesis_id: h1,
+    hypothesis: insufficientEvidence
+      ? "Insufficient evidence to state company specifics; validate current feedback/pulse workflow and ownership."
+      : "Validate current feedback workflow details before using specific claims.",
+    based_on_evidence_ids: [],
+    how_to_verify:
+      "Ask: Do you run regular employee pulse checks today? If yes, how (tool/process) and who owns follow-up actions?",
+    priority: "high",
+  });
 
   const line = (id: string, text: string, evidenceIds: string[] = [], hypothesisIds: string[] = []) => ({
     id,
@@ -1025,6 +1085,12 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
 
   const meetingPack = include.includes("meeting_booking_pack")
     ? {
+        discovery_questions: [
+          line("mq1", "Co vás přimělo řešit demo nebo změnu právě teď?", [], [h1]),
+          line("mq2", "Jak byste poznali, že má follow‑up meeting smysl?", [], [h1]),
+          line("mq3", "Kdo další by měl být u dalšího kroku, aby se rozhodovalo rychle?", [], [h1]),
+          line("mq4", "Co musí být jasné po 15 minutách, aby to stálo za pokračování?", [], [h1]),
+        ],
         meeting_asks: [
           line("ma1", "If this is relevant, would you be open to a short follow-up to map your current feedback loop end-to-end?", [], [h1]),
           line("ma2", "If we find a clear bottleneck, would it make sense to include the person who owns the follow-through?", [], [h1]),
@@ -1802,7 +1868,7 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
 // Per-user Pipedrive integration settings (stored server-side)
 app.get(`${BASE_PATH}/integrations/pipedrive`, async (c) => {
   const userId = getUserId(c);
-  const apiKey = await getPipedriveKey(userId);
+  const apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
   return c.json({ configured: Boolean(apiKey) });
 });
 

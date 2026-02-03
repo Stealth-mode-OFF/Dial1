@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, RefreshCw, Sparkles, X } from 'lucide-react';
+import { Check, Clock3, PhoneCall, PlayCircle, RefreshCw, Sparkles, StopCircle, X } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 import { echoApi, type ApprovedFact, type EvidenceClaim } from '../utils/echoApi';
+import { dialViaTelLink, getExtensionStatus, listenToExtension, requestExtensionDial, type ExtensionStatus } from '../utils/extensionBridge';
 
 type Hypothesis = {
   hypothesis_id: string;
@@ -68,13 +69,27 @@ const lineBadge = (line: { evidence_ids?: string[]; hypothesis_ids?: string[] })
 };
 
 export function BookDemoWorkspace() {
-  const { contacts, visibleContacts, showCompletedLeads, activeContact, setActiveContactId } = useSales();
+  const { contacts, visibleContacts, showCompletedLeads, activeContact, setActiveContactId, logCall, pipedriveConfigured } = useSales();
   const [noteText, setNoteText] = useState('');
   const [claims, setClaims] = useState<EvidenceClaim[]>([]);
   const [facts, setFacts] = useState<ApprovedFact[]>([]);
   const [pack, setPack] = useState<SalesPack | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dialerOpen, setDialerOpen] = useState(false);
+  const [dialerStatus, setDialerStatus] = useState<string | null>(null);
+  const [dialerNotes, setDialerNotes] = useState('');
+  const [dialerDisposition, setDialerDisposition] = useState('meeting');
+  const [dialerSaving, setDialerSaving] = useState(false);
+  const [dialerCalling, setDialerCalling] = useState(false);
+  const [dialerSeconds, setDialerSeconds] = useState(0);
+  const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(() => getExtensionStatus());
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   const contactId = activeContact?.id || '';
   const contactOptions = useMemo(() => {
@@ -127,6 +142,25 @@ export function BookDemoWorkspace() {
     void refreshIntel();
     void loadLastPack();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactId]);
+
+  useEffect(() => {
+    const unsub = listenToExtension({ onStatus: (next) => setExtensionStatus(next) });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!dialerCalling) return;
+    const timer = window.setInterval(() => setDialerSeconds((prev) => prev + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [dialerCalling]);
+
+  useEffect(() => {
+    setDialerStatus(null);
+    setDialerNotes('');
+    setDialerDisposition('meeting');
+    setDialerCalling(false);
+    setDialerSeconds(0);
   }, [contactId]);
 
   const ingestNote = async () => {
@@ -193,6 +227,63 @@ export function BookDemoWorkspace() {
   const qualifyingQuestions = (pack?.meeting_booking_pack?.discovery_questions || []).slice(0, 6);
   const meetingAsks = (pack?.meeting_booking_pack?.meeting_asks || []).slice(0, 2);
 
+  const startDialerCall = async () => {
+    if (!activeContact) {
+      setDialerStatus('Vyber lead.');
+      return;
+    }
+    const phone = activeContact.phone || '';
+    if (!phone.trim()) {
+      setDialerStatus('Lead nemá telefonní číslo.');
+      return;
+    }
+    setDialerStatus(null);
+    const dialRes = await requestExtensionDial(
+      { phone, contact: { id: activeContact.id, name: activeContact.name, company: activeContact.company } },
+      900,
+    );
+    if (!dialRes.ok) {
+      dialViaTelLink(phone);
+    }
+    setDialerCalling(true);
+    setDialerSeconds(0);
+  };
+
+  const stopDialerCall = () => {
+    setDialerCalling(false);
+  };
+
+  const submitDialerOutcome = async () => {
+    if (!activeContact) {
+      setDialerStatus('Vyber lead.');
+      return;
+    }
+    if (!pipedriveConfigured) {
+      setDialerStatus('Pipedrive není připojený. Otevři Nastavení → Pipedrive a vlož API key.');
+      return;
+    }
+    setDialerSaving(true);
+    setDialerStatus(null);
+    try {
+      await logCall({
+        contactId: activeContact.id,
+        contactName: activeContact.name,
+        companyName: activeContact.company || undefined,
+        disposition: dialerDisposition,
+        notes: dialerNotes.trim(),
+        duration: dialerSeconds,
+      });
+      setDialerStatus('Zapsáno do Pipedrive.');
+      setDialerCalling(false);
+      setDialerSeconds(0);
+      setDialerNotes('');
+    } catch (e) {
+      setDialerStatus(e instanceof Error ? e.message : 'Zápis selhal');
+    } finally {
+      setDialerSaving(false);
+    }
+  };
+
   return (
     <div className="workspace" data-testid="book-demo-workspace">
       <div className="panel stack">
@@ -202,9 +293,14 @@ export function BookDemoWorkspace() {
             <h2>Domluvit demo</h2>
             <p className="muted text-sm">Intel + otázky. Bez přepínání.</p>
           </div>
-          <button className="btn ghost" onClick={() => void refreshIntel()} disabled={!contactId || busy} type="button">
-            <RefreshCw size={14} /> Refresh
-          </button>
+          <div className="button-row">
+            <button className="btn outline sm" onClick={() => setDialerOpen(true)} disabled={!contactId} type="button">
+              <PhoneCall size={14} /> Dialer
+            </button>
+            <button className="btn ghost" onClick={() => void refreshIntel()} disabled={!contactId || busy} type="button">
+              <RefreshCw size={14} /> Refresh
+            </button>
+          </div>
         </div>
 
         <div className="panel soft">
@@ -377,6 +473,71 @@ export function BookDemoWorkspace() {
           </div>
         </div>
       </div>
+
+      {dialerOpen && (
+        <div className="modal-backdrop" onClick={() => setDialerOpen(false)}>
+          <div className="modal-card panel" onClick={(e) => e.stopPropagation()}>
+            <div className="panel-head">
+              <div>
+                <p className="eyebrow">Dialer</p>
+                <h2>{activeContact?.name || 'Vyber lead'}</h2>
+                <p className="muted text-sm">
+                  {activeContact?.title || 'Role'} {activeContact?.company ? `· ${activeContact.company}` : ''}
+                </p>
+              </div>
+              <button className="btn ghost sm" onClick={() => setDialerOpen(false)} type="button">
+                <X size={14} /> Zavřít
+              </button>
+            </div>
+
+            <div className="panel soft">
+              <div className="button-row wrap">
+                <button className="btn primary" onClick={() => void startDialerCall()} disabled={!activeContact || dialerCalling} type="button">
+                  <PlayCircle size={16} /> Start
+                </button>
+                <button className="btn ghost" onClick={stopDialerCall} disabled={!dialerCalling} type="button">
+                  <StopCircle size={16} /> Stop
+                </button>
+                <span className="pill warning">
+                  <Clock3 size={14} /> {formatTime(dialerSeconds)}
+                </span>
+                <span className="pill subtle">Ext: {extensionStatus.connected ? 'on' : 'off'}</span>
+              </div>
+              <div className="muted text-xs mt-2">Tel: {activeContact?.phone || '—'}</div>
+            </div>
+
+            <div className="panel soft">
+              <div className="panel-head tight">
+                <span className="eyebrow">Outcome → Pipedrive</span>
+                <span className={`pill ${pipedriveConfigured ? 'success' : 'warning'}`}>
+                  {pipedriveConfigured ? 'Pipedrive OK' : 'Pipedrive není připojený'}
+                </span>
+              </div>
+              <div className="muted text-xs">Poznámky</div>
+              <textarea
+                className="notes"
+                value={dialerNotes}
+                onChange={(e) => setDialerNotes(e.target.value)}
+                placeholder="Stručné poznámky z hovoru…"
+              />
+              <div className="action-row mt-2">
+                <select value={dialerDisposition} onChange={(e) => setDialerDisposition(e.target.value)}>
+                  <option value="connected">Connected</option>
+                  <option value="meeting">Meeting</option>
+                  <option value="callback">Callback</option>
+                  <option value="not-interested">Not interested</option>
+                  <option value="no-answer">No answer</option>
+                  <option value="sent">Sent email</option>
+                </select>
+                <button className="btn outline" onClick={() => void submitDialerOutcome()} disabled={dialerSaving} type="button">
+                  <PhoneCall size={14} /> {dialerSaving ? 'Zapisuji…' : 'Zapsat do Pipedrive'}
+                </button>
+              </div>
+              {dialerStatus && <div className="status-line small">{dialerStatus}</div>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
