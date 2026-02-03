@@ -19,6 +19,122 @@
   --font: 'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+/* ========== Neobrutalist Theme ========== */
+[data-theme="neobrutalist"] {
+  --bg: #fffef8;
+  --bg-2: #f5f4ee;
+  --panel: #ffffff;
+  --panel-soft: #fafaf5;
+  --border: #111111;
+  --text: #111111;
+  --muted: #555555;
+  --accent: #111111;
+  --accent-2: #ff6b35;
+  --danger: #e63946;
+  --radius: 0px;
+  --shadow: 4px 4px 0 #111111;
+  --shadow-soft: 2px 2px 0 #111111;
+  --glass: rgba(255, 255, 255, 0.9);
+  --ring: 0 0 0 3px #111111;
+}
+
+[data-theme="neobrutalist"] body {
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 21px, #c8daf8 21px, #c8daf8 22px),
+    repeating-linear-gradient(90deg, transparent, transparent 21px, #c8daf8 21px, #c8daf8 22px),
+    #fffef8;
+}
+
+[data-theme="neobrutalist"] .panel,
+[data-theme="neobrutalist"] .banner,
+[data-theme="neobrutalist"] .list-item,
+[data-theme="neobrutalist"] .list-row {
+  border-width: 2px;
+  border-color: #111111;
+}
+
+[data-theme="neobrutalist"] .btn {
+  border-width: 2px;
+  border-color: #111111;
+  font-weight: 600;
+}
+
+[data-theme="neobrutalist"] .btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 #111111;
+}
+
+[data-theme="neobrutalist"] .btn.primary {
+  background: #111111;
+  color: #fffef8;
+}
+
+[data-theme="neobrutalist"] .pill {
+  border-width: 2px;
+  border-color: #111111;
+  background: #fffef8;
+}
+
+[data-theme="neobrutalist"] .pill.success {
+  background: #a8e6cf;
+  color: #111111;
+}
+
+[data-theme="neobrutalist"] .pill.warning {
+  background: #ffd93d;
+  color: #111111;
+}
+
+[data-theme="neobrutalist"] .rail {
+  background: #fffef8;
+  border-right: 2px solid #111111;
+}
+
+[data-theme="neobrutalist"] .rail-btn {
+  border: 2px solid transparent;
+}
+
+[data-theme="neobrutalist"] .rail-btn.active {
+  border-color: #111111;
+  background: #f0f0e8;
+}
+
+[data-theme="neobrutalist"] .brand {
+  background: #111111;
+  color: #fffef8;
+  border: 2px solid #111111;
+}
+
+[data-theme="neobrutalist"] .eyebrow {
+  color: #111111;
+}
+
+[data-theme="neobrutalist"] input,
+[data-theme="neobrutalist"] textarea,
+[data-theme="neobrutalist"] select {
+  border-width: 2px;
+  border-color: #111111;
+  background: #fffef8;
+}
+
+[data-theme="neobrutalist"] .step {
+  border-width: 2px;
+}
+
+[data-theme="neobrutalist"] .step.active {
+  border-color: #111111;
+  background: #f0f0e8;
+}
+
+[data-theme="neobrutalist"] .coach-box {
+  border-width: 2px;
+}
+
+[data-theme="neobrutalist"] .coach-box.focus {
+  background: #e8f5e9;
+  border-color: #111111;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -92,6 +208,56 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(61, 217, 163, 0.18), rgba(74, 130, 255, 0.15));
+  color: #dff7ff;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+  box-shadow: var(--shadow-soft);
+}
+
+.theme-switcher {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.theme-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.theme-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.theme-btn.active {
+  background: var(--accent);
+  color: #0b1320;
+}
+
+.rail.collapsed .theme-switcher {
+  flex-direction: column;
+}
+
+.rail.collapsed .theme-btn {
+  width: 100%;
+}
   padding: 10px 12px;
   border-radius: 10px;
   background: linear-gradient(135deg, rgba(61, 217, 163, 0.18), rgba(74, 130, 255, 0.15));

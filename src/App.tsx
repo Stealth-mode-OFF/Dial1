@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   Bolt,
   CalendarCheck,
+  Grid,
+  Moon,
   PhoneCall,
   RefreshCw,
   Settings,
@@ -23,10 +25,23 @@ const SECONDARY_NAV: Array<{ id: View; label: string; icon: React.ElementType }>
   { id: 'ops', label: 'Statistiky & Nastavení', icon: Settings },
 ];
 
+type Theme = 'default' | 'neobrutalist';
+
 export default function App() {
   const [view, setView] = useState<View>('demo');
   const [railExpanded, setRailExpanded] = useState(false);
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('echo-theme') as Theme) || 'default';
+    }
+    return 'default';
+  });
   const { stats, isConfigured, pipedriveConfigured, lastUpdated, error, refresh, isLoading } = useSales();
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('echo-theme', theme);
+  }, [theme]);
 
   const viewLabel = useMemo(() => {
     return [...PRIMARY_NAV, ...SECONDARY_NAV].find((n) => n.id === view)?.label || '';
@@ -48,6 +63,26 @@ export default function App() {
         <div className="brand">
           <Bolt size={18} /> <span className="brand-label">Echo</span>
         </div>
+
+        <div className="theme-switcher">
+          <button
+            className={`theme-btn ${theme === 'default' ? 'active' : ''}`}
+            onClick={() => setTheme('default')}
+            title="Dark Mode"
+            type="button"
+          >
+            <Moon size={16} />
+          </button>
+          <button
+            className={`theme-btn ${theme === 'neobrutalist' ? 'active' : ''}`}
+            onClick={() => setTheme('neobrutalist')}
+            title="Neobrutalist"
+            type="button"
+          >
+            <Grid size={16} />
+          </button>
+        </div>
+
         <nav className="rail-nav" data-testid="nav-primary">
           {PRIMARY_NAV.map((item) => {
             const Icon = item.icon;
