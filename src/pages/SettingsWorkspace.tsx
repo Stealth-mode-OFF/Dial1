@@ -5,13 +5,35 @@ import { echoApi } from '../utils/echoApi';
 import { getExtensionStatus, listenToExtension, type ExtensionStatus } from '../utils/extensionBridge';
 import { supabaseConfigError, supabaseUrl, publicAnonKey } from '../utils/supabase/info';
 
+const STORAGE_PIPEDRIVE_KEY = 'echo.pipedrive.api_key';
+
 export function SettingsWorkspace() {
-  const { pipedriveConfigured, setPipedriveKey, clearPipedriveKey, refresh, isConfigured } = useSales();
+  const {
+    pipedriveConfigured,
+    setPipedriveKey,
+    clearPipedriveKey,
+    refresh,
+    isConfigured,
+    user,
+    updateUser,
+    settings,
+    updateSettings,
+    showCompletedLeads,
+    setShowCompletedLeads,
+    clearCompletedLeads,
+  } = useSales();
   const [apiKey, setApiKey] = useState('');
+  const [profile, setProfile] = useState(() => ({
+    name: user.name,
+    role: user.role,
+    dailyCallGoal: settings.dailyCallGoal || 0,
+  }));
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(() => getExtensionStatus());
   const [lastCaption, setLastCaption] = useState<string>('');
+
+  const hasStoredKey = Boolean(apiKey.trim());
 
   useEffect(() => {
     const unsub = listenToExtension({
@@ -21,16 +43,58 @@ export function SettingsWorkspace() {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const savedKey = window.localStorage.getItem(STORAGE_PIPEDRIVE_KEY);
+    if (savedKey && !apiKey) {
+      setApiKey(savedKey);
+    }
+  }, [apiKey]);
+
+  useEffect(() => {
+    setProfile({
+      name: user.name,
+      role: user.role,
+      dailyCallGoal: settings.dailyCallGoal || 0,
+    });
+  }, [user.name, user.role, settings.dailyCallGoal]);
+
+  const saveProfile = () => {
+    updateUser({ name: profile.name.trim(), role: profile.role.trim() });
+    updateSettings({ dailyCallGoal: Number(profile.dailyCallGoal) || 0 });
+    setStatus('Profile saved.');
+  };
+
   const saveKey = async () => {
     if (!apiKey.trim()) return;
     setBusy(true);
     setStatus(null);
     try {
       await setPipedriveKey(apiKey.trim());
-      setStatus('Pipedrive key saved.');
-      setApiKey('');
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(STORAGE_PIPEDRIVE_KEY, apiKey.trim());
+      }
+      setStatus('Pipedrive key saved (stored locally).');
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to save key';
+      setStatus(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeKey = async () => {
+    setBusy(true);
+    setStatus(null);
+    try {
+      await clearPipedriveKey();
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(STORAGE_PIPEDRIVE_KEY);
+      }
+      setApiKey('');
+      setStatus('Pipedrive key removed.');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to remove key';
       setStatus(message);
     } finally {
       setBusy(false);
@@ -54,6 +118,53 @@ export function SettingsWorkspace() {
 
   return (
     <div className="workspace column">
+      <div className="panel">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Profile</p>
+            <h2>Preferences</h2>
+            <p className="muted">Saved locally on this device.</p>
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <label>
+            <span className="label">Name</span>
+            <input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
+          </label>
+          <label>
+            <span className="label">Role</span>
+            <input value={profile.role} onChange={(e) => setProfile({ ...profile, role: e.target.value })} />
+          </label>
+          <label>
+            <span className="label">Daily call goal</span>
+            <input
+              type="number"
+              min={0}
+              value={profile.dailyCallGoal}
+              onChange={(e) => setProfile({ ...profile, dailyCallGoal: Number(e.target.value) })}
+            />
+          </label>
+        </div>
+
+        <div className="button-row wrap mt-3">
+          <button className="btn primary" onClick={saveProfile} disabled={busy} type="button">
+            Save profile
+          </button>
+          <label className="muted text-sm flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showCompletedLeads}
+              onChange={(e) => setShowCompletedLeads(e.target.checked)}
+            />
+            Show completed leads in queues
+          </label>
+          <button className="btn ghost sm" onClick={clearCompletedLeads} type="button">
+            Clear completed list
+          </button>
+        </div>
+      </div>
+
       <div className="panel">
         <div className="panel-head">
           <div>
@@ -88,19 +199,20 @@ export function SettingsWorkspace() {
             <input
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="API key (never stored client-side)"
+              placeholder="API key (stored locally)"
             />
             <div className="button-row wrap">
               <button className="btn primary" onClick={saveKey} disabled={busy}>
                 <KeyRound size={14} /> Save key
               </button>
-              <button className="btn ghost" onClick={clearPipedriveKey} disabled={busy}>
+              <button className="btn ghost" onClick={removeKey} disabled={busy}>
                 Remove key
               </button>
               <button className="btn outline" onClick={handleImport} disabled={busy || !pipedriveConfigured}>
                 Import contacts
               </button>
             </div>
+            {hasStoredKey && <div className="muted text-xs">Key is remembered on this device.</div>}
           </div>
 
           <div className="connection-card">

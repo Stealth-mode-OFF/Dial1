@@ -48,6 +48,7 @@ type SalesContextType = {
   lastUpdated: string | null;
   stats: Stats;
   contacts: Contact[];
+  visibleContacts: Contact[];
   analytics: AnalyticsSummary | null;
   activeContact: Contact | null;
   setActiveContactId: (id: string | null) => void;
@@ -60,12 +61,19 @@ type SalesContextType = {
   updateUser: (updates: Partial<UserProfile>) => void;
   settings: UserSettings;
   updateSettings: (updates: Partial<UserSettings>) => void;
+  completedLeadIds: string[];
+  showCompletedLeads: boolean;
+  setShowCompletedLeads: (value: boolean) => void;
+  markLeadCompleted: (id: string) => void;
+  clearCompletedLeads: () => void;
 };
 
 const SalesContext = createContext<SalesContextType | undefined>(undefined);
 
 const STORAGE_USER_KEY = 'echo.user';
 const STORAGE_SETTINGS_KEY = 'echo.settings';
+const STORAGE_COMPLETED_LEADS_KEY = 'echo.completed_leads';
+const STORAGE_SHOW_COMPLETED_KEY = 'echo.show_completed_leads';
 
 const defaultStats: Stats = {
   callsToday: 0,
@@ -90,6 +98,29 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
     const raw = window.localStorage.getItem(key);
     if (!raw) return fallback;
     return { ...fallback, ...JSON.parse(raw) } as T;
+  } catch {
+    return fallback;
+  }
+};
+
+const loadArrayFromStorage = (key: string): string[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map((value) => String(value)).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+};
+
+const loadBooleanFromStorage = (key: string, fallback = false): boolean => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return Boolean(JSON.parse(raw));
   } catch {
     return fallback;
   }
@@ -138,6 +169,12 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<UserSettings>(() =>
     loadFromStorage(STORAGE_SETTINGS_KEY, defaultSettings),
   );
+  const [completedLeadIds, setCompletedLeadIds] = useState<string[]>(() =>
+    loadArrayFromStorage(STORAGE_COMPLETED_LEADS_KEY),
+  );
+  const [showCompletedLeads, setShowCompletedLeads] = useState<boolean>(() =>
+    loadBooleanFromStorage(STORAGE_SHOW_COMPLETED_KEY, false),
+  );
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +187,14 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     saveToStorage(STORAGE_SETTINGS_KEY, settings);
   }, [settings]);
+
+  useEffect(() => {
+    saveToStorage(STORAGE_COMPLETED_LEADS_KEY, completedLeadIds);
+  }, [completedLeadIds]);
+
+  useEffect(() => {
+    saveToStorage(STORAGE_SHOW_COMPLETED_KEY, showCompletedLeads);
+  }, [showCompletedLeads]);
 
   const fetchContacts = async () => {
     const list = await echoApi.fetchContacts();
@@ -197,8 +242,18 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
     setError(errors.length ? errors.join(' • ') : null);
   };
 
+  const markLeadCompleted = (id: string) => {
+    if (!id) return;
+    setCompletedLeadIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
+  const clearCompletedLeads = () => {
+    setCompletedLeadIds([]);
+  };
+
   const logCall = async (payload: CallLogPayload) => {
     await echoApi.logCall(payload);
+    markLeadCompleted(payload.contactId);
     await fetchAnalytics(contacts.length).catch(() => null);
   };
 
@@ -234,6 +289,13 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
     return contacts.find((contact) => contact.id === activeContactId) || contacts[0] || null;
   }, [activeContactId, contacts]);
 
+  const visibleContacts = useMemo(() => {
+    if (showCompletedLeads) return contacts;
+    if (completedLeadIds.length === 0) return contacts;
+    const completed = new Set(completedLeadIds);
+    return contacts.filter((contact) => !completed.has(contact.id));
+  }, [contacts, completedLeadIds, showCompletedLeads]);
+
   const value = useMemo<SalesContextType>(
     () => ({
       isConfigured: isSupabaseConfigured,
@@ -242,6 +304,7 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
       lastUpdated,
       stats,
       contacts,
+      visibleContacts,
       analytics,
       activeContact,
       setActiveContactId,
@@ -254,6 +317,11 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
       updateUser,
       settings,
       updateSettings,
+      completedLeadIds,
+      showCompletedLeads,
+      setShowCompletedLeads,
+      markLeadCompleted,
+      clearCompletedLeads,
     }),
     [
       isLoading,
@@ -261,11 +329,14 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
       lastUpdated,
       stats,
       contacts,
+      visibleContacts,
       analytics,
       activeContact,
       pipedriveConfigured,
       user,
       settings,
+      completedLeadIds,
+      showCompletedLeads,
     ],
   );
 

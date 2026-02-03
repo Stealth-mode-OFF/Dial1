@@ -68,7 +68,7 @@ const lineBadge = (line: { evidence_ids?: string[]; hypothesis_ids?: string[] })
 };
 
 export function BookDemoWorkspace() {
-  const { contacts, activeContact, setActiveContactId } = useSales();
+  const { contacts, visibleContacts, showCompletedLeads, activeContact, setActiveContactId } = useSales();
   const [noteText, setNoteText] = useState('');
   const [claims, setClaims] = useState<EvidenceClaim[]>([]);
   const [facts, setFacts] = useState<ApprovedFact[]>([]);
@@ -77,7 +77,13 @@ export function BookDemoWorkspace() {
   const [busy, setBusy] = useState(false);
 
   const contactId = activeContact?.id || '';
-  const contactOptions = useMemo(() => contacts.slice(0, 80), [contacts]);
+  const contactOptions = useMemo(() => {
+    const base = (showCompletedLeads ? contacts : visibleContacts).slice(0, 80);
+    if (activeContact && !base.find((c) => c.id === activeContact.id)) {
+      return [activeContact, ...base];
+    }
+    return base;
+  }, [contacts, visibleContacts, showCompletedLeads, activeContact]);
 
   const refreshIntel = async () => {
     if (!contactId) return;

@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ChevronDown,
   Clock3,
+  Copy,
   Flame,
   PhoneCall,
   PlayCircle,
@@ -13,6 +14,17 @@ import {
 import { useSales } from '../contexts/SalesContext';
 import { echoApi } from '../utils/echoApi';
 import { dialViaTelLink, getExtensionStatus, listenToExtension, requestExtensionDial, type ExtensionStatus } from '../utils/extensionBridge';
+import { buildFunctionUrl, functionsBase, isSupabaseConfigured, publicAnonKey } from '../utils/supabase/info';
+
+type TranscriptEvent = {
+  id: string;
+  ts: number;
+  text: string;
+  speaker?: string;
+  speakerName?: string;
+};
+
+const STORAGE_MEET_CALL_IDS = 'echo.meet_call_ids';
 
 const DISPOSITIONS = [
   { id: 'connected', label: 'Connected' },
@@ -30,7 +42,17 @@ const formatTime = (seconds: number) => {
 };
 
 export function DialerWorkspace() {
-  const { contacts, activeContact, setActiveContactId, logCall, stats, isLoading } = useSales();
+  const {
+    contacts,
+    visibleContacts,
+    showCompletedLeads,
+    setShowCompletedLeads,
+    activeContact,
+    setActiveContactId,
+    logCall,
+    stats,
+    isLoading,
+  } = useSales();
   const [search, setSearch] = useState('');
   const [queueOpen, setQueueOpen] = useState(false);
   const [queuePage, setQueuePage] = useState(0);
@@ -50,8 +72,13 @@ export function DialerWorkspace() {
   const [whisper, setWhisper] = useState<any | null>(null);
   const [battleCard, setBattleCard] = useState<any | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [meetCallId, setMeetCallId] = useState('');
+  const [meetActive, setMeetActive] = useState(false);
+  const [meetEvents, setMeetEvents] = useState<TranscriptEvent[]>([]);
+  const [meetError, setMeetError] = useState<string | null>(null);
   const transcriptRef = useRef<Array<{ text: string; ts: number }>>([]);
   const lastCoachAtRef = useRef<number>(0);
+  const meetLastTsRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!isCalling) return;
@@ -82,13 +109,35 @@ export function DialerWorkspace() {
     setDisposition(DISPOSITIONS[0].id);
   }, [activeContact?.id]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!activeContact?.id) {
+      setMeetCallId('');
+      setMeetActive(false);
+      setMeetEvents([]);
+      meetLastTsRef.current = null;
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(STORAGE_MEET_CALL_IDS);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const stored = parsed?.[activeContact.id];
+      setMeetCallId(stored || '');
+      setMeetActive(false);
+      setMeetEvents([]);
+      meetLastTsRef.current = null;
+    } catch {
+      setMeetCallId('');
+    }
+  }, [activeContact?.id]);
+
   const filteredContacts = useMemo(() => {
-    if (!search.trim()) return contacts;
+    if (!search.trim()) return visibleContacts;
     const term = search.toLowerCase();
-    return contacts.filter((c) =>
+    return visibleContacts.filter((c) =>
       [c.name, c.company, c.title].filter(Boolean).some((val) => val?.toLowerCase().includes(term)),
     );
-  }, [contacts, search]);
+  }, [visibleContacts, search]);
 
   const activeIndex = filteredContacts.findIndex((c) => c.id === activeContact?.id);
   const nextContact = activeIndex >= 0 ? filteredContacts[activeIndex + 1] : null;
@@ -141,6 +190,93 @@ export function DialerWorkspace() {
     setIsCalling(true);
     setSeconds(0);
   };
+
+  const saveMeetCallId = (nextValue?: string) => {
+    if (typeof window === 'undefined') return;
+    if (!activeContact?.id) return;
+    const value = (nextValue ?? meetCallId).trim().toUpperCase();
+    setMeetCallId(value);
+    try {
+      const raw = window.localStorage.getItem(STORAGE_MEET_CALL_IDS);
+      const parsed = raw ? JSON.parse(raw) : {};
+      if (value) parsed[activeContact.id] = value;
+      else delete parsed[activeContact.id];
+      window.localStorage.setItem(STORAGE_MEET_CALL_IDS, JSON.stringify(parsed));
+    } catch {
+      // ignore
+    }
+  };
+
+  const copyText = async (text: string) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setMeetError('Copied to clipboard.');
+      window.setTimeout(() => setMeetError(null), 1600);
+    } catch {
+      setMeetError('Copy failed.');
+    }
+  };
+
+  const handleMeetConnect = () => {
+    const value = meetCallId.trim().toUpperCase();
+    if (!value || value.length < 8) {
+      setMeetError('Call ID musí mít alespoň 8 znaků.');
+      return;
+    }
+    if (!isSupabaseConfigured) {
+      setMeetError('Supabase není nakonfigurovaný.');
+      return;
+    }
+    saveMeetCallId(value);
+    setMeetEvents([]);
+    meetLastTsRef.current = null;
+    setMeetActive(true);
+    setMeetError(null);
+  };
+
+  const handleMeetStop = () => {
+    setMeetActive(false);
+  };
+
+  useEffect(() => {
+    if (!meetActive || !meetCallId.trim() || !isSupabaseConfigured) return;
+    let mounted = true;
+
+    const fetchTranscript = async () => {
+      const since = meetLastTsRef.current;
+      const url = buildFunctionUrl(`meet/transcript/${meetCallId.trim().toUpperCase()}${since ? `?since=${since}` : ''}`);
+      if (!url) return;
+      try {
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${publicAnonKey}`,
+            'x-echo-user': meetCallId.trim().toUpperCase(),
+          },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const incoming: TranscriptEvent[] = data.events || [];
+        if (!incoming.length || !mounted) return;
+        const last = incoming[incoming.length - 1];
+        meetLastTsRef.current = last.ts;
+        setMeetEvents((prev) => [...prev, ...incoming].slice(-120));
+        incoming.forEach((event) => {
+          transcriptRef.current = [...transcriptRef.current, { text: event.text, ts: event.ts }].slice(-24);
+        });
+        setLastCaption(last.text);
+      } catch {
+        // ignore polling errors
+      }
+    };
+
+    const interval = window.setInterval(fetchTranscript, 2000);
+    void fetchTranscript();
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
+  }, [meetActive, meetCallId]);
 
   const handleLog = async (disposition: string) => {
     if (!activeContact) return;
@@ -247,20 +383,32 @@ export function DialerWorkspace() {
             <p className="eyebrow">Queue</p>
             <h2>Contacts ready</h2>
           </div>
-          <button
-            className="btn ghost"
-            onClick={() => setQueueOpen((prev) => !prev)}
-            aria-expanded={queueOpen}
-            type="button"
-          >
-            {queueOpen ? 'Hide' : 'Show'} <ChevronDown size={14} className={queueOpen ? 'chev open' : 'chev'} />
-          </button>
+          <div className="button-row">
+            <button
+              className="btn ghost sm"
+              onClick={() => setShowCompletedLeads(!showCompletedLeads)}
+              type="button"
+            >
+              {showCompletedLeads ? 'Hide done' : 'Show done'}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={() => setQueueOpen((prev) => !prev)}
+              aria-expanded={queueOpen}
+              type="button"
+            >
+              {queueOpen ? 'Hide' : 'Show'} <ChevronDown size={14} className={queueOpen ? 'chev open' : 'chev'} />
+            </button>
+          </div>
         </div>
 
         {!queueOpen && (
           <div className="queue-summary">
             <div className="chip-row">
               <span className="pill subtle">{filteredContacts.length} leads</span>
+              {contacts.length !== filteredContacts.length && (
+                <span className="pill subtle">{contacts.length - filteredContacts.length} done</span>
+              )}
               <span className="pill subtle">{activeContact ? 'Selected' : 'Pick one'}</span>
             </div>
             <div className="muted text-sm">
@@ -373,24 +521,24 @@ export function DialerWorkspace() {
           ))}
         </ol>
 
-	        <div className="call-controls">
-	          <button
-	            className="btn primary"
-	            onClick={() => void startCall()}
-	            disabled={!activeContact || isCalling}
-	            type="button"
-	          >
-	            <PlayCircle size={16} /> Start
-	          </button>
+        <div className="call-controls">
+          <button
+            className="btn primary"
+            onClick={() => void startCall()}
+            disabled={!activeContact || isCalling}
+            type="button"
+          >
+            <PlayCircle size={16} /> Start
+          </button>
           <button className="btn ghost" onClick={() => setIsCalling(false)} disabled={!isCalling} type="button">
             <StopCircle size={16} /> Stop
           </button>
-	          <div className="muted flex gap-2 items-center">
-	            <Clock3 size={14} />
-	            {isCalling ? 'On call' : 'Idle'}
-	          </div>
-            <span className={`pill subtle`}>Ext: {extensionStatus.connected ? 'on' : 'off'}</span>
-	        </div>
+          <span className="muted flex gap-2 items-center">
+            <Clock3 size={14} />
+            {isCalling ? 'On call' : 'Idle'}
+          </span>
+          <span className="pill subtle">Ext: {extensionStatus.connected ? 'on' : 'off'}</span>
+        </div>
 
         <div className="split">
           <div className="panel soft">
@@ -439,166 +587,211 @@ export function DialerWorkspace() {
         </div>
       </div>
 
-	      <div className="panel stack">
-	        <div className="panel-head">
-	          <div className="button-row">
-	            <button
-	              className={`btn ghost sm ${rightMode === 'next' ? 'active' : ''}`}
-	              onClick={() => setRightMode('next')}
-	              type="button"
-	            >
-	              Next
-	            </button>
-	            <button
-	              className={`btn ghost sm ${rightMode === 'intel' ? 'active' : ''}`}
-	              onClick={() => setRightMode('intel')}
-	              type="button"
-	            >
-	              Intel
-	            </button>
-	          </div>
-	          <span className="pill subtle">{aiBusy ? 'Working…' : 'Ready'}</span>
-	        </div>
-	        {rightMode === 'next' && (
-	          <div className="panel soft">
-	            <p className="eyebrow">Next</p>
-	            <h3>{nextContact ? nextContact.name : 'Queue end'}</h3>
-	            {nextContact && (
-	              <p className="muted">
-	                {nextContact.title || '—'} {nextContact.company ? `· ${nextContact.company}` : ''}
-	              </p>
-	            )}
-	            <div className="button-row">
-	              <button
-	                className="btn outline"
-	                onClick={() => nextContact && setActiveContactId(nextContact.id)}
-	                disabled={!nextContact}
-	                type="button"
-	              >
-	                Next <ArrowRight size={14} />
-	              </button>
-	            </div>
-	            <div className="muted text-xs">No scrolling: only the next lead + one action.</div>
-	          </div>
-	        )}
-	        {rightMode === 'intel' && (
-	          <div className="panel soft">
-	            <p className="eyebrow">Intel</p>
-	            <div className="button-row wrap">
-	              <button className={`btn ghost sm ${intelTab === 'whisper' ? 'active' : ''}`} onClick={() => setIntelTab('whisper')} type="button">
-	                Whisper
-	              </button>
-	              <button className={`btn ghost sm ${intelTab === 'coaching' ? 'active' : ''}`} onClick={() => setIntelTab('coaching')} type="button">
-	                Coaching
-	              </button>
-	              <button className={`btn ghost sm ${intelTab === 'battle' ? 'active' : ''}`} onClick={() => setIntelTab('battle')} type="button">
-	                Battle
-	              </button>
-	              <button className={`btn ghost sm ${intelTab === 'packs' ? 'active' : ''}`} onClick={() => setIntelTab('packs')} type="button">
-	                Packs
-	              </button>
-	            </div>
+      <div className="panel stack">
+        <div className="panel-head">
+          <div className="button-row">
+            <button
+              className={`btn ghost sm ${rightMode === 'next' ? 'active' : ''}`}
+              onClick={() => setRightMode('next')}
+              type="button"
+            >
+              Next
+            </button>
+            <button
+              className={`btn ghost sm ${rightMode === 'intel' ? 'active' : ''}`}
+              onClick={() => setRightMode('intel')}
+              type="button"
+            >
+              Intel
+            </button>
+          </div>
+          <span className="pill subtle">{aiBusy ? 'Working…' : 'Ready'}</span>
+        </div>
+        {rightMode === 'next' && (
+          <div className="panel soft">
+            <p className="eyebrow">Next</p>
+            <h3>{nextContact ? nextContact.name : 'Queue end'}</h3>
+            {nextContact && (
+              <p className="muted">
+                {nextContact.title || '—'} {nextContact.company ? `· ${nextContact.company}` : ''}
+              </p>
+            )}
+            <div className="button-row mt-3">
+              <button
+                className="btn outline"
+                onClick={() => nextContact && setActiveContactId(nextContact.id)}
+                disabled={!nextContact}
+                type="button"
+              >
+                Next <ArrowRight size={14} />
+              </button>
+            </div>
+            <div className="muted text-xs mt-2">No scrolling: only the next lead + one action.</div>
+          </div>
+        )}
+        {rightMode === 'intel' && (
+          <div className="panel soft">
+            <p className="eyebrow">Intel</p>
+            <div className="button-row wrap mt-2">
+              <button className={`btn ghost sm ${intelTab === 'whisper' ? 'active' : ''}`} onClick={() => setIntelTab('whisper')} type="button">
+                Whisper
+              </button>
+              <button className={`btn ghost sm ${intelTab === 'coaching' ? 'active' : ''}`} onClick={() => setIntelTab('coaching')} type="button">
+                Coaching
+              </button>
+              <button className={`btn ghost sm ${intelTab === 'battle' ? 'active' : ''}`} onClick={() => setIntelTab('battle')} type="button">
+                Battle
+              </button>
+              <button className={`btn ghost sm ${intelTab === 'packs' ? 'active' : ''}`} onClick={() => setIntelTab('packs')} type="button">
+                Packs
+              </button>
+            </div>
 
-	            {intelTab === 'whisper' && (
-	              <>
-	                <div className="panel-head tight">
-	                  <span className="eyebrow">Whisper</span>
-	                  <button className="btn outline sm" onClick={() => void runWhisper()} disabled={!activeContact || aiBusy} type="button">
-	                    <Wand2 size={14} /> Run
-	                  </button>
-	                </div>
-	                <textarea
-	                  className="notes"
-	                  value={whisperInput}
-	                  onChange={(e) => setWhisperInput(e.target.value)}
-	                  placeholder="Paste objection (exact words)."
-	                />
-	                {whisper && <div className="muted text-sm">{whisper.objection_id} · {whisper.core_fear} · {whisper.confidence}</div>}
-	                {whisper?.whisper?.next_step?.text && (
-	                  <div className="coach-box focus">
-	                    <p className="say-next">{whisper.whisper.next_step.text}</p>
-	                  </div>
-	                )}
-	              </>
-	            )}
+            {intelTab === 'whisper' && (
+              <>
+                <div className="panel-head tight mt-3">
+                  <span className="eyebrow">Whisper</span>
+                  <button className="btn outline sm" onClick={() => void runWhisper()} disabled={!activeContact || aiBusy} type="button">
+                    <Wand2 size={14} /> Run
+                  </button>
+                </div>
+                <textarea
+                  className="notes"
+                  value={whisperInput}
+                  onChange={(e) => setWhisperInput(e.target.value)}
+                  placeholder="Paste objection (exact words)."
+                />
+                {whisper && <div className="muted text-sm mt-2">{whisper.objection_id} · {whisper.core_fear} · {whisper.confidence}</div>}
+                {whisper?.whisper?.next_step?.text && (
+                  <div className="coach-box focus">
+                    <p className="say-next">{whisper.whisper.next_step.text}</p>
+                  </div>
+                )}
+              </>
+            )}
 
-	            {intelTab === 'coaching' && (
-	              <>
-	                <div className="panel-head tight">
-	                  <span className="eyebrow">Live coaching</span>
-	                  <button className="btn ghost sm" onClick={() => setLiveCoachingEnabled((v) => !v)} type="button">
-	                    {liveCoachingEnabled ? 'On' : 'Off'}
-	                  </button>
-	                </div>
-	                <div className="muted text-xs">Source: Chrome extension → Google Meet captions.</div>
-	                {!extensionStatus.capabilities.meetCaptions && (
-	                  <div className="muted text-sm">Captions not connected (check Settings → Chrome Extension).</div>
-	                )}
-	                {lastCaption && <div className="muted text-sm">Last: {lastCaption}</div>}
-	                {coachTip && (
-	                  <div className="coach-box focus">
-	                    <p className="say-next">{coachTip}</p>
-	                  </div>
-	                )}
-	              </>
-	            )}
+            {intelTab === 'coaching' && (
+              <>
+                <div className="panel-head tight mt-3">
+                  <span className="eyebrow">Live coaching</span>
+                  <button className="btn ghost sm" onClick={() => setLiveCoachingEnabled((v) => !v)} type="button">
+                    {liveCoachingEnabled ? 'On' : 'Off'}
+                  </button>
+                </div>
+                <div className="muted text-xs">Source: Chrome extension → Google Meet captions.</div>
+                {!extensionStatus.capabilities.meetCaptions && (
+                  <div className="muted text-sm">Captions not connected (check Settings → Chrome Extension).</div>
+                )}
+                {lastCaption && <div className="muted text-sm">Last: {lastCaption}</div>}
+                {coachTip && (
+                  <div className="coach-box focus">
+                    <p className="say-next">{coachTip}</p>
+                  </div>
+                )}
 
-	            {intelTab === 'battle' && (
-	              <>
-	                <div className="panel-head tight">
-	                  <span className="eyebrow">Battle card</span>
-	                  <button className="btn ghost sm" onClick={() => void runBattleCard()} disabled={!activeContact || aiBusy} type="button">
-	                    <Flame size={14} /> Gen
-	                  </button>
-	                </div>
-	                {battleCard ? (
-	                  <div className="coach-box">
-	                    <div className="tagline">
-	                      {battleCard.detected_sector} {battleCard.sector_emoji}
-	                    </div>
-	                    <p className="muted text-sm">{battleCard.strategy_insight}</p>
-	                  </div>
-	                ) : (
-	                  <div className="muted text-sm">Generate when needed (hypothesis-only).</div>
-	                )}
-	              </>
-	            )}
+                <div className="panel soft mt-3">
+                  <div className="panel-head tight">
+                    <span className="eyebrow">Meet Coach (Chrome)</span>
+                    <div className="button-row">
+                      <button className="btn outline sm" onClick={handleMeetConnect} type="button">
+                        Connect
+                      </button>
+                      <button className="btn ghost sm" onClick={handleMeetStop} disabled={!meetActive} type="button">
+                        Stop
+                      </button>
+                    </div>
+                  </div>
 
-	            {intelTab === 'packs' && (
-	              <>
-	                <div className="panel-head tight">
-	                  <span className="eyebrow">Packs</span>
-	                </div>
-	                <div className="muted text-sm">Evidence-gated: if missing, pack becomes validation questions only.</div>
-	                <div className="button-row wrap">
-	                  <button
-	                    className="btn outline"
-	                    onClick={() =>
-	                      activeContact &&
-	                      void echoApi.packs.generate({ contact_id: activeContact.id, include: ['cold_call_prep_card'], language: 'cs' })
-	                    }
-	                    disabled={!activeContact || aiBusy}
-	                    type="button"
-	                  >
-	                    <Sparkles size={14} /> Cold call
-	                  </button>
-	                  <button
-	                    className="btn ghost"
-	                    onClick={() =>
-	                      activeContact &&
-	                      void echoApi.packs.generate({ contact_id: activeContact.id, include: ['meeting_booking_pack'], language: 'cs' })
-	                    }
-	                    disabled={!activeContact || aiBusy}
-	                    type="button"
-	                  >
-	                    Meeting
-	                  </button>
-	                </div>
-	              </>
-	            )}
-	          </div>
-	        )}
-	      </div>
+                  <input
+                    value={meetCallId}
+                    onChange={(e) => setMeetCallId(e.target.value)}
+                    placeholder="Call ID (např. ABCD1234)"
+                  />
+                  <div className="button-row wrap mt-2">
+                    <button className="btn ghost sm" onClick={() => saveMeetCallId()} disabled={!meetCallId.trim()} type="button">
+                      Save for lead
+                    </button>
+                    <button className="btn ghost sm" onClick={() => void copyText(meetCallId.trim().toUpperCase())} disabled={!meetCallId.trim()} type="button">
+                      <Copy size={14} /> Copy Call ID
+                    </button>
+                    <button className="btn ghost sm" onClick={() => void copyText(functionsBase)} disabled={!functionsBase} type="button">
+                      <Copy size={14} /> Copy Endpoint
+                    </button>
+                    <button className="btn ghost sm" onClick={() => void copyText(publicAnonKey)} disabled={!publicAnonKey} type="button">
+                      <Copy size={14} /> Copy Auth Token
+                    </button>
+                  </div>
+                  <div className="muted text-xs break-all mt-2">
+                    Endpoint: {functionsBase || 'Supabase functions endpoint not configured.'}
+                  </div>
+                  <div className="muted text-xs break-all">
+                    Auth token: {publicAnonKey ? 'Anon key ready (paste into extension Advanced).' : 'Missing VITE_SUPABASE_ANON_KEY.'}
+                  </div>
+                  <div className="muted text-xs">
+                    Vlož Call ID + Endpoint + Auth token do popupu Meet Coach extension. Bude platit pro tento Google Meet.
+                  </div>
+                  {meetActive && <div className="muted text-xs">Captions: {meetEvents.length} lines</div>}
+                  {meetError && <div className="status-line small">{meetError}</div>}
+                </div>
+              </>
+            )}
+
+            {intelTab === 'battle' && (
+              <>
+                <div className="panel-head tight mt-3">
+                  <span className="eyebrow">Battle card</span>
+                  <button className="btn ghost sm" onClick={() => void runBattleCard()} disabled={!activeContact || aiBusy} type="button">
+                    <Flame size={14} /> Gen
+                  </button>
+                </div>
+                {battleCard ? (
+                  <div className="coach-box">
+                    <div className="tagline">
+                      {battleCard.detected_sector} {battleCard.sector_emoji}
+                    </div>
+                    <p className="muted text-sm mt-2">{battleCard.strategy_insight}</p>
+                  </div>
+                ) : (
+                  <div className="muted text-sm">Generate when needed (hypothesis-only).</div>
+                )}
+              </>
+            )}
+
+            {intelTab === 'packs' && (
+              <>
+                <div className="panel-head tight mt-3">
+                  <span className="eyebrow">Packs</span>
+                </div>
+                <div className="muted text-sm">Evidence-gated: if missing, pack becomes validation questions only.</div>
+                <div className="button-row wrap mt-2">
+                  <button
+                    className="btn outline"
+                    onClick={() =>
+                      activeContact &&
+                      void echoApi.packs.generate({ contact_id: activeContact.id, include: ['cold_call_prep_card'], language: 'cs' })
+                    }
+                    disabled={!activeContact || aiBusy}
+                    type="button"
+                  >
+                    <Sparkles size={14} /> Cold call
+                  </button>
+                  <button
+                    className="btn ghost"
+                    onClick={() =>
+                      activeContact &&
+                      void echoApi.packs.generate({ contact_id: activeContact.id, include: ['meeting_booking_pack'], language: 'cs' })
+                    }
+                    disabled={!activeContact || aiBusy}
+                    type="button"
+                  >
+                    Meeting
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
