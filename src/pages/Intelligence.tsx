@@ -5,28 +5,23 @@ import { useSales } from '../contexts/SalesContext';
 const formatNumber = (value: number) => new Intl.NumberFormat().format(value || 0);
 
 export default function Intelligence() {
-  const { calls, stats, deals } = useSales();
+  const { analytics, stats } = useSales();
 
   const outcomeSummary = useMemo(() => {
-    const summary: Record<string, number> = {};
-    calls.forEach((call) => {
-      const key = (call.outcome || call.status || 'Unspecified').toLowerCase();
-      summary[key] = (summary[key] || 0) + 1;
-    });
-    return Object.entries(summary)
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 4);
-  }, [calls]);
-
-  const pipelineValue = deals.reduce((sum, deal) => sum + (deal.value || 0), 0);
+    const breakdown = analytics?.dispositionBreakdown ?? [];
+    return [...breakdown]
+      .filter((item) => Boolean(item?.name))
+      .sort((a, b) => (b.value || 0) - (a.value || 0))
+      .slice(0, 4)
+      .map((item) => ({ label: item.name, count: item.value }));
+  }, [analytics]);
 
   return (
     <div className="app-page">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="app-title text-3xl">Insights</h1>
-          <p className="app-subtitle">A clean read on call performance.</p>
+          <p className="app-subtitle">Call performance summary.</p>
         </div>
         <span className="app-pill">Today</span>
       </header>
@@ -35,9 +30,9 @@ export default function Intelligence() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="app-card app-section">
             <h2 className="app-title text-lg">Pipeline value</h2>
-            <p className="app-subtitle">Open deals</p>
-            <div className="mt-6 text-3xl font-semibold app-title">{formatNumber(pipelineValue)}</div>
-            <div className="text-sm app-muted mt-2">Across {deals.length} open deals</div>
+            <p className="app-subtitle">From analytics</p>
+            <div className="mt-6 text-3xl font-semibold app-title">{formatNumber(stats.pipelineValue)}</div>
+            <div className="text-sm app-muted mt-2">Updated from your connected sources</div>
           </div>
 
           <div className="app-card app-section">
@@ -61,7 +56,7 @@ export default function Intelligence() {
               <Activity size={20} />
             </div>
             <div className="mt-6 text-3xl font-semibold app-title">{formatNumber(stats.meetingsBooked)}</div>
-            <div className="text-sm app-muted mt-2">Track outcomes for accuracy</div>
+            <div className="text-sm app-muted mt-2">Based on logged outcomes</div>
           </div>
         </div>
 

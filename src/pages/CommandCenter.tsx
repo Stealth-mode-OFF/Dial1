@@ -15,15 +15,15 @@ export default function CommandCenter({ onStartDialer }: { onStartDialer?: () =>
     <div className="app-page">
       <header>
         <h1 className="app-title text-3xl">Today</h1>
-        <p className="app-subtitle">One clean view of what matters right now.</p>
+        <p className="app-subtitle">Your daily overview.</p>
       </header>
 
       <div className="app-page-body">
         {!isConfigured && (
           <div className="app-card app-section">
-            <h2 className="app-title text-lg">Connect live data</h2>
+            <h2 className="app-title text-lg">Connect your data</h2>
             <p className="app-subtitle mt-2">
-              Add your Supabase keys to load real contacts, calls, and deals.
+              Add Supabase keys to load contacts, calls, and deals.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <span className="app-pill">VITE_SUPABASE_URL</span>
@@ -37,7 +37,7 @@ export default function CommandCenter({ onStartDialer }: { onStartDialer?: () =>
             icon={<PhoneCall size={18} />}
             label="Calls today"
             value={formatNumber(stats.callsToday)}
-            detail={goal ? `${goalPct}% of goal` : 'Set a daily goal'}
+            detail={goal ? `${goalPct}% of goal` : 'No goal set'}
           />
           <StatCard
             icon={<Target size={18} />}
@@ -56,11 +56,11 @@ export default function CommandCenter({ onStartDialer }: { onStartDialer?: () =>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="app-card app-section">
             <h2 className="app-title text-xl">Next lead</h2>
-            <p className="app-subtitle mt-1">Focus on one conversation at a time.</p>
+            <p className="app-subtitle mt-1">Your next contact to call.</p>
 
             {isLoading && <div className="app-subtitle mt-4">Loading contact…</div>}
             {!isLoading && !nextLead && (
-              <div className="app-subtitle mt-4">No contacts yet. Import to start dialing.</div>
+              <div className="app-subtitle mt-4">No contacts available. Import contacts to begin.</div>
             )}
 
             {nextLead && (
@@ -81,12 +81,12 @@ export default function CommandCenter({ onStartDialer }: { onStartDialer?: () =>
           </div>
 
           <div className="app-card app-section">
-            <h2 className="app-title text-xl">Focus reminder</h2>
+            <h2 className="app-title text-xl">Call checklist</h2>
             <p className="app-subtitle mt-1">
-              Keep the call simple: confirm fit, surface pain, book next step.
+              Three steps for each call.
             </p>
             <div className="mt-4 grid gap-3">
-              {['Confirm the ICP in 1 question', 'Ask 1 pain question', 'Book 15-minute follow-up'].map((item) => (
+              {['Confirm fit', 'Identify need', 'Book next step'].map((item) => (
                 <div key={item} className="app-card soft px-4 py-3 text-sm">
                   {item}
                 </div>

@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Database, Save } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
-import { supabaseConfigError, isSupabaseConfigured } from '../utils/supabase/info';
+import { supabaseConfigError, isSupabaseConfigured, supabaseUrl, publicAnonKey } from '../utils/supabase/info';
 
 export default function Configuration() {
-  const { user, updateUser, settings, updateSettings } = useSales();
+  const { user, updateUser, settings, updateSettings, refresh } = useSales();
   const [form, setForm] = useState({
     name: user.name,
     role: user.role,
     dailyCallGoal: settings.dailyCallGoal || 0,
   });
   const [saved, setSaved] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
 
   const handleSave = () => {
     updateUser({ name: form.name.trim(), role: form.role.trim() });
@@ -19,17 +21,50 @@ export default function Configuration() {
     window.setTimeout(() => setSaved(false), 1800);
   };
 
+  const handleImport = async () => {
+    if (!isSupabaseConfigured) {
+      setImportStatus('Connect Supabase to import contacts.');
+      return;
+    }
+    setIsImporting(true);
+    setImportStatus(null);
+    try {
+      const res = await fetch(
+        `${supabaseUrl}/functions/v1/make-server-139017f8/pipedrive/import`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: publicAnonKey,
+            Authorization: `Bearer ${publicAnonKey}`,
+          },
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || 'Import failed');
+      }
+      setImportStatus(`Imported ${data?.count ?? 0} contacts.`);
+      await refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Import failed';
+      setImportStatus(message);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="app-page">
       <header>
-        <h1 className="app-title text-3xl">Configuration</h1>
-        <p className="app-subtitle">Set your identity and connect data.</p>
+        <h1 className="app-title text-3xl">Settings</h1>
+        <p className="app-subtitle">Profile and data connections.</p>
       </header>
 
       <div className="app-page-body grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="app-card app-section">
           <h2 className="app-title text-xl">Profile</h2>
-          <p className="app-subtitle mt-2">Used across the workspace.</p>
+          <p className="app-subtitle mt-2">Your display name and role.</p>
 
           <div className="mt-4 grid gap-4">
             <label className="text-sm font-semibold">
@@ -70,7 +105,7 @@ export default function Configuration() {
 
         <div className="app-card app-section">
           <h2 className="app-title text-xl">Data connection</h2>
-          <p className="app-subtitle mt-2">Supabase powers live data.</p>
+          <p className="app-subtitle mt-2">Connect to load live data.</p>
           <div className="mt-4 app-card soft p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -83,15 +118,32 @@ export default function Configuration() {
             </div>
             <p className="text-sm app-muted mt-3">
               {isSupabaseConfigured
-                ? 'Your project keys are configured.'
+                ? 'Connected.'
                 : supabaseConfigError || 'Add environment variables to connect.'}
             </p>
+          </div>
+
+          <div className="mt-4 app-card soft p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Pipedrive</div>
+                <p className="text-sm app-muted mt-1">Import leads into contacts.</p>
+              </div>
+              <button
+                className="app-button"
+                onClick={handleImport}
+                disabled={isImporting}
+              >
+                {isImporting ? 'Importing...' : 'Import from Pipedrive'}
+              </button>
+            </div>
+            {importStatus && <p className="text-sm app-muted mt-3">{importStatus}</p>}
           </div>
 
           <div className="mt-6 app-card soft p-4">
             <div className="text-sm font-semibold">Recommended tables</div>
             <p className="text-sm app-muted mt-2">
-              Use `contacts`, `calls`, and `deals` tables for fastest onboarding.
+              Use contacts, calls, and deals tables.
             </p>
           </div>
         </div>

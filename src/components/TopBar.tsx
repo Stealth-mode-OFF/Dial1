@@ -27,7 +27,7 @@ export function TopBar({ onNavigate }: TopBarProps) {
 
       <div className="flex items-center gap-3 justify-end">
         <span className="app-pill">
-          {isConfigured ? 'Supabase connected' : 'Connect Supabase'}
+          {isConfigured ? 'Connected' : 'Not connected'}
         </span>
         <span className="app-subtitle">Last sync: {formatSyncTime(lastUpdated)}</span>
         {error ? <span className="app-subtitle">Warning: {error}</span> : null}
@@ -48,9 +48,9 @@ export function TopBar({ onNavigate }: TopBarProps) {
           </span>
           <span className="text-left leading-tight">
             <span className="block text-sm font-semibold">
-              {user.name || 'Set your name'}
+              {user.name || 'Add name'}
             </span>
-            <span className="block text-xs app-muted">{user.role || 'Sales role'}</span>
+            <span className="block text-xs app-muted">{user.role || 'Add role'}</span>
           </span>
         </button>
       </div>

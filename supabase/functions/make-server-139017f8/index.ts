@@ -27,15 +27,15 @@ app.use(
   }),
 );
 
-// Supabase mounts this function at /functions/v1/make-server-139017f8
-// so internal routes should be root-relative (no extra prefix).
-const FUNCTION_NAME = Deno.env.get("SUPABASE_FUNCTION_NAME") || "make-server-139017f8";
-const BASE_PATH = FUNCTION_NAME ? `/${FUNCTION_NAME}` : "";
+// Supabase already routes requests to /functions/v1/<functionName> into this handler.
+// Routes must be root-relative (no extra /<functionName> prefix) otherwise callers hit 404.
+const BASE_PATH = "";
 
 const DEFAULT_USER_ID = Deno.env.get("ECHO_DEFAULT_USER_ID") || "owner";
 const REQUIRE_AUTH = Deno.env.get("ECHO_REQUIRE_AUTH") === "true";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const userKey = (userId: string, key: string) => `user:${userId}:${key}`;
 const userPrefix = (userId: string, prefix: string) => `user:${userId}:${prefix}`;
@@ -70,6 +70,11 @@ const resolveUserId = async (c: any) => {
 };
 
 const getUserId = (c: any) => c.get("userId") as string;
+
+const getAdminClient = () => {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+};
 
 const getPipedriveKey = async (userId: string) => {
   try {
@@ -208,35 +213,42 @@ app.get(`${BASE_PATH}/analytics`, async (c) => {
   }
 });
 
-// --- PIPEDRIVE CONTACTS & ENRICHMENT ---
-app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
+app.post(`${BASE_PATH}/pipedrive/import`, async (c) => {
   const userId = getUserId(c);
   const apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
   if (!apiKey) return c.json({ error: "No Pipedrive API key" }, 401);
 
+  const admin = getAdminClient();
+  if (!admin) return c.json({ error: "Supabase service role not configured" }, 500);
+
   try {
-    // Fetch leads instead of persons
-    const res = await fetch(`https://api.pipedrive.com/v1/leads?limit=50&api_token=${apiKey}`);
+    const res = await fetch(`https://api.pipedrive.com/v1/leads?limit=200&api_token=${apiKey}`);
     if (!res.ok) return c.json({ error: "Pipedrive API error" }, res.status);
     const data = await res.json();
-    
-    // Transform leads to match expected contact format
     const leads = (data.data || []).map((lead: any) => ({
-      id: lead.id,
-      name: lead.title || lead.person_name || null, // TODO: connect to live Pipedrive person data
+      name: lead.title || lead.person_name || "Unnamed contact",
       phone: lead.person?.phone?.[0]?.value || lead.phone || null,
       email: lead.person?.email?.[0]?.value || lead.email || null,
-      organization: lead.organization_name || null, // TODO: connect to live org enrichment
-      label: lead.label_ids?.[0] || lead.label || null,
-      value: lead.value?.amount || 0,
-      currency: lead.value?.currency || 'CZK',
-      source: 'pipedrive_lead'
+      company: lead.organization_name || null,
+      status: lead.label_ids?.[0] || lead.label || null,
+      source: "pipedrive",
+      external_id: lead.id?.toString() || null,
+      last_touch: lead.update_time || null,
     }));
-    
-    return c.json(leads);
+
+    const { error } = await admin
+      .from("contacts")
+      .upsert(leads, { onConflict: "source,external_id" });
+
+    if (error) {
+      console.error("Pipedrive import upsert failed:", error);
+      return c.json({ error: "Failed to import contacts" }, 500);
+    }
+
+    return c.json({ ok: true, count: leads.length });
   } catch (e) {
-    console.error("Pipedrive fetch failed:", e);
-    return c.json({ error: "Pipedrive API error" }, 500);
+    console.error("Pipedrive import failed:", e);
+    return c.json({ error: "Pipedrive import failed" }, 500);
   }
 });
 

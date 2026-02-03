@@ -15,9 +15,9 @@ interface SidebarProps {
 }
 
 const navItems: Array<{ id: NavItem; label: string; icon: React.ElementType }> = [
-  { id: 'command-center', label: 'Command Center', icon: LayoutDashboard },
+  { id: 'command-center', label: 'Today', icon: LayoutDashboard },
   { id: 'live-campaigns', label: 'Dialer', icon: PhoneCall },
-  { id: 'intelligence', label: 'Intelligence', icon: BarChart3 },
+  { id: 'intelligence', label: 'Insights', icon: BarChart3 },
 ];
 
 export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {

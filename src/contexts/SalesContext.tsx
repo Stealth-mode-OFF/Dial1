@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { supabaseClient } from '../utils/supabase/client';
-import { isSupabaseConfigured } from '../utils/supabase/info';
+import { echoApi, type AnalyticsSummary, type CallLogPayload, type EchoContact } from '../utils/echoApi';
+import { isSupabaseConfigured, supabaseConfigError } from '../utils/supabase/info';
 
 export type Stats = {
   callsToday: number;
@@ -14,14 +14,15 @@ export type Contact = {
   id: string;
   name: string;
   title?: string;
-  company?: string;
-  phone?: string;
-  email?: string;
-  status?: string;
-  lastTouch?: string;
-  source?: string;
-  location?: string;
-  score?: number;
+  company?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  status?: string | null;
+  lastTouch?: string | null;
+  source?: string | null;
+  location?: string | null;
+  score?: number | null;
+  orgId?: number | null;
 };
 
 export type CallRecord = {
@@ -35,22 +36,10 @@ export type CallRecord = {
   notes?: string;
 };
 
-export type Deal = {
-  id: string;
-  value?: number;
-  status?: string;
-  stage?: string;
-};
+export type Deal = { id: string; value?: number; status?: string; stage?: string };
 
-export type UserProfile = {
-  name: string;
-  role: string;
-  avatarInitials: string;
-};
-
-export type UserSettings = {
-  dailyCallGoal?: number;
-};
+export type UserProfile = { name: string; role: string; avatarInitials: string };
+export type UserSettings = { dailyCallGoal?: number };
 
 type SalesContextType = {
   isConfigured: boolean;
@@ -59,11 +48,14 @@ type SalesContextType = {
   lastUpdated: string | null;
   stats: Stats;
   contacts: Contact[];
-  calls: CallRecord[];
-  deals: Deal[];
+  analytics: AnalyticsSummary | null;
   activeContact: Contact | null;
   setActiveContactId: (id: string | null) => void;
   refresh: () => Promise<void>;
+  logCall: (payload: CallLogPayload) => Promise<void>;
+  pipedriveConfigured: boolean;
+  setPipedriveKey: (apiKey: string) => Promise<void>;
+  clearPipedriveKey: () => Promise<void>;
   user: UserProfile;
   updateUser: (updates: Partial<UserProfile>) => void;
   settings: UserSettings;
@@ -83,69 +75,13 @@ const defaultStats: Stats = {
   activeLeads: 0,
 };
 
-const defaultUser: UserProfile = {
-  name: '',
-  role: '',
-  avatarInitials: '',
-};
+const defaultUser: UserProfile = { name: '', role: '', avatarInitials: '' };
+const defaultSettings: UserSettings = { dailyCallGoal: 0 };
 
-const defaultSettings: UserSettings = {
-  dailyCallGoal: 0,
-};
-
-const normalizeContact = (row: Record<string, any>, index: number): Contact => {
-  const name =
-    row.name ||
-    row.full_name ||
-    row.contact_name ||
-    [row.first_name, row.last_name].filter(Boolean).join(' ');
-  const company = row.company || row.organization || row.org_name || row.company_name || '';
-  const id = String(row.id || row.contact_id || row.uuid || row.email || row.phone || index);
-  return {
-    id,
-    name: name || 'Unnamed contact',
-    title: row.title || row.role || row.job_title || '',
-    company,
-    phone: row.phone || row.mobile || row.phone_number || '',
-    email: row.email || '',
-    status: row.status || row.stage || '',
-    lastTouch: row.last_touch || row.last_contacted_at || row.updated_at || row.created_at || '',
-    source: row.source || row.source_name || '',
-    location: row.location || row.city || row.region || '',
-    score: row.score || row.lead_score || undefined,
-  };
-};
-
-const normalizeCall = (row: Record<string, any>, index: number): CallRecord => {
-  const status = row.status || row.disposition || row.outcome || '';
-  const connected =
-    row.connected === true ||
-    row.is_connected === true ||
-    (typeof status === 'string' &&
-      ['connected', 'answered', 'completed', 'meeting'].some((key) => status.toLowerCase().includes(key)));
-  const outcome = row.outcome || row.disposition || row.status || '';
-  return {
-    id: String(row.id || row.call_id || row.uuid || index),
-    createdAt: row.created_at || row.createdAt || row.timestamp || '',
-    contactId: row.contact_id || row.contactId || '',
-    status,
-    outcome,
-    connected,
-    durationSec: row.duration_sec || row.duration || row.call_duration || undefined,
-    notes: row.notes || row.summary || '',
-  };
-};
-
-const normalizeDeal = (row: Record<string, any>, index: number): Deal => ({
-  id: String(row.id || row.deal_id || row.uuid || index),
-  value: toNumber(row.value ?? row.amount ?? row.pipeline_value ?? row.deal_value),
-  status: row.status || row.stage || '',
-  stage: row.stage || row.phase || '',
-});
-
-const toNumber = (value: unknown): number => {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
+const initialsFromName = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || '');
+  return letters.join('') || '';
 };
 
 const loadFromStorage = <T,>(key: string, fallback: T): T => {
@@ -164,26 +100,45 @@ const saveToStorage = (key: string, value: unknown) => {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // Ignore write errors (privacy mode, quota, etc.)
+    // ignore
   }
 };
 
-const initialsFromName = (name: string) => {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || '');
-  return letters.join('') || '';
+const mapContact = (row: EchoContact, index: number): Contact => ({
+  id: row.id || String(index),
+  name: row.name || 'Unnamed contact',
+  title: row.role || '',
+  company: row.company || '',
+  phone: row.phone || '',
+  email: row.email || '',
+  status: row.status || '',
+  location: '',
+  score: row.aiScore ?? null,
+  orgId: row.org_id ?? null,
+});
+
+const deriveStats = (analytics: AnalyticsSummary | null, contactsCount: number): Stats => {
+  const callsToday = analytics?.callsToday ?? analytics?.totalCalls ?? 0;
+  const connectRate = analytics?.connectRate ?? 0;
+  const meetingsBooked =
+    analytics?.dispositionBreakdown?.find((d) => d.name?.toLowerCase() === 'meeting')?.value || 0;
+  const pipelineValue = analytics?.revenue ?? 0;
+  const activeLeads = contactsCount;
+  return { callsToday, connectRate, meetingsBooked, pipelineValue, activeLeads };
 };
 
 export function SalesProvider({ children }: { children: React.ReactNode }) {
-  const [stats, setStats] = useState<Stats>(defaultStats);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [calls, setCalls] = useState<CallRecord[]>([]);
-  const [deals, setDeals] = useState<Deal[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+  const [stats, setStats] = useState<Stats>(defaultStats);
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
+  const [pipedriveConfigured, setPipedriveConfigured] = useState(false);
+
   const [user, setUser] = useState<UserProfile>(() => loadFromStorage(STORAGE_USER_KEY, defaultUser));
   const [settings, setSettings] = useState<UserSettings>(() =>
     loadFromStorage(STORAGE_SETTINGS_KEY, defaultSettings),
   );
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -196,117 +151,65 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
     saveToStorage(STORAGE_SETTINGS_KEY, settings);
   }, [settings]);
 
+  const fetchContacts = async () => {
+    const list = await echoApi.fetchContacts();
+    const mapped = list.map(mapContact);
+    setContacts(mapped);
+    return mapped;
+  };
+
+  const fetchAnalytics = async (contactCount: number) => {
+    const summary = await echoApi.analytics();
+    setAnalytics(summary);
+    setStats(deriveStats(summary, contactCount));
+    return summary;
+  };
+
+  const fetchPipedriveStatus = async () => {
+    const status = await echoApi.getPipedriveStatus();
+    setPipedriveConfigured(Boolean(status?.configured));
+  };
+
   const refresh = async () => {
-    if (!supabaseClient || !isSupabaseConfigured) {
-      setError(null);
-      setContacts([]);
-      setCalls([]);
-      setDeals([]);
-      setStats(defaultStats);
-      setIsLoading(false);
+    if (!isSupabaseConfigured) {
+      setError(supabaseConfigError || 'Add Supabase URL and anon key to enable data.');
       return;
     }
 
     setIsLoading(true);
     setError(null);
     const errors: string[] = [];
-    const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-    const startIso = startOfDay.toISOString();
 
-    const contactsPromise = supabaseClient
-      .from('contacts')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(200);
-
-    const callsPromise = supabaseClient
-      .from('calls')
-      .select('*')
-      .gte('created_at', startIso)
-      .limit(500);
-
-    const dealsPromise = supabaseClient
-      .from('deals')
-      .select('*')
-      .limit(200);
-
-    const [contactsRes, callsRes, dealsRes] = await Promise.allSettled([
-      contactsPromise,
-      callsPromise,
-      dealsPromise,
+    const [contactsResult] = await Promise.all([
+      fetchContacts().catch((e) => {
+        errors.push(e?.message || 'Contacts unavailable');
+        return contacts;
+      }),
+      fetchPipedriveStatus().catch((e) => errors.push(e?.message || 'Pipedrive unavailable')),
     ]);
 
-    const nextContacts: Contact[] = [];
-    const nextCalls: CallRecord[] = [];
-    const nextDeals: Deal[] = [];
+    await fetchAnalytics((contactsResult || contacts).length).catch((e) =>
+      errors.push(e?.message || 'Analytics unavailable'),
+    );
 
-    if (contactsRes.status === 'fulfilled') {
-      if (contactsRes.value.error) {
-        errors.push('Contacts unavailable');
-      } else {
-        const rows = contactsRes.value.data || [];
-        rows.forEach((row, index) => nextContacts.push(normalizeContact(row as Record<string, any>, index)));
-      }
-    } else {
-      errors.push('Contacts unavailable');
-    }
-
-    if (callsRes.status === 'fulfilled') {
-      if (callsRes.value.error) {
-        // If created_at filter fails, attempt fallback without filter
-        const fallback = await supabaseClient.from('calls').select('*').limit(200);
-        if (fallback.error) {
-          errors.push('Calls unavailable');
-        } else {
-          const rows = fallback.data || [];
-          rows.forEach((row, index) => nextCalls.push(normalizeCall(row as Record<string, any>, index)));
-        }
-      } else {
-        const rows = callsRes.value.data || [];
-        rows.forEach((row, index) => nextCalls.push(normalizeCall(row as Record<string, any>, index)));
-      }
-    } else {
-      errors.push('Calls unavailable');
-    }
-
-    if (dealsRes.status === 'fulfilled') {
-      if (dealsRes.value.error) {
-        errors.push('Deals unavailable');
-      } else {
-        const rows = dealsRes.value.data || [];
-        rows.forEach((row, index) => nextDeals.push(normalizeDeal(row as Record<string, any>, index)));
-      }
-    } else {
-      errors.push('Deals unavailable');
-    }
-
-    const callsToday = nextCalls.length;
-    const connected = nextCalls.filter((call) => call.connected).length;
-    const meetingsBooked = nextCalls.filter((call) => {
-      const outcome = (call.outcome || call.status || '').toLowerCase();
-      return ['meeting', 'demo', 'appointment'].some((key) => outcome.includes(key));
-    }).length;
-    const pipelineValue = nextDeals.reduce((sum, deal) => sum + (deal.value || 0), 0);
-    const activeLeads = nextContacts.filter((contact) => {
-      const status = (contact.status || '').toLowerCase();
-      return !status || ['queued', 'new', 'open', 'active'].some((key) => status.includes(key));
-    }).length;
-
-    setContacts(nextContacts);
-    setCalls(nextCalls);
-    setDeals(nextDeals);
-    setStats({
-      callsToday,
-      connectRate: callsToday ? Math.round((connected / callsToday) * 100) : 0,
-      meetingsBooked,
-      pipelineValue,
-      activeLeads,
-    });
     setLastUpdated(new Date().toISOString());
-    setError(errors.length ? errors.join(' • ') : null);
     setIsLoading(false);
+    setError(errors.length ? errors.join(' • ') : null);
+  };
+
+  const logCall = async (payload: CallLogPayload) => {
+    await echoApi.logCall(payload);
+    await fetchAnalytics(contacts.length).catch(() => null);
+  };
+
+  const setPipedriveKey = async (apiKey: string) => {
+    await echoApi.savePipedriveKey(apiKey);
+    await fetchPipedriveStatus();
+  };
+
+  const clearPipedriveKey = async () => {
+    await echoApi.deletePipedriveKey();
+    await fetchPipedriveStatus();
   };
 
   useEffect(() => {
@@ -314,23 +217,11 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    const interval = window.setInterval(() => {
-      void refresh();
-    }, 60000);
-    return () => window.clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const updateUser = (updates: Partial<UserProfile>) => {
     setUser((prev) => {
       const next = { ...prev, ...updates };
       const initials = updates.avatarInitials || initialsFromName(next.name || '');
-      return {
-        ...next,
-        avatarInitials: initials || next.avatarInitials || '',
-      };
+      return { ...next, avatarInitials: initials || next.avatarInitials || '' };
     });
   };
 
@@ -351,11 +242,14 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
       lastUpdated,
       stats,
       contacts,
-      calls,
-      deals,
+      analytics,
       activeContact,
       setActiveContactId,
       refresh,
+      logCall,
+      pipedriveConfigured,
+      setPipedriveKey,
+      clearPipedriveKey,
       user,
       updateUser,
       settings,
@@ -367,9 +261,9 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
       lastUpdated,
       stats,
       contacts,
-      calls,
-      deals,
+      analytics,
       activeContact,
+      pipedriveConfigured,
       user,
       settings,
     ],

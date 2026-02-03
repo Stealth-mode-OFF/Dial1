@@ -49,11 +49,11 @@ export default function LiveCampaigns() {
     <div className="app-page">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="app-title text-3xl">Live Dialer</h1>
-          <p className="app-subtitle">One lead, one outcome, then move on.</p>
+          <h1 className="app-title text-3xl">Dialer</h1>
+          <p className="app-subtitle">Call and log outcomes.</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="app-pill">Session {isLive ? 'Live' : 'Ready'}</span>
+          <span className="app-pill">{isLive ? 'Call in progress' : 'Ready'}</span>
           <button className="app-button accent" onClick={isLive ? handleStop : handleStart}>
             {isLive ? <StopCircle size={16} /> : <PhoneCall size={16} />}
             {isLive ? 'End call' : 'Start call'}
@@ -127,7 +127,7 @@ export default function LiveCampaigns() {
             </div>
             <textarea
               className="app-card soft w-full mt-3 p-4 app-notes"
-              placeholder="Capture outcomes, objections, and next steps..."
+              placeholder="Add notes here"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
             />
