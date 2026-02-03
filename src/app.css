@@ -104,6 +104,12 @@ body {
   gap: 10px;
 }
 
+.rail-nav.secondary {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
 .rail-btn {
   width: 100%;
   display: flex;

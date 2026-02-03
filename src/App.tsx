@@ -35,6 +35,7 @@ export default function App() {
   return (
     <div className="shell">
       <aside
+        data-testid="nav-rail"
         className={`rail ${railExpanded ? 'expanded' : 'collapsed'}`}
         onMouseEnter={() => setRailExpanded(true)}
         onMouseLeave={() => setRailExpanded(false)}
@@ -47,15 +48,17 @@ export default function App() {
         <div className="brand">
           <Bolt size={18} /> <span className="brand-label">Echo</span>
         </div>
-        <nav className="rail-nav">
+        <nav className="rail-nav" data-testid="nav-primary">
           {PRIMARY_NAV.map((item) => {
             const Icon = item.icon;
             const active = item.id === view;
             return (
               <button
                 key={item.id}
+                data-testid={`nav-${item.id}`}
                 className={`rail-btn ${active ? 'active' : ''}`}
                 onClick={() => setView(item.id)}
+                aria-label={item.label}
                 type="button"
               >
                 <Icon size={18} />
@@ -65,15 +68,17 @@ export default function App() {
           })}
         </nav>
 
-        <nav className="rail-nav secondary">
+        <nav className="rail-nav secondary" data-testid="nav-secondary">
           {SECONDARY_NAV.map((item) => {
             const Icon = item.icon;
             const active = item.id === view;
             return (
               <button
                 key={item.id}
+                data-testid={`nav-${item.id}`}
                 className={`rail-btn ${active ? 'active' : ''}`}
                 onClick={() => setView(item.id)}
+                aria-label={item.label}
                 type="button"
               >
                 <Icon size={18} />
@@ -89,7 +94,7 @@ export default function App() {
           <header className="topbar">
             <div>
               <p className="eyebrow">Echo OS</p>
-              <h1>{viewLabel}</h1>
+              <h1 data-testid="view-title">{viewLabel}</h1>
               {view === 'book_demo' && (
                 <p className="muted">Intel + otázky na domluvení dema (bez scrollu, bez šumu).</p>
               )}

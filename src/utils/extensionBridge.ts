@@ -162,8 +162,8 @@ export const requestExtensionDial = async (payload: DialRequest['payload'], time
 
 export const dialViaTelLink = (phone: string) => {
   if (typeof window === 'undefined') return;
+  if (import.meta.env.VITE_E2E_DISABLE_EXTERNAL_NAV === 'true') return;
   const normalized = normalizePhone(phone);
   if (!normalized) return;
   window.location.href = `tel:${normalized}`;
 };
-

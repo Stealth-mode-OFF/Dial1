@@ -1,10 +1,5 @@
 import { test, expect } from '@playwright/test';
 
-/**
- * E2E Tests: Navigation & Layout
- * Priority: P0 (Critical)
- */
-
 test.describe('Navigation & Layout', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -12,22 +7,20 @@ test.describe('Navigation & Layout', () => {
   });
 
   test('should display main navigation', async ({ page }) => {
-    await expect(page.locator('[data-testid=\"sidebar\"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('nav-rail')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('nav-book_demo')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('nav-demo')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('nav-ops')).toBeVisible({ timeout: 10000 });
   });
 
   test('should navigate between main tabs', async ({ page }) => {
-    const tabs = [/command center/i, /live campaigns/i, /intelligence/i, /meet coach/i, /configuration/i];
+    await page.getByTestId('nav-book_demo').click();
+    await expect(page.getByTestId('view-title')).toHaveText(/domluvit demo/i, { timeout: 10000 });
 
-    for (const tab of tabs) {
-      const btn = page.locator('button').filter({ hasText: tab }).first();
-      await expect(btn).toBeVisible({ timeout: 10000 });
-      await btn.click();
-      await page.waitForTimeout(400);
-    }
+    await page.getByTestId('nav-ops').click();
+    await expect(page.getByTestId('view-title')).toHaveText(/statistiky/i, { timeout: 10000 });
 
-    await expect(page.locator('text=/System Configuration|Intelligence Hub|Live Meet Coach|Mission Control/i')).toBeVisible({
-      timeout: 10000,
-    });
+    await page.getByTestId('nav-demo').click();
+    await expect(page.getByTestId('demo-workspace')).toBeVisible({ timeout: 10000 });
   });
 });
-

@@ -1,19 +1,14 @@
 import { test, expect } from '@playwright/test';
 
-/**
- * E2E Tests: Intelligence (Analytics)
- * Priority: P0
- */
-
-test.describe('Intelligence Screen', () => {
+test.describe('Book Demo: Intel + Questions', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
   });
 
-  test('should navigate to Intelligence and render KPIs', async ({ page }) => {
-    await page.locator('button').filter({ hasText: /intelligence/i }).first().click();
-    await expect(page.locator('text=/Intelligence Hub/i')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=/Total Interactions/i').first()).toBeVisible({ timeout: 10000 });
+  test('should open Book Demo workspace', async ({ page }) => {
+    await page.getByTestId('nav-book_demo').click();
+    await expect(page.getByTestId('book-demo-workspace')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('view-title')).toHaveText(/domluvit demo/i, { timeout: 10000 });
   });
 });

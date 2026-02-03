@@ -20,10 +20,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'bash -lc "export VITE_E2E_BYPASS_AUTH=true; npm run dev -- --host 127.0.0.1 --port 3000 --strictPort"',
+    command:
+      'bash -lc "export VITE_E2E_BYPASS_AUTH=true; export VITE_E2E_DISABLE_EXTERNAL_NAV=true; npm run dev -- --host 127.0.0.1 --port 3000 --strictPort"',
     url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },
 });
-

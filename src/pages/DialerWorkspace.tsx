@@ -240,7 +240,7 @@ export function DialerWorkspace() {
   }, [lastCaption, liveCoachingEnabled]);
 
   return (
-    <div className="workspace">
+    <div className="workspace" data-testid="demo-workspace">
       <div className="panel stack">
         <div className="panel-head">
           <div>
