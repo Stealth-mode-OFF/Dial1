@@ -77,20 +77,25 @@ export default function App() {
             <h1>{viewLabel}</h1>
             {view !== 'dialer' && <p className="muted">Dialer + coaching + logging, fully backed by the edge function.</p>}
           </div>
-          <div className="chip-row">
-            <span className={`pill ${isConfigured ? 'success' : 'warning'}`}>
-              {isConfigured ? 'Supabase connected' : 'Supabase missing'}
-            </span>
-            <span className={`pill ${pipedriveConfigured ? 'success' : 'warning'}`}>
-              {pipedriveConfigured ? 'Pipedrive linked' : 'Pipedrive pending'}
-            </span>
-            <span className="pill subtle">
-              <Activity size={14} /> {lastUpdated ? `Synced ${new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not synced'}
-            </span>
-            <button className="btn ghost" onClick={() => void refresh()} disabled={isLoading}>
-              <RefreshCw size={14} /> Sync
-            </button>
-          </div>
+          {view !== 'dialer' && (
+            <div className="chip-row">
+              <span className={`pill ${isConfigured ? 'success' : 'warning'}`}>
+                {isConfigured ? 'Supabase connected' : 'Supabase missing'}
+              </span>
+              <span className={`pill ${pipedriveConfigured ? 'success' : 'warning'}`}>
+                {pipedriveConfigured ? 'Pipedrive linked' : 'Pipedrive pending'}
+              </span>
+              <span className="pill subtle">
+                <Activity size={14} />{' '}
+                {lastUpdated
+                  ? `Synced ${new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : 'Not synced'}
+              </span>
+              <button className="btn ghost" onClick={() => void refresh()} disabled={isLoading} type="button">
+                <RefreshCw size={14} /> Sync
+              </button>
+            </div>
+          )}
         </header>
 
         {error && <div className="banner warning">{error}</div>}

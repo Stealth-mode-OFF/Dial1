@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Database, KeyRound, RefreshCw, Server, ShieldCheck } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 import { echoApi } from '../utils/echoApi';
+import { getExtensionStatus, listenToExtension, type ExtensionStatus } from '../utils/extensionBridge';
 import { supabaseConfigError, supabaseUrl, publicAnonKey } from '../utils/supabase/info';
 
 export function SettingsWorkspace() {
@@ -9,6 +10,16 @@ export function SettingsWorkspace() {
   const [apiKey, setApiKey] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(() => getExtensionStatus());
+  const [lastCaption, setLastCaption] = useState<string>('');
+
+  useEffect(() => {
+    const unsub = listenToExtension({
+      onStatus: (s) => setExtensionStatus(s),
+      onMeetCaption: (chunk) => setLastCaption(chunk.text),
+    });
+    return () => unsub();
+  }, []);
 
   const saveKey = async () => {
     if (!apiKey.trim()) return;
@@ -101,6 +112,37 @@ export function SettingsWorkspace() {
             <button className="btn ghost" onClick={() => void refresh()} disabled={busy}>
               <RefreshCw size={14} /> Refresh data
             </button>
+          </div>
+
+          <div className="connection-card">
+            <div className="icon-title">
+              <ShieldCheck size={16} />
+              <span>Chrome Extension</span>
+            </div>
+            <div className={`pill ${extensionStatus.connected ? 'success' : 'warning'}`}>
+              {extensionStatus.connected ? 'Connected' : 'Not connected'}
+            </div>
+            <p className="muted text-sm">
+              Capabilities: dial {extensionStatus.capabilities.dial ? '✓' : '—'} · meet captions{' '}
+              {extensionStatus.capabilities.meetCaptions ? '✓' : '—'}
+            </p>
+            <p className="muted text-xs">
+              {extensionStatus.last_seen_at ? `Last seen: ${new Date(extensionStatus.last_seen_at).toLocaleString()}` : 'Last seen: —'}
+            </p>
+            <div className="button-row wrap">
+              <button
+                className="btn ghost"
+                onClick={() => window.postMessage({ type: 'ECHO_WEBAPP_PING', sent_at: Date.now() }, '*')}
+                type="button"
+              >
+                Ping extension
+              </button>
+            </div>
+            {lastCaption && <div className="status-line small">Last caption: {lastCaption}</div>}
+            <div className="muted text-xs">
+              To connect: install the Echo Chrome extension, open this app tab, then refresh the page so the extension sends
+              `ECHO_EXTENSION_HELLO`.
+            </div>
           </div>
         </div>
 

@@ -1,13 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   ChevronDown,
   Clock3,
+  Flame,
   PhoneCall,
   PlayCircle,
+  Sparkles,
   StopCircle,
+  Wand2,
 } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
+import { echoApi } from '../utils/echoApi';
+import { dialViaTelLink, getExtensionStatus, listenToExtension, requestExtensionDial, type ExtensionStatus } from '../utils/extensionBridge';
 
 const DISPOSITIONS = [
   { id: 'connected', label: 'Connected' },
@@ -35,12 +40,35 @@ export function DialerWorkspace() {
   const [disposition, setDisposition] = useState(DISPOSITIONS[0].id);
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [rightMode, setRightMode] = useState<'next' | 'intel'>('next');
+  const [intelTab, setIntelTab] = useState<'whisper' | 'coaching' | 'battle' | 'packs'>('whisper');
+  const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(() => getExtensionStatus());
+  const [lastCaption, setLastCaption] = useState('');
+  const [liveCoachingEnabled, setLiveCoachingEnabled] = useState(false);
+  const [coachTip, setCoachTip] = useState('');
+  const [whisperInput, setWhisperInput] = useState('');
+  const [whisper, setWhisper] = useState<any | null>(null);
+  const [battleCard, setBattleCard] = useState<any | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const transcriptRef = useRef<Array<{ text: string; ts: number }>>([]);
+  const lastCoachAtRef = useRef<number>(0);
 
   useEffect(() => {
     if (!isCalling) return;
     const timer = window.setInterval(() => setSeconds((prev) => prev + 1), 1000);
     return () => window.clearInterval(timer);
   }, [isCalling]);
+
+  useEffect(() => {
+    const unsub = listenToExtension({
+      onStatus: (s) => setExtensionStatus(s),
+      onMeetCaption: (chunk) => {
+        setLastCaption(chunk.text);
+        transcriptRef.current = [...transcriptRef.current, { text: chunk.text, ts: chunk.captured_at }].slice(-24);
+      },
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (!activeContact) setQueueOpen(true);
@@ -85,6 +113,33 @@ export function DialerWorkspace() {
     setSeconds(0);
     setIsCalling(false);
     setStatus(null);
+    setWhisper(null);
+    setBattleCard(null);
+    setCoachTip('');
+  };
+
+  const startCall = async () => {
+    if (!activeContact) return;
+    if (isCalling) return;
+    const phone = activeContact.phone || '';
+    if (!phone.trim()) {
+      setStatus('Missing phone number for this lead.');
+      return;
+    }
+
+    setStatus(null);
+    // 1) Prefer extension dial if connected
+    const dialRes = await requestExtensionDial(
+      { phone, contact: { id: activeContact.id, name: activeContact.name, company: activeContact.company } },
+      900,
+    );
+    if (!dialRes.ok) {
+      // 2) Fallback to tel: link
+      dialViaTelLink(phone);
+    }
+
+    setIsCalling(true);
+    setSeconds(0);
   };
 
   const handleLog = async (disposition: string) => {
@@ -114,6 +169,75 @@ export function DialerWorkspace() {
       setSaving(false);
     }
   };
+
+  const runWhisper = async () => {
+    if (!activeContact) return;
+    const text = whisperInput.trim();
+    if (!text) return;
+    setAiBusy(true);
+    setStatus(null);
+    try {
+      const res = await echoApi.whisper.objection({ contact_id: activeContact.id, prospect_text: text });
+      setWhisper(res);
+      setRightMode('intel');
+      setIntelTab('whisper');
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : 'Whisper failed');
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const runBattleCard = async () => {
+    if (!activeContact) return;
+    setAiBusy(true);
+    setStatus(null);
+    try {
+      const res = await echoApi.ai.sectorBattleCard({
+        companyName: activeContact.company || activeContact.name,
+        personTitle: activeContact.title,
+      });
+      setBattleCard(res);
+      setRightMode('intel');
+      setIntelTab('battle');
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : 'Battle card failed');
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!liveCoachingEnabled) return;
+    const now = Date.now();
+    if (now - lastCoachAtRef.current < 9000) return;
+    if (transcriptRef.current.length < 2) return;
+    lastCoachAtRef.current = now;
+
+    const run = async () => {
+      setAiBusy(true);
+      try {
+        const transcriptWindow = transcriptRef.current.slice(-12).map((x) => `prospect: ${x.text}`);
+        const res = await echoApi.ai.spinNext({
+          stage: 'situation',
+          mode: 'live',
+          transcriptWindow,
+          recap: '',
+          dealState: '',
+          strict: true,
+        });
+        const say = res?.output?.say_next || res?.say_next || res?.say_next || '';
+        const whisper = res?.output?.coach_whisper || res?.coach_whisper || '';
+        setCoachTip(whisper || say || '');
+      } catch {
+        // ignore coaching errors in live mode
+      } finally {
+        setAiBusy(false);
+      }
+    };
+
+    void run();
+  }, [lastCaption, liveCoachingEnabled]);
 
   return (
     <div className="workspace">
@@ -249,23 +373,24 @@ export function DialerWorkspace() {
           ))}
         </ol>
 
-        <div className="call-controls">
-          <button
-            className="btn primary"
-            onClick={() => setIsCalling(true)}
-            disabled={!activeContact || isCalling}
-            type="button"
-          >
-            <PlayCircle size={16} /> Start
-          </button>
+	        <div className="call-controls">
+	          <button
+	            className="btn primary"
+	            onClick={() => void startCall()}
+	            disabled={!activeContact || isCalling}
+	            type="button"
+	          >
+	            <PlayCircle size={16} /> Start
+	          </button>
           <button className="btn ghost" onClick={() => setIsCalling(false)} disabled={!isCalling} type="button">
             <StopCircle size={16} /> Stop
           </button>
-          <div className="muted flex gap-2 items-center">
-            <Clock3 size={14} />
-            {isCalling ? 'On call' : 'Idle'}
-          </div>
-        </div>
+	          <div className="muted flex gap-2 items-center">
+	            <Clock3 size={14} />
+	            {isCalling ? 'On call' : 'Idle'}
+	          </div>
+            <span className={`pill subtle`}>Ext: {extensionStatus.connected ? 'on' : 'off'}</span>
+	        </div>
 
         <div className="split">
           <div className="panel soft">
@@ -314,31 +439,166 @@ export function DialerWorkspace() {
         </div>
       </div>
 
-      <div className="panel stack">
-        <div className="panel-head">
-          <div>
-            <p className="eyebrow">Next</p>
-            <h3>{nextContact ? nextContact.name : 'Queue end'}</h3>
-            {nextContact && (
-              <p className="muted">
-                {nextContact.title || '—'} {nextContact.company ? `· ${nextContact.company}` : ''}
-              </p>
-            )}
-          </div>
-          <button
-            className="btn ghost"
-            onClick={() => nextContact && setActiveContactId(nextContact.id)}
-            disabled={!nextContact}
-            type="button"
-          >
-            Next <ArrowRight size={14} />
-          </button>
-        </div>
-        <div className="panel soft">
-          <p className="eyebrow">Focus</p>
-          <div className="muted text-sm">Dialer stays for calling + logging. Use Intel for prep, objections, and packs.</div>
-        </div>
-      </div>
+	      <div className="panel stack">
+	        <div className="panel-head">
+	          <div className="button-row">
+	            <button
+	              className={`btn ghost sm ${rightMode === 'next' ? 'active' : ''}`}
+	              onClick={() => setRightMode('next')}
+	              type="button"
+	            >
+	              Next
+	            </button>
+	            <button
+	              className={`btn ghost sm ${rightMode === 'intel' ? 'active' : ''}`}
+	              onClick={() => setRightMode('intel')}
+	              type="button"
+	            >
+	              Intel
+	            </button>
+	          </div>
+	          <span className="pill subtle">{aiBusy ? 'Working…' : 'Ready'}</span>
+	        </div>
+	        {rightMode === 'next' && (
+	          <div className="panel soft">
+	            <p className="eyebrow">Next</p>
+	            <h3>{nextContact ? nextContact.name : 'Queue end'}</h3>
+	            {nextContact && (
+	              <p className="muted">
+	                {nextContact.title || '—'} {nextContact.company ? `· ${nextContact.company}` : ''}
+	              </p>
+	            )}
+	            <div className="button-row">
+	              <button
+	                className="btn outline"
+	                onClick={() => nextContact && setActiveContactId(nextContact.id)}
+	                disabled={!nextContact}
+	                type="button"
+	              >
+	                Next <ArrowRight size={14} />
+	              </button>
+	            </div>
+	            <div className="muted text-xs">No scrolling: only the next lead + one action.</div>
+	          </div>
+	        )}
+	        {rightMode === 'intel' && (
+	          <div className="panel soft">
+	            <p className="eyebrow">Intel</p>
+	            <div className="button-row wrap">
+	              <button className={`btn ghost sm ${intelTab === 'whisper' ? 'active' : ''}`} onClick={() => setIntelTab('whisper')} type="button">
+	                Whisper
+	              </button>
+	              <button className={`btn ghost sm ${intelTab === 'coaching' ? 'active' : ''}`} onClick={() => setIntelTab('coaching')} type="button">
+	                Coaching
+	              </button>
+	              <button className={`btn ghost sm ${intelTab === 'battle' ? 'active' : ''}`} onClick={() => setIntelTab('battle')} type="button">
+	                Battle
+	              </button>
+	              <button className={`btn ghost sm ${intelTab === 'packs' ? 'active' : ''}`} onClick={() => setIntelTab('packs')} type="button">
+	                Packs
+	              </button>
+	            </div>
+
+	            {intelTab === 'whisper' && (
+	              <>
+	                <div className="panel-head tight">
+	                  <span className="eyebrow">Whisper</span>
+	                  <button className="btn outline sm" onClick={() => void runWhisper()} disabled={!activeContact || aiBusy} type="button">
+	                    <Wand2 size={14} /> Run
+	                  </button>
+	                </div>
+	                <textarea
+	                  className="notes"
+	                  value={whisperInput}
+	                  onChange={(e) => setWhisperInput(e.target.value)}
+	                  placeholder="Paste objection (exact words)."
+	                />
+	                {whisper && <div className="muted text-sm">{whisper.objection_id} · {whisper.core_fear} · {whisper.confidence}</div>}
+	                {whisper?.whisper?.next_step?.text && (
+	                  <div className="coach-box focus">
+	                    <p className="say-next">{whisper.whisper.next_step.text}</p>
+	                  </div>
+	                )}
+	              </>
+	            )}
+
+	            {intelTab === 'coaching' && (
+	              <>
+	                <div className="panel-head tight">
+	                  <span className="eyebrow">Live coaching</span>
+	                  <button className="btn ghost sm" onClick={() => setLiveCoachingEnabled((v) => !v)} type="button">
+	                    {liveCoachingEnabled ? 'On' : 'Off'}
+	                  </button>
+	                </div>
+	                <div className="muted text-xs">Source: Chrome extension → Google Meet captions.</div>
+	                {!extensionStatus.capabilities.meetCaptions && (
+	                  <div className="muted text-sm">Captions not connected (check Settings → Chrome Extension).</div>
+	                )}
+	                {lastCaption && <div className="muted text-sm">Last: {lastCaption}</div>}
+	                {coachTip && (
+	                  <div className="coach-box focus">
+	                    <p className="say-next">{coachTip}</p>
+	                  </div>
+	                )}
+	              </>
+	            )}
+
+	            {intelTab === 'battle' && (
+	              <>
+	                <div className="panel-head tight">
+	                  <span className="eyebrow">Battle card</span>
+	                  <button className="btn ghost sm" onClick={() => void runBattleCard()} disabled={!activeContact || aiBusy} type="button">
+	                    <Flame size={14} /> Gen
+	                  </button>
+	                </div>
+	                {battleCard ? (
+	                  <div className="coach-box">
+	                    <div className="tagline">
+	                      {battleCard.detected_sector} {battleCard.sector_emoji}
+	                    </div>
+	                    <p className="muted text-sm">{battleCard.strategy_insight}</p>
+	                  </div>
+	                ) : (
+	                  <div className="muted text-sm">Generate when needed (hypothesis-only).</div>
+	                )}
+	              </>
+	            )}
+
+	            {intelTab === 'packs' && (
+	              <>
+	                <div className="panel-head tight">
+	                  <span className="eyebrow">Packs</span>
+	                </div>
+	                <div className="muted text-sm">Evidence-gated: if missing, pack becomes validation questions only.</div>
+	                <div className="button-row wrap">
+	                  <button
+	                    className="btn outline"
+	                    onClick={() =>
+	                      activeContact &&
+	                      void echoApi.packs.generate({ contact_id: activeContact.id, include: ['cold_call_prep_card'], language: 'cs' })
+	                    }
+	                    disabled={!activeContact || aiBusy}
+	                    type="button"
+	                  >
+	                    <Sparkles size={14} /> Cold call
+	                  </button>
+	                  <button
+	                    className="btn ghost"
+	                    onClick={() =>
+	                      activeContact &&
+	                      void echoApi.packs.generate({ contact_id: activeContact.id, include: ['meeting_booking_pack'], language: 'cs' })
+	                    }
+	                    disabled={!activeContact || aiBusy}
+	                    type="button"
+	                  >
+	                    Meeting
+	                  </button>
+	                </div>
+	              </>
+	            )}
+	          </div>
+	        )}
+	      </div>
     </div>
   );
 }

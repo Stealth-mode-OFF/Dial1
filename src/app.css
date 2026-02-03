@@ -320,6 +320,11 @@ body {
   font-size: 13px;
 }
 
+.btn.active {
+  border-color: rgba(61, 217, 163, 0.45);
+  background: rgba(61, 217, 163, 0.08);
+}
+
 .btn.primary {
   background: linear-gradient(135deg, #3dd9a3, #4a82ff);
   color: #0b1320;

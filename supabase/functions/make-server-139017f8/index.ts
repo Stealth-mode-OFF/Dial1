@@ -1955,7 +1955,12 @@ const SPIN_AGENT_TEMPLATES = {
 
 const buildAgentMessages = (role: keyof typeof SPIN_AGENT_TEMPLATES, payload: any) => {
   const base = SPIN_AGENT_TEMPLATES[role];
-  const header = base.system;
+  const strict = Boolean(payload.strict);
+  const header =
+    base.system +
+    (strict
+      ? `\nSTRICT MODE:\n- Do NOT invent company facts or numbers.\n- Only use what is explicitly in TRANSCRIPT WINDOW.\n- If unsure, output empty arrays and confidence 0.\n`
+      : "");
   const user = `
 STAGE: ${payload.stage}
 TRANSCRIPT WINDOW (latest 10-14 turns, trimmed): 
@@ -1994,7 +1999,7 @@ const runSpinAgent = async (openai: any, model: string, role: keyof typeof SPIN_
 };
 
 const buildOrchestratorMessages = (payload: any) => {
-  const { stage, transcript, recap, dealState, proofPack, agents, timers } = payload;
+  const { stage, transcript, recap, dealState, proofPack, agents, timers, strict } = payload;
   const schema = `
 Return JSON:
 {
@@ -2017,6 +2022,7 @@ You are the orchestrator for real-time SPIN B2B sales coaching. One high-impact 
 - Close must propose date/time; if objection, call Objection Sniper first, then re-ask slot.
 - Speak in business outcomes with metrics; avoid feature talk.
 - If unsafe/unknown/low confidence -> (pause).
+${strict ? "- STRICT MODE: never invent company facts, tech stack, headcount, numbers, or outcomes. If not in transcript, ask a question instead.\n" : ""}
 `;
 
   const user = `
@@ -2069,9 +2075,10 @@ app.post(`${BASE_PATH}/ai/spin/next`, async (c) => {
       1200,
     );
     const proofPack = limitString(body?.proofPack || DEFAULT_PROOF_PACK, 1200);
+    const strict = Boolean(body?.strict);
 
     const openai = new OpenAI({ apiKey });
-    const agentPayload = { transcript, recap, dealState, proofPack, stage };
+    const agentPayload = { transcript, recap, dealState, proofPack, stage, strict };
 
     const [situation, problem, implication, payoff] = await Promise.all([
       runSpinAgent(openai, liveModel, "situation", agentPayload),
@@ -2093,6 +2100,7 @@ app.post(`${BASE_PATH}/ai/spin/next`, async (c) => {
       proofPack,
       agents: { situation, problem, implication, payoff, objection },
       timers: body?.stageTimers || {},
+      strict,
     });
 
     const started = Date.now();
@@ -2807,44 +2815,102 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
     await kv.set(userKey(userId, `log:${logId}`), log);
 
     // --- PIPEDRIVE SYNC START ---
-    // If this contact is from Pipedrive (we can check if ID is numeric, or if campaign is 'live-pipedrive')
-    // Ideally, we should pass a flag or check the campaign ID. 
-    // For this MVP, we'll try to sync if the ID looks like a Pipedrive ID (numeric) and we have an API key.
-    
     const pipedriveKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
-    if (pipedriveKey && !isNaN(Number(contactId))) {
-        try {
-            let subject = `Echo Call: ${disposition}`;
-            let type = 'call';
-            
-            if (disposition === 'sent') {
-                subject = `Echo Email Sent`;
-                type = 'email';
-            }
+    const admin = getAdminClient();
 
-            const activityBody = {
-                subject: subject,
-                type: type,
-                person_id: Number(contactId),
-                done: 1, // Mark as done immediately
-                duration: typeof duration === "number" ? duration : 0,
-                note: notes || `Logged via Echo Telesales OS. Disposition: ${disposition}`
-            };
+    const toPdDurationHHMM = (seconds: unknown) => {
+      const secNum = typeof seconds === "number" ? seconds : Number(seconds);
+      if (!Number.isFinite(secNum) || secNum <= 0) return "00:00";
+      const totalMins = Math.floor(secNum / 60);
+      const hh = String(Math.floor(totalMins / 60)).padStart(2, "0");
+      const mm = String(totalMins % 60).padStart(2, "0");
+      return `${hh}:${mm}`;
+    };
 
-            const pdRes = await fetch(`https://api.pipedrive.com/v1/activities?api_token=${pipedriveKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(activityBody)
+    const syncPipedriveActivity = async (personId: number, dealId?: number | null, orgId?: number | null) => {
+      let subject = `Echo Call: ${disposition}`;
+      let type = "call";
+      if (disposition === "sent") {
+        subject = "Echo Email Sent";
+        type = "email";
+      }
+
+      const safeNotes = typeof notes === "string" ? notes.trim() : "";
+      const pdNote = safeNotes || `Logged via Echo. Disposition: ${disposition}`;
+
+      const activityBody: any = {
+        subject,
+        type,
+        person_id: personId,
+        done: 1,
+        duration: toPdDurationHHMM(duration),
+        note: pdNote,
+      };
+      if (dealId) activityBody.deal_id = dealId;
+      if (orgId) activityBody.org_id = orgId;
+
+      const pdRes = await fetch(`https://api.pipedrive.com/v1/activities?api_token=${pipedriveKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(activityBody),
+      });
+      if (!pdRes.ok) {
+        const err = await pdRes.text();
+        console.error("Failed to sync to Pipedrive:", err);
+        return { ok: false, error: err };
+      }
+      return { ok: true };
+    };
+
+    if (pipedriveKey) {
+      try {
+        // Back-compat: if contactId is numeric, treat as Pipedrive person_id.
+        const directPersonId = Number(contactId);
+        if (Number.isFinite(directPersonId) && !Number.isNaN(directPersonId)) {
+          await syncPipedriveActivity(directPersonId);
+        } else if (admin) {
+          // Current app: contactId is UUID. Resolve to Pipedrive lead -> person_id via stored external_id.
+          const { data: contactRow, error: contactErr } = await admin
+            .from("contacts")
+            .select("id, source, external_id")
+            .eq("id", contactId)
+            .single();
+
+          if (!contactErr && contactRow?.source === "pipedrive" && contactRow?.external_id) {
+            const leadId = contactRow.external_id.toString().trim();
+            const leadRes = await fetch(`https://api.pipedrive.com/v1/leads/${leadId}?api_token=${pipedriveKey}`, {
+              headers: { Accept: "application/json" },
             });
-            
-            if (!pdRes.ok) {
-                console.error("Failed to sync to Pipedrive:", await pdRes.text());
+            const leadJson = await leadRes.json().catch(() => null);
+            if (!leadRes.ok || !leadJson?.success) {
+              console.error("Failed to fetch Pipedrive lead for activity sync:", leadJson || leadRes.status);
             } else {
-                console.log("Synced activity to Pipedrive:", await pdRes.json());
+              const lead = leadJson.data || {};
+              const personIdRaw =
+                lead.person_id?.value ??
+                lead.person_id ??
+                lead.person?.id ??
+                lead.person?.value ??
+                null;
+              const orgIdRaw =
+                lead.organization_id?.value ??
+                lead.organization_id ??
+                lead.org_id?.value ??
+                lead.org_id ??
+                null;
+              const personId = Number(personIdRaw);
+              const orgId = orgIdRaw ? Number(orgIdRaw) : null;
+              if (Number.isFinite(personId) && !Number.isNaN(personId)) {
+                await syncPipedriveActivity(personId, null, Number.isFinite(orgId as any) ? (orgId as any) : null);
+              } else {
+                console.error("Pipedrive lead missing person_id; cannot sync activity", { lead_id: leadId });
+              }
             }
-        } catch (pdErr) {
-            console.error("Pipedrive Sync Error:", pdErr);
+          }
         }
+      } catch (pdErr) {
+        console.error("Pipedrive Sync Error:", pdErr);
+      }
     }
     // --- PIPEDRIVE SYNC END ---
 
