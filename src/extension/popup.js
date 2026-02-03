@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Connect button
   connectBtn.addEventListener('click', () => {
+    const rawInput = callIdInput.value.trim();
     const code = normalizeCallId(callIdInput.value);
     callIdInput.value = code;
     const endpoint = apiEndpointInput.value.trim();
@@ -55,6 +56,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (code.length < 8) {
       showError('Call ID must be at least 8 characters');
+      return;
+    }
+
+    if (rawInput && rawInput.includes('http') && !rawInput.includes('meet.google.com')) {
+      showError('Call ID musí být kód z Google Meet (např. mse-ebhc-zgp).');
       return;
     }
 

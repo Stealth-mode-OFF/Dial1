@@ -37,6 +37,20 @@ export default function App() {
     return 'default';
   });
   const { stats, isConfigured, pipedriveConfigured, lastUpdated, error, refresh, isLoading } = useSales();
+  const errorHint = useMemo(() => {
+    if (!error) return null;
+    const msg = error.toLowerCase();
+    if (msg.includes('supabase')) {
+      return 'Chybí Supabase konfigurace. Nastav `VITE_SUPABASE_URL=https://<project>.supabase.co` a `VITE_SUPABASE_ANON_KEY`, pak redeploy.';
+    }
+    if (msg.includes('pipedrive')) {
+      return 'Pipedrive není připojený. Otevři Nastavení → Pipedrive a vlož API key.';
+    }
+    if (msg.includes('network') || msg.includes('fetch')) {
+      return 'Nelze se připojit k serveru. Zkontroluj internet a stav Supabase/Vercel.';
+    }
+    return 'Zkontroluj konfiguraci integrací (Supabase, Pipedrive).';
+  }, [error]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -154,7 +168,26 @@ export default function App() {
           </header>
         )}
 
-        {error && <div className="banner warning">{error}</div>}
+        {error && (
+          <div className="banner warning">
+            <div>{error}</div>
+            {errorHint && <div className="muted text-sm mt-2">Jak opravit: {errorHint}</div>}
+          </div>
+        )}
+        {!error && !isConfigured && (
+          <div className="banner warning">
+            Supabase není nastavený. Bez toho nepojede coaching ani sync.
+            <div className="muted text-sm mt-2">
+              Jak opravit: nastav `VITE_SUPABASE_URL=https://&lt;project&gt;.supabase.co` a `VITE_SUPABASE_ANON_KEY` a redeploy.
+            </div>
+          </div>
+        )}
+        {!error && isConfigured && !pipedriveConfigured && (
+          <div className="banner warning">
+            Pipedrive není připojený. Outcome logy se nezapíšou.
+            <div className="muted text-sm mt-2">Jak opravit: Nastavení → Pipedrive → vlož API key.</div>
+          </div>
+        )}
         {view !== 'demo' && (
           <div className="banner info">
             <div className="stat">

@@ -106,6 +106,7 @@ export function DemoWorkspace() {
   const [prepGoal, setPrepGoal] = useState('Book demo');
   const [prepOutput, setPrepOutput] = useState('');
   const [prepBusy, setPrepBusy] = useState(false);
+  const [prepStatus, setPrepStatus] = useState<string | null>(null);
 
   const derivedCallId = useMemo(() => extractMeetCode(meetLink), [meetLink]);
   const canOpenMeet = Boolean(meetLink.trim());
@@ -266,9 +267,13 @@ export function DemoWorkspace() {
   const isCallIdValid = meetCallId.trim().length >= 8;
   const lastCaptionAgo = lastCaptionAt ? Math.round((Date.now() - lastCaptionAt) / 1000) : null;
   const captionStale = lastCaptionAt ? Date.now() - lastCaptionAt > 12000 : false;
+  const callIdLooksLikeUrl = /https?:\/\//i.test(meetCallId);
   const connectionStatus = useMemo(() => {
     if (!extensionStatus.connected) {
       return { tone: 'warning', text: 'Extension není připojená k webapp.' };
+    }
+    if (callIdLooksLikeUrl) {
+      return { tone: 'warning', text: 'Call ID je URL. Vlož pouze kód z Google Meet.' };
     }
     if (!isCallIdValid) {
       return { tone: 'warning', text: 'Call ID je neplatné (min. 8 znaků).' };
@@ -280,7 +285,7 @@ export function DemoWorkspace() {
       return { tone: 'success', text: 'Propojeno a titulky běží.' };
     }
     return { tone: 'subtle', text: 'Připrav se na propojení.' };
-  }, [extensionStatus.connected, isCallIdValid, meetActive, meetEvents.length, captionStale]);
+  }, [extensionStatus.connected, callIdLooksLikeUrl, isCallIdValid, meetActive, meetEvents.length, captionStale]);
 
   const handleMeetConnect = () => {
     const value = meetCallId.trim().toUpperCase();
@@ -406,6 +411,10 @@ export function DemoWorkspace() {
       setLogStatus('Zadej Pipedrive Person ID (číselné) nebo Lead ID ve tvaru lead:123.');
       return;
     }
+    if (!pipedriveConfigured) {
+      setLogStatus('Pipedrive není připojený. Otevři Nastavení → Pipedrive a vlož API key.');
+      return;
+    }
     setLogSaving(true);
     setLogStatus(null);
     try {
@@ -427,6 +436,12 @@ export function DemoWorkspace() {
   const runPrep = async (mode: 'script' | 'research') => {
     setPrepBusy(true);
     setPrepOutput('');
+    setPrepStatus(null);
+    if (!isSupabaseConfigured) {
+      setPrepStatus('Supabase není nastavený. Nastav VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY a redeploy.');
+      setPrepBusy(false);
+      return;
+    }
     try {
       const res = await echoApi.ai.generate({
         contactName: prepContact || 'Prospect',
@@ -439,7 +454,9 @@ export function DemoWorkspace() {
       const text = res?.content || res;
       setPrepOutput(typeof text === 'string' ? text : JSON.stringify(text, null, 2));
     } catch (e) {
-      setPrepOutput(e instanceof Error ? e.message : 'Prep failed');
+      const msg = e instanceof Error ? e.message : 'Prep failed';
+      setPrepStatus(msg);
+      setPrepOutput('Prep failed. Zkontroluj OPENAI_API_KEY v Supabase secrets.');
     } finally {
       setPrepBusy(false);
     }
@@ -465,9 +482,24 @@ export function DemoWorkspace() {
           <span className="pill subtle">{extensionStatus.connected ? 'Ext: zapnuto' : 'Ext: vypnuto'}</span>
         </div>
 
-        <div className={`banner ${connectionStatus.tone}`}>
-          {connectionStatus.text}
-        </div>
+          <div className={`banner ${connectionStatus.tone}`}>
+            {connectionStatus.text}
+            {!extensionStatus.connected && (
+              <div className="muted text-xs mt-2">
+                Jak opravit: otevři `meet.google.com` v aktivní kartě, reloadni stránku a ujisti se, že extension je zapnutá.
+              </div>
+            )}
+            {extensionStatus.connected && meetActive && (!meetEvents.length || captionStale) && (
+              <div className="muted text-xs mt-2">
+                Jak opravit: zapni v Google Meet titulky (CC). Bez nich nepřijdou data.
+              </div>
+            )}
+            {callIdLooksLikeUrl && (
+              <div className="muted text-xs mt-2">
+                Příklad správného Call ID: `mse-ebhc-zgp` (bez `https://`).
+              </div>
+            )}
+          </div>
         {lastCaptionAgo !== null && (
           <div className="muted text-xs">Poslední titulek: před {lastCaptionAgo}s</div>
         )}
@@ -661,6 +693,9 @@ export function DemoWorkspace() {
             onChange={(e) => setLogNotes(e.target.value)}
             placeholder="Stručné poznámky z hovoru…"
           />
+          <div className="muted text-xs mt-2">
+            Příklad: Person ID najdeš v URL Pipedrive jako `/person/123456`. Lead zapiš jako `lead:123456`.
+          </div>
           <div className="button-row mt-2">
             <button className="btn outline sm" onClick={() => void submitOutcome()} disabled={logSaving} type="button">
               {logSaving ? 'Zapisuji…' : 'Zapsat do Pipedrive'}
@@ -700,7 +735,11 @@ export function DemoWorkspace() {
               Research
             </button>
           </div>
+          {prepStatus && <div className="status-line small">{prepStatus}</div>}
           <pre className="output-box">{prepOutput || 'Prep output se zobrazí zde.'}</pre>
+          <div className="muted text-xs mt-2">
+            Pokud AI neodpovídá: zkontroluj `OPENAI_API_KEY` v Supabase secrets a redeploy edge functions.
+          </div>
         </div>
 
         <div className="button-row wrap">

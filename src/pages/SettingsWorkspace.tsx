@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Database, KeyRound, RefreshCw, Server, ShieldCheck } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 import { echoApi } from '../utils/echoApi';
@@ -32,16 +32,30 @@ export function SettingsWorkspace() {
   const [busy, setBusy] = useState(false);
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(() => getExtensionStatus());
   const [lastCaption, setLastCaption] = useState<string>('');
+  const [lastCaptionAt, setLastCaptionAt] = useState<number | null>(null);
 
   const hasStoredKey = Boolean(apiKey.trim());
 
   useEffect(() => {
     const unsub = listenToExtension({
       onStatus: (s) => setExtensionStatus(s),
-      onMeetCaption: (chunk) => setLastCaption(chunk.text),
+      onMeetCaption: (chunk) => {
+        setLastCaption(chunk.text);
+        setLastCaptionAt(Date.now());
+      },
     });
     return () => unsub();
   }, []);
+
+  const extensionHint = useMemo(() => {
+    if (extensionStatus.connected && extensionStatus.capabilities.meetCaptions) {
+      if (!lastCaption) {
+        return 'Extension je připojená. Pokud nevidíš titulky, zapni CC v Google Meet.';
+      }
+      return 'Extension běží a posílá titulky.';
+    }
+    return 'Extension není připojená. Otevři `meet.google.com` v aktivní kartě a reloadni stránku.';
+  }, [extensionStatus.connected, extensionStatus.capabilities.meetCaptions, lastCaption]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -185,7 +199,14 @@ export function SettingsWorkspace() {
             <div className={`pill ${isConfigured ? 'success' : 'warning'}`}>
               {isConfigured ? 'Connected' : 'Not configured'}
             </div>
-            {!isConfigured && <div className="status-line small">{supabaseConfigError}</div>}
+            {!isConfigured && (
+              <div className="status-line small">
+                {supabaseConfigError || 'Supabase není nastavený.'}
+                <div className="muted text-xs mt-2">
+                  Jak opravit: nastav `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`, pak redeploy (např. `dial1.vercel.app`).
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="connection-card">
@@ -213,6 +234,14 @@ export function SettingsWorkspace() {
               </button>
             </div>
             {hasStoredKey && <div className="muted text-xs">Key is remembered on this device.</div>}
+            {!pipedriveConfigured && (
+              <div className="muted text-xs mt-2">
+                Jak opravit: otevři Pipedrive → Settings → API → zkopíruj key a vlož ho sem. Potom klikni Save key.
+                <div className="muted text-xs mt-2">
+                  Příklad: Person ID najdeš v URL jako `/person/123456` (pro outcome logy).
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="connection-card">
@@ -250,7 +279,13 @@ export function SettingsWorkspace() {
                 Ping extension
               </button>
             </div>
-            {lastCaption && <div className="status-line small">Last caption: {lastCaption}</div>}
+            {lastCaption && (
+              <div className="status-line small">
+                Poslední titulek: {lastCaption}
+                {lastCaptionAt && <div className="muted text-xs mt-1">Před {Math.round((Date.now() - lastCaptionAt) / 1000)}s</div>}
+              </div>
+            )}
+            <div className="muted text-xs mt-2">{extensionHint}</div>
             <div className="muted text-xs">
               To connect: install the Echo Chrome extension, open this app tab, then refresh the page so the extension sends
               `ECHO_EXTENSION_HELLO`.
