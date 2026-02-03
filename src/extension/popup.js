@@ -14,6 +14,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const advancedToggle = document.getElementById('advancedToggle');
   const advancedSection = document.getElementById('advancedSection');
 
+  function normalizeCallId(input) {
+    const raw = (input || '').toString().trim();
+    if (!raw) return '';
+    const urlMatch = raw.match(/meet\.google\.com\/([a-zA-Z0-9-]{6,})/i);
+    if (urlMatch && urlMatch[1]) return urlMatch[1].toUpperCase();
+    const codeMatch = raw.match(/^[a-zA-Z0-9-]{6,}$/);
+    if (codeMatch) return raw.toUpperCase();
+    return raw.toUpperCase();
+  }
+
   // Load saved settings
   chrome.storage.local.get(['callId', 'sessionCode', 'apiEndpoint', 'authToken', 'myName'], (result) => {
     const savedCallId = result.callId || result.sessionCode;
@@ -34,7 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Connect button
   connectBtn.addEventListener('click', () => {
-    const code = callIdInput.value.trim().toUpperCase();
+    const code = normalizeCallId(callIdInput.value);
+    callIdInput.value = code;
     const endpoint = apiEndpointInput.value.trim();
 
     if (!code) {

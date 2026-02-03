@@ -46,6 +46,20 @@
   const lastSentBySpeaker = new Map();
   const pendingBySpeaker = new Map();
 
+  function postToPage(type, payload) {
+    try {
+      window.postMessage({ type, payload }, '*');
+    } catch {
+      // ignore
+    }
+  }
+
+  // Notify webapp that extension is available
+  postToPage('ECHO_EXTENSION_HELLO', {
+    version: '1.0.0',
+    capabilities: { dial: false, meetCaptions: true },
+  });
+
   function normalizeSpeakerName(name) {
     if (!name) return null;
     return name.toString().trim().replace(/\s+/g, ' ').slice(0, 80) || null;
@@ -81,6 +95,13 @@
       text: pending.text,
       speaker: classifySpeaker(pending.speakerName),
       speakerName: pending.speakerName,
+    });
+
+    postToPage('ECHO_MEET_CAPTION_CHUNK', {
+      text: pending.text,
+      speaker: classifySpeaker(pending.speakerName),
+      captured_at: Date.now(),
+      meeting_url: window.location.href,
     });
   }
 
@@ -180,11 +201,19 @@
       console.log('[Echo Meet Coach] DOM ready, starting observer');
       setupMutationObserver();
       healthCheck();
+      postToPage('ECHO_EXTENSION_HELLO', {
+        version: '1.0.0',
+        capabilities: { dial: false, meetCaptions: true },
+      });
     });
   } else {
     console.log('[Echo Meet Coach] DOM already loaded, starting observer');
     setupMutationObserver();
     healthCheck();
+    postToPage('ECHO_EXTENSION_HELLO', {
+      version: '1.0.0',
+      capabilities: { dial: false, meetCaptions: true },
+    });
   }
 
   // Periodic health check

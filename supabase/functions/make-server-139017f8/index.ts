@@ -2868,16 +2868,11 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
         const directPersonId = Number(contactId);
         if (Number.isFinite(directPersonId) && !Number.isNaN(directPersonId)) {
           await syncPipedriveActivity(directPersonId);
-        } else if (admin) {
-          // Current app: contactId is UUID. Resolve to Pipedrive lead -> person_id via stored external_id.
-          const { data: contactRow, error: contactErr } = await admin
-            .from("contacts")
-            .select("id, source, external_id")
-            .eq("id", contactId)
-            .single();
+        } else {
+          const leadMatch = typeof contactId === "string" ? contactId.match(/^(lead:|lead-|lead_)?(\d+)$/i) : null;
+          const leadId = leadMatch?.[2] || null;
 
-          if (!contactErr && contactRow?.source === "pipedrive" && contactRow?.external_id) {
-            const leadId = contactRow.external_id.toString().trim();
+          if (leadId) {
             const leadRes = await fetch(`https://api.pipedrive.com/v1/leads/${leadId}?api_token=${pipedriveKey}`, {
               headers: { Accept: "application/json" },
             });
@@ -2904,6 +2899,45 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
                 await syncPipedriveActivity(personId, null, Number.isFinite(orgId as any) ? (orgId as any) : null);
               } else {
                 console.error("Pipedrive lead missing person_id; cannot sync activity", { lead_id: leadId });
+              }
+            }
+          } else if (admin) {
+            // Current app: contactId is UUID. Resolve to Pipedrive lead -> person_id via stored external_id.
+            const { data: contactRow, error: contactErr } = await admin
+              .from("contacts")
+              .select("id, source, external_id")
+              .eq("id", contactId)
+              .single();
+
+            if (!contactErr && contactRow?.source === "pipedrive" && contactRow?.external_id) {
+              const mappedLeadId = contactRow.external_id.toString().trim();
+              const leadRes = await fetch(`https://api.pipedrive.com/v1/leads/${mappedLeadId}?api_token=${pipedriveKey}`, {
+                headers: { Accept: "application/json" },
+              });
+              const leadJson = await leadRes.json().catch(() => null);
+              if (!leadRes.ok || !leadJson?.success) {
+                console.error("Failed to fetch Pipedrive lead for activity sync:", leadJson || leadRes.status);
+              } else {
+                const lead = leadJson.data || {};
+                const personIdRaw =
+                  lead.person_id?.value ??
+                  lead.person_id ??
+                  lead.person?.id ??
+                  lead.person?.value ??
+                  null;
+                const orgIdRaw =
+                  lead.organization_id?.value ??
+                  lead.organization_id ??
+                  lead.org_id?.value ??
+                  lead.org_id ??
+                  null;
+                const personId = Number(personIdRaw);
+                const orgId = orgIdRaw ? Number(orgIdRaw) : null;
+                if (Number.isFinite(personId) && !Number.isNaN(personId)) {
+                  await syncPipedriveActivity(personId, null, Number.isFinite(orgId as any) ? (orgId as any) : null);
+                } else {
+                  console.error("Pipedrive lead missing person_id; cannot sync activity", { lead_id: mappedLeadId });
+                }
               }
             }
           }

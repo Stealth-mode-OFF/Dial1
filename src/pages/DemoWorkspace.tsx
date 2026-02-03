@@ -3,6 +3,7 @@ import { Copy, PlayCircle, Sparkles, StopCircle } from 'lucide-react';
 import { echoApi } from '../utils/echoApi';
 import { getExtensionStatus, listenToExtension, type ExtensionStatus } from '../utils/extensionBridge';
 import { buildFunctionUrl, functionsBase, isSupabaseConfigured, publicAnonKey } from '../utils/supabase/info';
+import { useSales } from '../contexts/SalesContext';
 
 type TranscriptEvent = {
   id: string;
@@ -23,6 +24,14 @@ type SpinPrompts = {
 const STORAGE_MEET_LINK = 'echo.demo.meet_link';
 const STORAGE_MEET_CALL = 'echo.demo.meet_call_id';
 const STORAGE_SPIN_PROMPTS = 'echo.demo.spin_prompts';
+const STORAGE_PD_PERSON = 'echo.demo.pd_person_id';
+const STORAGE_PD_NAME = 'echo.demo.pd_name';
+const STORAGE_PD_COMPANY = 'echo.demo.pd_company';
+const STORAGE_PD_OUTCOME = 'echo.demo.pd_outcome';
+const STORAGE_PD_NOTES = 'echo.demo.pd_notes';
+const STORAGE_PREP_CONTACT = 'echo.demo.prep_contact';
+const STORAGE_PREP_COMPANY = 'echo.demo.prep_company';
+const STORAGE_PREP_GOAL = 'echo.demo.prep_goal';
 
 const emptyPrompts: SpinPrompts = {
   situation: '',
@@ -55,6 +64,7 @@ const buildSpinContext = (prompts: SpinPrompts) => {
 };
 
 export function DemoWorkspace() {
+  const { pipedriveConfigured } = useSales();
   const [meetLink, setMeetLink] = useState('');
   const [meetCallId, setMeetCallId] = useState('');
   const [callIdTouched, setCallIdTouched] = useState(false);
@@ -63,6 +73,7 @@ export function DemoWorkspace() {
   const [meetError, setMeetError] = useState<string | null>(null);
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(() => getExtensionStatus());
   const [lastCaption, setLastCaption] = useState('');
+  const [lastCaptionAt, setLastCaptionAt] = useState<number | null>(null);
   const transcriptRef = useRef<Array<{ text: string; ts: number }>>([]);
   const meetLastTsRef = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -82,7 +93,22 @@ export function DemoWorkspace() {
   const [spinPrompts, setSpinPrompts] = useState<SpinPrompts>(emptyPrompts);
   const [useSpinPrompts, setUseSpinPrompts] = useState(true);
 
+  const [logContactId, setLogContactId] = useState('');
+  const [logContactName, setLogContactName] = useState('');
+  const [logCompanyName, setLogCompanyName] = useState('');
+  const [logNotes, setLogNotes] = useState('');
+  const [logDisposition, setLogDisposition] = useState('connected');
+  const [logStatus, setLogStatus] = useState<string | null>(null);
+  const [logSaving, setLogSaving] = useState(false);
+
+  const [prepContact, setPrepContact] = useState('');
+  const [prepCompany, setPrepCompany] = useState('');
+  const [prepGoal, setPrepGoal] = useState('Book demo');
+  const [prepOutput, setPrepOutput] = useState('');
+  const [prepBusy, setPrepBusy] = useState(false);
+
   const derivedCallId = useMemo(() => extractMeetCode(meetLink), [meetLink]);
+  const canOpenMeet = Boolean(meetLink.trim());
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -99,6 +125,22 @@ export function DemoWorkspace() {
         const parsed = JSON.parse(storedPrompts);
         setSpinPrompts({ ...emptyPrompts, ...parsed });
       }
+      const storedPdId = window.localStorage.getItem(STORAGE_PD_PERSON);
+      if (storedPdId) setLogContactId(storedPdId);
+      const storedPdName = window.localStorage.getItem(STORAGE_PD_NAME);
+      if (storedPdName) setLogContactName(storedPdName);
+      const storedPdCompany = window.localStorage.getItem(STORAGE_PD_COMPANY);
+      if (storedPdCompany) setLogCompanyName(storedPdCompany);
+      const storedPdOutcome = window.localStorage.getItem(STORAGE_PD_OUTCOME);
+      if (storedPdOutcome) setLogDisposition(storedPdOutcome);
+      const storedPdNotes = window.localStorage.getItem(STORAGE_PD_NOTES);
+      if (storedPdNotes) setLogNotes(storedPdNotes);
+      const storedPrepContact = window.localStorage.getItem(STORAGE_PREP_CONTACT);
+      if (storedPrepContact) setPrepContact(storedPrepContact);
+      const storedPrepCompany = window.localStorage.getItem(STORAGE_PREP_COMPANY);
+      if (storedPrepCompany) setPrepCompany(storedPrepCompany);
+      const storedPrepGoal = window.localStorage.getItem(STORAGE_PREP_GOAL);
+      if (storedPrepGoal) setPrepGoal(storedPrepGoal);
     } catch {
       // ignore storage errors
     }
@@ -138,11 +180,28 @@ export function DemoWorkspace() {
   }, [spinPrompts]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(STORAGE_PD_PERSON, logContactId);
+      window.localStorage.setItem(STORAGE_PD_NAME, logContactName);
+      window.localStorage.setItem(STORAGE_PD_COMPANY, logCompanyName);
+      window.localStorage.setItem(STORAGE_PD_OUTCOME, logDisposition);
+      window.localStorage.setItem(STORAGE_PD_NOTES, logNotes);
+      window.localStorage.setItem(STORAGE_PREP_CONTACT, prepContact);
+      window.localStorage.setItem(STORAGE_PREP_COMPANY, prepCompany);
+      window.localStorage.setItem(STORAGE_PREP_GOAL, prepGoal);
+    } catch {
+      // ignore
+    }
+  }, [logContactId, logContactName, logCompanyName, logDisposition, logNotes, prepContact, prepCompany, prepGoal]);
+
+  useEffect(() => {
     const unsub = listenToExtension({
       onStatus: (s) => setExtensionStatus(s),
       onMeetCaption: (chunk) => {
         const ts = typeof chunk.captured_at === 'number' ? chunk.captured_at : Date.now();
         setLastCaption(chunk.text);
+        setLastCaptionAt(Date.now());
         transcriptRef.current = [...transcriptRef.current, { text: chunk.text, ts }].slice(-24);
         setMeetEvents((prev) => {
           const exists = prev.some((evt) => evt.ts === ts && evt.text === chunk.text);
@@ -205,6 +264,23 @@ export function DemoWorkspace() {
   }, [meetEvents]);
 
   const isCallIdValid = meetCallId.trim().length >= 8;
+  const lastCaptionAgo = lastCaptionAt ? Math.round((Date.now() - lastCaptionAt) / 1000) : null;
+  const captionStale = lastCaptionAt ? Date.now() - lastCaptionAt > 12000 : false;
+  const connectionStatus = useMemo(() => {
+    if (!extensionStatus.connected) {
+      return { tone: 'warning', text: 'Extension není připojená k webapp.' };
+    }
+    if (!isCallIdValid) {
+      return { tone: 'warning', text: 'Call ID je neplatné (min. 8 znaků).' };
+    }
+    if (meetActive && (!meetEvents.length || captionStale)) {
+      return { tone: 'warning', text: 'Propojeno, ale nechodí titulky. Zkontroluj CC v Meet.' };
+    }
+    if (meetActive && meetEvents.length > 0) {
+      return { tone: 'success', text: 'Propojeno a titulky běží.' };
+    }
+    return { tone: 'subtle', text: 'Připrav se na propojení.' };
+  }, [extensionStatus.connected, isCallIdValid, meetActive, meetEvents.length, captionStale]);
 
   const handleMeetConnect = () => {
     const value = meetCallId.trim().toUpperCase();
@@ -217,6 +293,19 @@ export function DemoWorkspace() {
     meetLastTsRef.current = null;
     setMeetActive(true);
     setMeetError(null);
+  };
+
+  const openMeetLink = () => {
+    if (typeof window === 'undefined') return;
+    if (!meetLink.trim()) return;
+    if (import.meta.env.VITE_E2E_DISABLE_EXTERNAL_NAV === 'true') return;
+    window.open(meetLink.trim(), '_blank', 'noopener');
+  };
+
+  const useDetectedCallId = () => {
+    if (!derivedCallId) return;
+    setCallIdTouched(true);
+    setMeetCallId(derivedCallId);
   };
 
   const handleMeetStop = () => {
@@ -311,6 +400,51 @@ export function DemoWorkspace() {
     }
   };
 
+  const submitOutcome = async () => {
+    const contactId = logContactId.trim();
+    if (!contactId) {
+      setLogStatus('Zadej Pipedrive Person ID (číselné) nebo Lead ID ve tvaru lead:123.');
+      return;
+    }
+    setLogSaving(true);
+    setLogStatus(null);
+    try {
+      await echoApi.logCall({
+        contactId,
+        contactName: logContactName.trim() || undefined,
+        companyName: logCompanyName.trim() || undefined,
+        disposition: logDisposition,
+        notes: logNotes.trim(),
+      });
+      setLogStatus('Zapsáno do Pipedrive.');
+    } catch (e) {
+      setLogStatus(e instanceof Error ? e.message : 'Zápis selhal');
+    } finally {
+      setLogSaving(false);
+    }
+  };
+
+  const runPrep = async (mode: 'script' | 'research') => {
+    setPrepBusy(true);
+    setPrepOutput('');
+    try {
+      const res = await echoApi.ai.generate({
+        contactName: prepContact || 'Prospect',
+        company: prepCompany || 'their company',
+        goal: prepGoal || 'Book demo',
+        type: mode,
+        salesStyle: 'consultative',
+        contextData: { mode: 'quick_prep' },
+      });
+      const text = res?.content || res;
+      setPrepOutput(typeof text === 'string' ? text : JSON.stringify(text, null, 2));
+    } catch (e) {
+      setPrepOutput(e instanceof Error ? e.message : 'Prep failed');
+    } finally {
+      setPrepBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (!liveCoachingEnabled) return;
     if (!lastCaption) return;
@@ -331,6 +465,17 @@ export function DemoWorkspace() {
           <span className="pill subtle">{extensionStatus.connected ? 'Ext: zapnuto' : 'Ext: vypnuto'}</span>
         </div>
 
+        <div className={`banner ${connectionStatus.tone}`}>
+          {connectionStatus.text}
+        </div>
+        {lastCaptionAgo !== null && (
+          <div className="muted text-xs">Poslední titulek: před {lastCaptionAgo}s</div>
+        )}
+
+        <div className="muted text-xs">
+          1) Vlož Meet odkaz. 2) Nastav Call ID (stejné v app i v extension). 3) Klikni Propojit.
+        </div>
+
         <div>
           <div className="muted text-xs">Odkaz na Google Meet</div>
           <input
@@ -344,10 +489,18 @@ export function DemoWorkspace() {
           {meetLink.trim() && !derivedCallId && (
             <div className="status-line small">Odkaz nevypadá jako Google Meet.</div>
           )}
+          <div className="button-row mt-2">
+            <button className="btn ghost sm" onClick={openMeetLink} disabled={!canOpenMeet} type="button">
+              Otevřít Meet
+            </button>
+            <button className="btn ghost sm" onClick={useDetectedCallId} disabled={!derivedCallId} type="button">
+              Použít kód z odkazu
+            </button>
+          </div>
         </div>
 
         <div>
-          <div className="muted text-xs">Call ID pro Meet Coach extension</div>
+          <div className="muted text-xs">Call ID / Session code (zadej stejné do extension)</div>
           <input
             value={meetCallId}
             onChange={(e) => {
@@ -464,7 +617,90 @@ export function DemoWorkspace() {
             <p className="eyebrow">Zaměření</p>
             <h2>SPIN & custom</h2>
           </div>
-          <span className="pill subtle">{useSpinPrompts ? 'Custom zapnuto' : 'Custom vypnuto'}</span>
+          <span className={`pill ${pipedriveConfigured ? 'success' : 'warning'}`}>
+            {pipedriveConfigured ? 'Pipedrive OK' : 'Pipedrive není připojený'}
+          </span>
+        </div>
+
+        <div className="panel soft">
+          <div className="panel-head tight">
+            <span className="eyebrow">Call outcome → Pipedrive</span>
+            <span className="pill subtle">Log</span>
+          </div>
+          <div className="muted text-xs">Pipedrive Person ID (číselné) nebo Lead ID (lead:123)</div>
+          <input
+            value={logContactId}
+            onChange={(e) => setLogContactId(e.target.value)}
+            placeholder="např. 1234567"
+          />
+          <div className="muted text-xs mt-2">Jméno kontaktu (volitelné)</div>
+          <input
+            value={logContactName}
+            onChange={(e) => setLogContactName(e.target.value)}
+            placeholder="Jan Novák"
+          />
+          <div className="muted text-xs mt-2">Firma (volitelné)</div>
+          <input
+            value={logCompanyName}
+            onChange={(e) => setLogCompanyName(e.target.value)}
+            placeholder="ACME s.r.o."
+          />
+          <div className="muted text-xs mt-2">Outcome</div>
+          <select value={logDisposition} onChange={(e) => setLogDisposition(e.target.value)}>
+            <option value="connected">Connected</option>
+            <option value="meeting">Meeting</option>
+            <option value="callback">Callback</option>
+            <option value="not-interested">Not interested</option>
+            <option value="no-answer">No answer</option>
+            <option value="sent">Sent email</option>
+          </select>
+          <div className="muted text-xs mt-2">Poznámky</div>
+          <textarea
+            className="notes"
+            value={logNotes}
+            onChange={(e) => setLogNotes(e.target.value)}
+            placeholder="Stručné poznámky z hovoru…"
+          />
+          <div className="button-row mt-2">
+            <button className="btn outline sm" onClick={() => void submitOutcome()} disabled={logSaving} type="button">
+              {logSaving ? 'Zapisuji…' : 'Zapsat do Pipedrive'}
+            </button>
+          </div>
+          {logStatus && <div className="status-line small">{logStatus}</div>}
+        </div>
+
+        <div className="panel soft">
+          <div className="panel-head tight">
+            <span className="eyebrow">Prep & intel</span>
+            <span className="pill subtle">AI</span>
+          </div>
+          <div className="muted text-xs">Kontakt</div>
+          <input
+            value={prepContact}
+            onChange={(e) => setPrepContact(e.target.value)}
+            placeholder="Jméno kontaktu"
+          />
+          <div className="muted text-xs mt-2">Firma</div>
+          <input
+            value={prepCompany}
+            onChange={(e) => setPrepCompany(e.target.value)}
+            placeholder="Firma / sektor"
+          />
+          <div className="muted text-xs mt-2">Cíl hovoru</div>
+          <input
+            value={prepGoal}
+            onChange={(e) => setPrepGoal(e.target.value)}
+            placeholder="Např. Book demo"
+          />
+          <div className="button-row wrap mt-2">
+            <button className="btn outline sm" onClick={() => void runPrep('script')} disabled={prepBusy} type="button">
+              {prepBusy ? 'Připravuji…' : 'Call opener'}
+            </button>
+            <button className="btn ghost sm" onClick={() => void runPrep('research')} disabled={prepBusy} type="button">
+              Research
+            </button>
+          </div>
+          <pre className="output-box">{prepOutput || 'Prep output se zobrazí zde.'}</pre>
         </div>
 
         <div className="button-row wrap">
