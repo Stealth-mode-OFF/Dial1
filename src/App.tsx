@@ -2,39 +2,35 @@ import React, { useMemo, useState } from 'react';
 import {
   Activity,
   Bolt,
-  BookOpen,
-  FileText,
-  Headphones,
+  CalendarCheck,
   PhoneCall,
   RefreshCw,
   Settings,
-  TrendingUp,
 } from 'lucide-react';
+import { BookDemoWorkspace } from './pages/BookDemoWorkspace';
 import { DialerWorkspace } from './pages/DialerWorkspace';
-import { AnalyticsWorkspace } from './pages/AnalyticsWorkspace';
-import { CoachWorkspace } from './pages/CoachWorkspace';
-import { IntelWorkspace } from './pages/IntelWorkspace';
-import { KnowledgeWorkspace } from './pages/KnowledgeWorkspace';
-import { SettingsWorkspace } from './pages/SettingsWorkspace';
+import { OpsWorkspace } from './pages/OpsWorkspace';
 import { useSales } from './contexts/SalesContext';
 
-type View = 'dialer' | 'intel' | 'coach' | 'analytics' | 'knowledge' | 'settings';
+type View = 'book_demo' | 'demo' | 'ops';
 
-const NAV: Array<{ id: View; label: string; icon: React.ElementType }> = [
-  { id: 'dialer', label: 'Dialer', icon: PhoneCall },
-  { id: 'intel', label: 'Intel', icon: FileText },
-  { id: 'coach', label: 'Coaching', icon: Headphones },
-  { id: 'analytics', label: 'Analytics', icon: TrendingUp },
-  { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
-  { id: 'settings', label: 'Settings', icon: Settings },
+const PRIMARY_NAV: Array<{ id: View; label: string; icon: React.ElementType }> = [
+  { id: 'book_demo', label: 'Domluvit demo', icon: CalendarCheck },
+  { id: 'demo', label: 'Demo', icon: PhoneCall },
+];
+
+const SECONDARY_NAV: Array<{ id: View; label: string; icon: React.ElementType }> = [
+  { id: 'ops', label: 'Statistiky & Nastavení', icon: Settings },
 ];
 
 export default function App() {
-  const [view, setView] = useState<View>('dialer');
+  const [view, setView] = useState<View>('demo');
   const [railExpanded, setRailExpanded] = useState(false);
   const { stats, isConfigured, pipedriveConfigured, lastUpdated, error, refresh, isLoading } = useSales();
 
-  const viewLabel = useMemo(() => NAV.find((n) => n.id === view)?.label || '', [view]);
+  const viewLabel = useMemo(() => {
+    return [...PRIMARY_NAV, ...SECONDARY_NAV].find((n) => n.id === view)?.label || '';
+  }, [view]);
 
   return (
     <div className="shell">
@@ -52,7 +48,25 @@ export default function App() {
           <Bolt size={18} /> <span className="brand-label">Echo</span>
         </div>
         <nav className="rail-nav">
-          {NAV.map((item) => {
+          {PRIMARY_NAV.map((item) => {
+            const Icon = item.icon;
+            const active = item.id === view;
+            return (
+              <button
+                key={item.id}
+                className={`rail-btn ${active ? 'active' : ''}`}
+                onClick={() => setView(item.id)}
+                type="button"
+              >
+                <Icon size={18} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <nav className="rail-nav secondary">
+          {SECONDARY_NAV.map((item) => {
             const Icon = item.icon;
             const active = item.id === view;
             return (
@@ -71,13 +85,15 @@ export default function App() {
       </aside>
 
       <main className="canvas">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Echo OS</p>
-            <h1>{viewLabel}</h1>
-            {view !== 'dialer' && <p className="muted">Dialer + coaching + logging, fully backed by the edge function.</p>}
-          </div>
-          {view !== 'dialer' && (
+        {view !== 'demo' && (
+          <header className="topbar">
+            <div>
+              <p className="eyebrow">Echo OS</p>
+              <h1>{viewLabel}</h1>
+              {view === 'book_demo' && (
+                <p className="muted">Intel + otázky na domluvení dema (bez scrollu, bez šumu).</p>
+              )}
+            </div>
             <div className="chip-row">
               <span className={`pill ${isConfigured ? 'success' : 'warning'}`}>
                 {isConfigured ? 'Supabase connected' : 'Supabase missing'}
@@ -95,11 +111,11 @@ export default function App() {
                 <RefreshCw size={14} /> Sync
               </button>
             </div>
-          )}
-        </header>
+          </header>
+        )}
 
         {error && <div className="banner warning">{error}</div>}
-        {view !== 'dialer' && (
+        {view !== 'demo' && (
           <div className="banner info">
             <div className="stat">
               <span className="label">Calls today</span>
@@ -121,12 +137,9 @@ export default function App() {
         )}
 
         <section className="screen">
-          {view === 'dialer' && <DialerWorkspace />}
-          {view === 'intel' && <IntelWorkspace />}
-          {view === 'coach' && <CoachWorkspace />}
-          {view === 'analytics' && <AnalyticsWorkspace />}
-          {view === 'knowledge' && <KnowledgeWorkspace />}
-          {view === 'settings' && <SettingsWorkspace />}
+          {view === 'book_demo' && <BookDemoWorkspace />}
+          {view === 'demo' && <DialerWorkspace />}
+          {view === 'ops' && <OpsWorkspace />}
         </section>
       </main>
     </div>
