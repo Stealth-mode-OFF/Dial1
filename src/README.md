@@ -79,6 +79,32 @@
 - **Pipedrive** účet s API přístupem
 - **OpenAI** API key (GPT-4o)
 
+---
+
+## Calling Terminal UI (2026-02-04)
+
+### What changed
+- Dva screeny, jeden fokus: **Lead Brief** (CALL → Save & Next) a **Live Call Coach** (Řekni teď).
+- Zero-scroll default layout pro 13–15" (1440×900).
+- Intel / SPIN / Transcript jsou schované v drawers; global Search (Ctrl/Cmd+K).
+
+### Keyboard shortcuts
+**Global**
+- `Enter` — primární akce dle stavu
+- `Ctrl/Cmd + K` — Search leads
+- `Shift + /` — help overlay
+- `Esc` — zavře overlay/drawer
+
+**Lead Brief**
+- `↑ / ↓` — změna leadu v queue
+- `D` — Details drawer
+- `1..6` — disposition ve wrap-up
+
+**Live Call Coach**
+- `T` — Transcript drawer
+- `O` — Objection mode
+- `1..6` — outcome ve wrap-up
+
 ### Instalace
 
 ```bash

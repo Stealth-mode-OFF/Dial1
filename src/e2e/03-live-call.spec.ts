@@ -10,9 +10,9 @@ test.describe('Live Call Coach', () => {
 
   test('should show a connect error for invalid Meet link', async ({ page }) => {
     const workspace = page.getByTestId('demo-workspace');
-    const input = workspace.locator('input[placeholder*="Meet"]').first();
+    const input = page.getByPlaceholder(/meet link|meet/i).first();
     await input.fill('foo');
-    await workspace.getByRole('button', { name: /connect/i }).click();
+    await page.getByTestId('meet-connect').click();
     await expect(workspace.locator('.status-line')).toContainText(/meet link/i, { timeout: 10000 });
   });
 });

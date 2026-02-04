@@ -1,8 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react';
+import { Drawer } from '../components/terminal/Drawer';
+import type { StatusPill } from '../components/terminal/TerminalShell';
 import { echoApi, type WhisperObjectionResult } from '../utils/echoApi';
 import { buildFunctionUrl, functionsBase, isSupabaseConfigured, publicAnonKey } from '../utils/supabase/info';
 import { useSales } from '../contexts/SalesContext';
+import type { ScreenChrome } from './BookDemoWorkspace';
+import type { HotkeyHandler } from '../hooks/useHotkeys';
 
 type TranscriptEvent = {
   id: string;
@@ -72,11 +76,24 @@ const defaultRunbook: Record<Exclude<Stage, 'close'>, string[]> = {
   need_payoff: ['Kdybyste to vyřešili, co by se zlepšilo jako první?', 'Jak byste poznali, že pilot byl úspěch?'],
 };
 
-export function DemoWorkspace() {
+type CoachMode = 'listening' | 'talking' | 'objection' | 'wrapup';
+
+const OUTCOMES: Array<{ id: string; label: string; hotkey: string }> = [
+  { id: 'no-answer', label: 'No answer', hotkey: '1' },
+  { id: 'gatekeeper', label: 'Gatekeeper', hotkey: '2' },
+  { id: 'not-interested', label: 'Not interested', hotkey: '3' },
+  { id: 'meeting', label: 'Meeting set', hotkey: '4' },
+  { id: 'callback', label: 'Callback', hotkey: '5' },
+  { id: 'wrong-person', label: 'Wrong person', hotkey: '6' },
+];
+
+export function DemoWorkspace({ chrome }: { chrome?: ScreenChrome }) {
   const { activeContact, pipedriveConfigured, logCall } = useSales();
 
   const [meetLink, setMeetLink] = useState('');
   const [meetActive, setMeetActive] = useState(false);
+  const [mode, setMode] = useState<CoachMode>('listening');
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [events, setEvents] = useState<TranscriptEvent[]>([]);
   const [lastCaptionAt, setLastCaptionAt] = useState<number | null>(null);
   const [meetError, setMeetError] = useState<string | null>(null);
@@ -146,6 +163,13 @@ export function DemoWorkspace() {
     });
   }, [events]);
 
+  const transcriptDrawerLines = useMemo(() => {
+    return events.slice(-10).map((e) => {
+      const who = e.speaker === 'user' ? 'ME' : 'THEM';
+      return `${who}: ${e.text}`;
+    });
+  }, [events]);
+
   const connectionStatus = useMemo(() => {
     if (!meetActive) return { text: 'Not connected', tone: 'subtle' as const };
     const age = lastCaptionAt ? Date.now() - lastCaptionAt : null;
@@ -177,7 +201,7 @@ export function DemoWorkspace() {
     }
     const fromPack = runbook?.[stage]?.map((l) => ({ id: l.id, text: l.text })) || [];
     const fallback = (defaultRunbook[stage] || []).map((t, idx) => ({ id: `fb-${stage}-${idx}`, text: t }));
-    const merged = [...fromPack, ...fallback].slice(0, 3);
+    const merged = [...fromPack, ...fallback].slice(0, 2);
     return merged.length ? merged : fallback;
   }, [runbook, stage]);
 
@@ -248,23 +272,7 @@ export function DemoWorkspace() {
     return () => window.clearInterval(timer);
   }, [meetActive]);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      const tag = el?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || (el as any)?.isContentEditable) return;
-      if (e.key === '1') bumpStage('situation');
-      if (e.key === '2') bumpStage('problem');
-      if (e.key === '3') bumpStage('implication');
-      if (e.key === '4') bumpStage('need_payoff');
-      if (e.key === '5') bumpStage('close');
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const connect = () => {
+  const connect = useCallback(() => {
     setMeetError(null);
     setEvents([]);
     setLastCaptionAt(null);
@@ -279,11 +287,14 @@ export function DemoWorkspace() {
     stageStartAtRef.current = Date.now();
     stageTimersRef.current = { situation: 0, problem: 0, implication: 0, need_payoff: 0, close: 0 };
     stageRef.current = stage;
-  };
+    setMode('listening');
+    setTranscriptOpen(false);
+  }, [callId, stage]);
 
-  const disconnect = () => {
+  const disconnect = useCallback(() => {
     setMeetActive(false);
-  };
+    setMode('wrapup');
+  }, []);
 
   useEffect(() => {
     if (!meetActive || !callId.trim() || !isSupabaseConfigured) return;
@@ -383,7 +394,7 @@ export function DemoWorkspace() {
     }
   };
 
-  const onLogCall = async () => {
+  const onLogCall = useCallback(async () => {
     if (!activeContact) {
       setWrapStatus('Vyber lead.');
       return;
@@ -403,236 +414,321 @@ export function DemoWorkspace() {
         notes: wrapNotes.trim(),
         duration: callSeconds,
       });
+      setWrapNotes('');
+      setMode('listening');
       setWrapStatus('Zapsáno do Pipedrive.');
     } catch (e) {
       setWrapStatus(e instanceof Error ? e.message : 'Zápis selhal');
     } finally {
       setWrapSaving(false);
     }
-  };
+  }, [activeContact, pipedriveConfigured, logCall, wrapOutcome, wrapNotes, callSeconds]);
 
-  return (
-    <div className="call-layout" data-testid="demo-workspace">
-      <div className="panel compact">
-        <div className="panel-head tight">
-          <div>
-            <p className="eyebrow">Live Call Coach</p>
-            <h2>{activeContact?.name || 'Vyber lead'}</h2>
-            <div className="chip-row">
-              <span className={`pill ${connectionStatus.tone}`}>{connectionStatus.text}</span>
-              <span className="pill subtle">⏱ {formatTimer(callSeconds)}</span>
-              <span className="pill subtle">Stage: {stagePill}</span>
+  const statusPill = useMemo<StatusPill | null>(() => {
+    if (mode === 'wrapup') return { text: 'Wrap-up', tone: 'warning' };
+    if (!meetActive) return { text: 'Not connected', tone: 'subtle' };
+    return { text: `${connectionStatus.text} · ${formatTimer(callSeconds)}`, tone: connectionStatus.tone };
+  }, [mode, meetActive, connectionStatus, callSeconds]);
+
+  useEffect(() => {
+    chrome?.setStatus(statusPill);
+  }, [chrome, statusPill]);
+
+  const topbarAccessory = useMemo(() => {
+    if (meetActive || mode === 'wrapup') return null;
+    return (
+      <div className="meet-accessory">
+        <input
+          value={meetLink}
+          onChange={(e) => setMeetLink(e.target.value)}
+          placeholder="Meet link / kód"
+          style={{ width: 240 }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            connect();
+          }}
+        />
+        <button className="btn ghost sm" onClick={() => setTranscriptOpen((v) => !v)} type="button" aria-label="Transcript (T)">
+          T
+        </button>
+        <button className="btn primary sm" onClick={connect} disabled={!meetLink.trim()} type="button" data-testid="meet-connect">
+          Connect
+        </button>
+      </div>
+    );
+  }, [meetActive, mode, meetLink, connect]);
+
+  useEffect(() => {
+    chrome?.setTopbarAccessory(topbarAccessory);
+    return () => chrome?.setTopbarAccessory(null);
+  }, [chrome, topbarAccessory]);
+
+  const bottomBar = useMemo(() => {
+    if (mode !== 'wrapup') return null;
+    return (
+      <div className="bottom-bar">
+        <div className="wrapup-grid">
+          <div className="wrapup-dispos">
+            <div className="muted text-xs" style={{ marginBottom: 6 }}>
+              Outcome (1..6)
             </div>
-          </div>
-
-          <div className="button-row wrap" style={{ justifyContent: 'flex-end' }}>
-            <div className="button-row">
-              {(
-                [
-                  ['1', 'situation'],
-                  ['2', 'problem'],
-                  ['3', 'implication'],
-                  ['4', 'need_payoff'],
-                  ['5', 'close'],
-                ] as Array<[string, Stage]>
-              ).map(([key, s]) => (
+            <div className="quick-row" aria-label="Outcome">
+              {OUTCOMES.map((o) => (
                 <button
-                  key={s}
-                  className={`btn ghost sm ${stage === s ? 'active' : ''}`}
-                  onClick={() => bumpStage(s)}
+                  key={o.id}
+                  className={`btn ghost sm ${wrapOutcome === o.id ? 'active' : ''}`}
+                  onClick={() => setWrapOutcome(o.id)}
                   type="button"
-                  title={`${key} – ${s}`}
+                  title={`${o.hotkey} – ${o.label}`}
                 >
-                  {key}
+                  {o.hotkey}. {o.label}
                 </button>
               ))}
             </div>
-
-            <input
-              value={meetLink}
-              onChange={(e) => setMeetLink(e.target.value)}
-              placeholder="Meet link / kód"
-              style={{ width: 260 }}
-            />
-            {!meetActive ? (
-              <button className="btn outline sm" onClick={connect} disabled={!meetLink.trim()} type="button">
-                Connect
-              </button>
-            ) : (
-              <button className="btn danger sm" onClick={disconnect} type="button">
-                Stop
-              </button>
-            )}
+          </div>
+          <div>
+            <div className="muted text-xs" style={{ marginBottom: 6 }}>
+              Notes
+            </div>
+            <input value={wrapNotes} onChange={(e) => setWrapNotes(e.target.value)} placeholder="Stručně…" />
+            {wrapStatus ? <div className="status-line small">{wrapStatus}</div> : null}
+          </div>
+          <div className="wrapup-cta">
+            <button className="btn primary" onClick={() => void onLogCall()} disabled={wrapSaving} type="button" data-testid="live-log">
+              {wrapSaving ? 'Logging…' : 'Log'}
+            </button>
+            <span className={`pill ${pipedriveConfigured ? 'success' : 'warning'}`}>
+              {pipedriveConfigured ? 'Pipedrive OK' : 'Pipedrive missing'}
+            </span>
           </div>
         </div>
-        {meetError && <div className="status-line">{meetError}</div>}
       </div>
+    );
+  }, [mode, wrapOutcome, wrapNotes, wrapStatus, wrapSaving, onLogCall, pipedriveConfigured]);
 
-      <div className="call-main">
-        <div className="panel soft compact" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div className="panel-head">
+  useEffect(() => {
+    chrome?.setBottomBar(bottomBar);
+    return () => chrome?.setBottomBar(null);
+  }, [chrome, bottomBar]);
+
+  const hotkeys = useCallback<HotkeyHandler>(
+    (e) => {
+      if (chrome?.overlayOpen) return false;
+      const key = (e.key || '').toLowerCase();
+      if (key === 't') {
+        setTranscriptOpen((v) => !v);
+        return true;
+      }
+      if (key === 'o' && mode !== 'wrapup') {
+        setMode((m) => (m === 'objection' ? 'listening' : 'objection'));
+        return true;
+      }
+      if (mode === 'wrapup') {
+        const found = OUTCOMES.find((x) => x.hotkey === e.key);
+        if (found) {
+          setWrapOutcome(found.id);
+          return true;
+        }
+      }
+      if (e.key === 'Enter') {
+        if (mode === 'wrapup') {
+          void onLogCall();
+          return true;
+        }
+        if (meetActive) {
+          disconnect();
+          return true;
+        }
+        connect();
+        return true;
+      }
+      return false;
+    },
+    [chrome?.overlayOpen, mode, meetActive, connect, disconnect, onLogCall],
+  );
+
+  useEffect(() => {
+    chrome?.registerHotkeys(hotkeys);
+  }, [chrome, hotkeys]);
+
+  const objectionResponse = objectionPack?.whisper?.validate?.text || '';
+  const objectionFollowUp = objectionPack?.whisper?.implication_question?.text || '';
+
+  return (
+    <div className="live-terminal" data-testid="demo-workspace">
+      <div className="live-grid">
+        <div className="panel focus compact say-card">
+          <div className="panel-head tight">
             <div>
-              <p className="eyebrow">Transcript</p>
-              <h2>Posledních 14 řádků</h2>
-              <p className="muted text-sm">Okno, ne nekonečný feed.</p>
-            </div>
-            <span className="pill subtle">{callId ? callId : '—'}</span>
-          </div>
-
-          {meetActive && connectionStatus.tone !== 'success' && (
-            <div className="banner warning" style={{ marginBottom: 12 }}>
-              <div className="icon-title">
-                <TriangleAlert size={16} /> <strong>Titulky se nečtou</strong>
+              <p className="eyebrow">Live Call</p>
+              <h2>Řekni teď</h2>
+              <div className="chip-row">
+                <span className="pill subtle">Mode: {mode}</span>
+                <span className="pill subtle">Stage: {stagePill}</span>
+                <button className={`btn ghost sm ${mode === 'objection' ? 'active' : ''}`} onClick={() => setMode((m) => (m === 'objection' ? 'listening' : 'objection'))} type="button">
+                  O Objection
+                </button>
+                <button className="btn ghost sm" onClick={() => setTranscriptOpen(true)} type="button">
+                  T Transcript
+                </button>
+                {meetActive ? (
+                  <button className="btn danger sm" onClick={disconnect} type="button" data-testid="meet-stop">
+                    Stop
+                  </button>
+                ) : null}
               </div>
-              <div className="muted text-sm" style={{ marginTop: 6 }}>
-                Checklist: 1) Zapni CC v Google Meet. 2) V extension zapni <strong>Enabled</strong>. 3) Zkontroluj endpoint.
-              </div>
-              {functionsBase && (
-                <div className="muted text-xs" style={{ marginTop: 8 }}>
-                  Endpoint (pro extension Advanced): {functionsBase}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="output-box" style={{ flex: 1, minHeight: 0 }}>
-            {!transcriptWindow.length && <div className="muted">Čekám na titulky z Meet…</div>}
-            {transcriptWindow.length > 0 && (
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{transcriptWindow.join('\n')}</pre>
-            )}
-          </div>
-        </div>
-
-        <div className="panel focus compact" style={{ overflow: 'hidden' }}>
-          <div className="panel-head">
-            <div>
-              <p className="eyebrow">Next Best Move</p>
-              <h2>Řekni další větu</h2>
-              <p className="muted text-sm">Auto refresh max 1× / ~9 s.</p>
             </div>
             <div className="button-row">
-              <button className="btn ghost sm" onClick={() => void copyToClipboard(sayNext)} disabled={!sayNext} type="button">
-                <Copy size={14} /> Copy
+              <button className="btn icon" onClick={() => void copyToClipboard(sayNext)} disabled={!sayNext} type="button" aria-label="Copy say next">
+                <Copy size={16} />
               </button>
-              <button className="btn ghost sm" onClick={() => void refreshCoach()} disabled={coachBusy || !transcriptWindow.length} type="button">
-                <RefreshCw size={14} /> Refresh
+              <button className="btn icon" onClick={() => void refreshCoach()} disabled={coachBusy || !transcriptWindow.length} type="button" aria-label="Refresh coaching">
+                <RefreshCw size={16} />
               </button>
             </div>
           </div>
 
-          <div style={{ overflow: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="coach-box focus">
-              <div className="item-title">Say next</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{sayNext || '—'}</div>
-              {why && (
-                <div className="muted text-sm" style={{ marginTop: 8 }}>
-                  Why: {why}
+          {meetError ? <div className="status-line">{meetError}</div> : null}
+          {coachError ? <div className="status-line">{coachError}</div> : null}
+          {wrapStatus && mode !== 'wrapup' ? <div className="status-line small">{wrapStatus}</div> : null}
+
+          <div className="say-next-card">
+            <div className="say-section">
+              <div className="say-label">Řekni teď</div>
+              <div className="say-big">{sayNext || (meetActive ? '—' : 'Připoj Meet (Connect) a zapni titulky.')}</div>
+              {why ? (
+                <div className="muted text-sm" style={{ marginTop: 10 }}>
+                  Proč: {why}
                 </div>
-              )}
-              {confidence !== null && confidence < 0.55 && risk && (
+              ) : null}
+              {confidence !== null && confidence < 0.55 && risk ? (
                 <div className="pill warning" style={{ marginTop: 10 }}>
                   Risk: {risk}
                 </div>
-              )}
+              ) : null}
             </div>
-            {coachError && <div className="status-line">{coachError}</div>}
 
-            <div className="panel soft" style={{ marginTop: 0 }}>
-              <div className="panel-head tight">
-                <span className="eyebrow">Objection</span>
-                <span className="pill subtle">{objectionPack ? objectionPack.category : '—'}</span>
-              </div>
-              <input
-                value={objectionDraft}
-                onChange={(e) => setObjectionDraft(e.target.value)}
-                placeholder="Vlož námitku (nebo nech prázdné)"
-              />
-              <div className="button-row" style={{ marginTop: 10 }}>
-                <button className="btn outline sm" onClick={() => void onMarkObjection()} disabled={objectionBusy || !objectionDraft.trim()} type="button">
-                  <Sparkles size={14} /> {objectionBusy ? 'Analyzing…' : 'Mark objection'}
+            <div className="say-section">
+              <div className="say-label">Zeptej se</div>
+              <div className="say-mid">{activeQuestion || '—'}</div>
+              <div className="button-row" style={{ marginTop: 8 }}>
+                <button className="btn ghost sm" onClick={() => void copyToClipboard(activeQuestion)} disabled={!activeQuestion} type="button">
+                  <Copy size={14} /> Copy question
                 </button>
-                {objectionPack && (
-                  <button className="btn ghost sm" onClick={() => setObjectionPack(null)} type="button">
-                    Clear
-                  </button>
-                )}
               </div>
-              {objectionError && <div className="status-line">{objectionError}</div>}
-
-              {objectionPack && (
-                <div className="list paged" style={{ marginTop: 10 }}>
-                  {[
-                    objectionPack.whisper.validate,
-                    objectionPack.whisper.reframe,
-                    objectionPack.whisper.implication_question,
-                    objectionPack.whisper.next_step,
-                  ].map((l) => (
-                    <div key={l.id} className="list-row" style={{ cursor: 'default' }}>
-                      <div className="item-title">{l.text}</div>
-                      <button className="btn ghost sm" onClick={() => void copyToClipboard(l.text)} type="button">
-                        <Copy size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
+
+            {mode === 'objection' ? (
+              <div className="say-section">
+                <div className="say-label">Pokud namítne</div>
+                <div className="objection-inline">
+                  <input value={objectionDraft} onChange={(e) => setObjectionDraft(e.target.value)} placeholder="Vlož námitku…" />
+                  <button className="btn ghost sm" onClick={() => void onMarkObjection()} disabled={objectionBusy || !objectionDraft.trim()} type="button">
+                    <Sparkles size={14} /> {objectionBusy ? '…' : 'Analyze'}
+                  </button>
+                  {objectionPack ? (
+                    <button className="btn ghost sm" onClick={() => setObjectionPack(null)} type="button">
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+                {objectionError ? <div className="status-line">{objectionError}</div> : null}
+
+                <div className="objection-two">
+                  <div className="objection-piece">
+                    <div className="muted text-xs">Odpověď</div>
+                    <div className="say-mid">{objectionResponse || '—'}</div>
+                    <button className="btn icon" type="button" onClick={() => void copyToClipboard(objectionResponse)} disabled={!objectionResponse} aria-label="Copy objection response">
+                      <Copy size={16} />
+                    </button>
+                  </div>
+                  <div className="objection-piece">
+                    <div className="muted text-xs">Follow-up otázka</div>
+                    <div className="say-mid">{objectionFollowUp || '—'}</div>
+                    <button className="btn icon" type="button" onClick={() => void copyToClipboard(objectionFollowUp)} disabled={!objectionFollowUp} aria-label="Copy follow-up">
+                      <Copy size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
-        <div className="panel soft compact" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div className="panel-head">
+        <div className="panel soft compact spin-panel">
+          <div className="panel-head tight">
             <div>
-              <p className="eyebrow">SPIN runbook</p>
+              <p className="eyebrow">SPIN</p>
               <h2>{stage.toUpperCase()}</h2>
-              <p className="muted text-sm">Klikni na otázku, pak Copy.</p>
+              <p className="muted text-sm">Max 2 otázky.</p>
             </div>
-            <button className="btn outline sm" onClick={() => void copyToClipboard(activeQuestion)} disabled={!activeQuestion} type="button">
+            <button className="btn ghost sm" onClick={() => void copyToClipboard(activeQuestion)} disabled={!activeQuestion} type="button">
               <Copy size={14} /> Copy current
             </button>
           </div>
 
-          <div className="list" style={{ flex: 1, minHeight: 0, maxHeight: 'none' }}>
+          <div className="chip-row" style={{ marginBottom: 10 }}>
+            {(
+              [
+                ['S', 'situation'],
+                ['P', 'problem'],
+                ['I', 'implication'],
+                ['N', 'need_payoff'],
+                ['C', 'close'],
+              ] as Array<[string, Stage]>
+            ).map(([k, s]) => (
+              <button key={s} className={`btn ghost sm ${stage === s ? 'active' : ''}`} onClick={() => bumpStage(s)} type="button">
+                {k}
+              </button>
+            ))}
+          </div>
+
+          <div className="list paged" style={{ gap: 8 }}>
             {stageQuestions.map((q) => (
-              <div
+              <button
                 key={q.id}
-                className={`list-item ${q.id === activeQuestionId ? 'active' : ''}`}
+                className={`list-row ${q.id === activeQuestionId ? 'active' : ''}`}
                 onClick={() => setActiveQuestionId(q.id)}
-                role="button"
-                tabIndex={0}
+                type="button"
               >
                 <div className="item-title">{q.text}</div>
                 <span className="pill subtle">{q.id === activeQuestionId ? 'Now' : ''}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="panel soft compact">
-        <div className="call-wrap">
-          <div>
-            <label className="label">Outcome</label>
-            <select value={wrapOutcome} onChange={(e) => setWrapOutcome(e.target.value)}>
-              <option value="meeting">Meeting</option>
-              <option value="callback">Callback</option>
-              <option value="not-interested">Not interested</option>
-              <option value="no-answer">No answer</option>
-            </select>
+      <Drawer open={transcriptOpen} onOpenChange={setTranscriptOpen} side="bottom" title="Transcript (T)" data-testid="transcript-drawer">
+        {meetActive && connectionStatus.tone !== 'success' ? (
+          <div className="banner warning" style={{ marginBottom: 12 }}>
+            <div className="icon-title">
+              <TriangleAlert size={16} /> <strong>Titulky se nečtou</strong>
+            </div>
+            <div className="muted text-sm" style={{ marginTop: 6 }}>
+              Checklist: 1) Zapni CC v Google Meet. 2) V extension zapni <strong>Enabled</strong>. 3) Zkontroluj endpoint.
+            </div>
+            {functionsBase ? (
+              <div className="muted text-xs" style={{ marginTop: 8 }}>
+                Endpoint: {functionsBase}
+              </div>
+            ) : null}
           </div>
-          <div>
-            <label className="label">Notes</label>
-            <textarea className="mini-notes" value={wrapNotes} onChange={(e) => setWrapNotes(e.target.value)} placeholder="Stručné poznámky…" />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'end' }}>
-            <span className={`pill ${pipedriveConfigured ? 'success' : 'warning'}`}>{pipedriveConfigured ? 'Pipedrive OK' : 'Pipedrive missing'}</span>
-            <button className="btn primary" onClick={() => void onLogCall()} disabled={wrapSaving} type="button">
-              {wrapSaving ? 'Logging…' : 'Log'}
-            </button>
-          </div>
+        ) : null}
+
+        <div className="chip-row" style={{ marginBottom: 10 }}>
+          <span className="pill subtle">{callId || '—'}</span>
+          <span className={`pill ${connectionStatus.tone}`}>{connectionStatus.text}</span>
         </div>
-        {wrapStatus && <div className="status-line small">{wrapStatus}</div>}
-      </div>
+
+        <div className="output-box" style={{ minHeight: 0, maxHeight: 260 }}>
+          {!transcriptDrawerLines.length ? <div className="muted">Čekám na titulky…</div> : null}
+          {transcriptDrawerLines.length ? (
+            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{transcriptDrawerLines.join('\n')}</pre>
+          ) : null}
+        </div>
+      </Drawer>
     </div>
   );
 }
