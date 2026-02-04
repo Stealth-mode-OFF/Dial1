@@ -72,8 +72,10 @@ const resolveUserId = async (c: any) => {
 const getUserId = (c: any) => c.get("userId") as string;
 
 const getAdminClient = () => {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  if (!SUPABASE_URL) return null;
+  const key = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+  if (!key) return null;
+  return createClient(SUPABASE_URL, key);
 };
 
 const getCorrelationId = (c: any) => {
@@ -114,7 +116,12 @@ const auditEvent = async (
 
 const requireAdmin = (c: any) => {
   const admin = getAdminClient();
-  if (!admin) return { admin: null, error: c.json({ error: "Supabase service role not configured" }, 500) };
+  if (!admin) {
+    return {
+      admin: null,
+      error: c.json({ error: "Supabase DB client not configured. Set SUPABASE_URL + (SUPABASE_SERVICE_ROLE_KEY recommended)." }, 500),
+    };
+  }
   return { admin, error: null };
 };
 
