@@ -459,7 +459,7 @@ export function DialerApp() {
   const goalProgress = Math.min(100, Math.round((session.stats.calls / session.stats.goal) * 100));
 
   return (
-    <div className="app">
+    <div className="app" data-testid="dialer-app">
       {/* Header */}
       <header className="header">
         <div className="header-left">

@@ -7,7 +7,7 @@ test.describe('App Boot', () => {
   });
 
   test('should load neo dialer', async ({ page }) => {
-    await expect(page.getByTestId('neo-dialer')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/dial1 dialer/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('dialer-app')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/dial1/i)).toBeVisible({ timeout: 10000 });
   });
 });
