@@ -1,12 +1,9 @@
-// Extension Popup Script - Handle user interactions
 document.addEventListener('DOMContentLoaded', () => {
-  const callIdInput = document.getElementById('callId');
+  const enabledToggle = document.getElementById('enabledToggle');
   const apiEndpointInput = document.getElementById('apiEndpoint');
   const authTokenInput = document.getElementById('authToken');
   const myNameInput = document.getElementById('myName');
-  const connectBtn = document.getElementById('connectBtn');
-  const disconnectBtn = document.getElementById('disconnectBtn');
-  const clearBtn = document.getElementById('clearBtn');
+  const saveBtn = document.getElementById('saveBtn');
   const statusDot = document.getElementById('statusDot');
   const statusText = document.getElementById('statusText');
   const infoBox = document.getElementById('infoBox');
@@ -14,129 +11,86 @@ document.addEventListener('DOMContentLoaded', () => {
   const advancedToggle = document.getElementById('advancedToggle');
   const advancedSection = document.getElementById('advancedSection');
 
-  function normalizeCallId(input) {
-    const raw = (input || '').toString().trim();
-    if (!raw) return '';
-    const urlMatch = raw.match(/meet\.google\.com\/([a-zA-Z0-9-]{6,})/i);
-    if (urlMatch && urlMatch[1]) return urlMatch[1].toUpperCase();
-    const codeMatch = raw.match(/^[a-zA-Z0-9-]{6,}$/);
-    if (codeMatch) return raw.toUpperCase();
-    return raw.toUpperCase();
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.classList.add('show');
   }
 
-  // Load saved settings
-  chrome.storage.local.get(['callId', 'sessionCode', 'apiEndpoint', 'authToken', 'myName'], (result) => {
-    const savedCallId = result.callId || result.sessionCode;
-    if (savedCallId) {
-      callIdInput.value = savedCallId;
-      updateStatus(true);
-    }
-    if (result.apiEndpoint) {
-      apiEndpointInput.value = result.apiEndpoint;
-    }
-    if (result.authToken) {
-      authTokenInput.value = result.authToken;
-    }
-    if (result.myName) {
-      myNameInput.value = result.myName;
-    }
-  });
-
-  // Connect button
-  connectBtn.addEventListener('click', () => {
-    const rawInput = callIdInput.value.trim();
-    const code = normalizeCallId(callIdInput.value);
-    callIdInput.value = code;
-    const endpoint = apiEndpointInput.value.trim();
-
-    if (!code) {
-      showError('Please enter a Call ID');
-      return;
-    }
-
-    if (code.length < 8) {
-      showError('Call ID must be at least 8 characters');
-      return;
-    }
-
-    if (rawInput && rawInput.includes('http') && !rawInput.includes('meet.google.com')) {
-      showError('Call ID musí být kód z Google Meet (např. mse-ebhc-zgp).');
-      return;
-    }
-
-    if (!endpoint || endpoint.includes('<project>')) {
-      showError('Set a valid API Endpoint in Advanced Settings');
-      advancedSection.classList.add('show');
-      return;
-    }
-
-    // Save to extension storage
-    chrome.storage.local.set({
-      callId: code,
-      sessionCode: code, // backward compatibility for older builds
-      apiEndpoint: endpoint,
-      authToken: authTokenInput.value.trim(),
-      myName: myNameInput.value.trim(),
-    });
-
-    updateStatus(true);
-    infoBox.style.display = 'block';
+  function clearError() {
+    errorBox.textContent = '';
     errorBox.classList.remove('show');
-  });
+  }
 
-  // Disconnect button
-  disconnectBtn.addEventListener('click', () => {
-    chrome.storage.local.remove(['callId', 'sessionCode']);
-    callIdInput.value = '';
-    updateStatus(false);
-    infoBox.style.display = 'none';
-  });
+  function updateStatus({ enabled, apiEndpoint }) {
+    const ok = Boolean(enabled && apiEndpoint);
+    if (ok) {
+      statusDot.classList.add('active');
+      statusText.textContent = 'Enabled';
+      infoBox.classList.add('show');
+      infoBox.textContent = 'Listening to Meet captions…';
+    } else if (enabled && !apiEndpoint) {
+      statusDot.classList.remove('active');
+      statusText.textContent = 'Needs endpoint';
+      infoBox.classList.remove('show');
+    } else {
+      statusDot.classList.remove('active');
+      statusText.textContent = 'Disabled';
+      infoBox.classList.remove('show');
+    }
+  }
 
-  // Clear button
-  clearBtn.addEventListener('click', () => {
-    callIdInput.value = '';
-    callIdInput.focus();
-  });
+  function load() {
+    chrome.storage.local.get(['enabled', 'apiEndpoint', 'authToken', 'myName'], (result) => {
+      const enabled = Boolean(result.enabled);
+      const apiEndpoint = (result.apiEndpoint || '').toString().trim();
+      const authToken = (result.authToken || '').toString().trim();
+      const myName = (result.myName || '').toString().trim();
 
-  // Advanced toggle
+      enabledToggle.checked = enabled;
+      apiEndpointInput.value = apiEndpoint;
+      authTokenInput.value = authToken;
+      myNameInput.value = myName;
+
+      clearError();
+      updateStatus({ enabled, apiEndpoint });
+    });
+  }
+
+  function save() {
+    const enabled = Boolean(enabledToggle.checked);
+    const apiEndpoint = (apiEndpointInput.value || '').toString().trim();
+    const authToken = (authTokenInput.value || '').toString().trim();
+    const myName = (myNameInput.value || '').toString().trim();
+
+    clearError();
+
+    if (enabled && (!apiEndpoint || apiEndpoint.includes('<project>'))) {
+      showError('Set a valid API Endpoint in Advanced Settings.');
+      advancedSection.classList.add('show');
+      updateStatus({ enabled, apiEndpoint: '' });
+      return;
+    }
+
+    chrome.storage.local.set({ enabled, apiEndpoint, authToken, myName }, () => {
+      updateStatus({ enabled, apiEndpoint });
+    });
+  }
+
+  enabledToggle.addEventListener('change', save);
+  saveBtn.addEventListener('click', save);
+
   advancedToggle.addEventListener('click', (e) => {
     e.preventDefault();
     advancedSection.classList.toggle('show');
   });
 
-  // Enter key on session code input
-  callIdInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      connectBtn.click();
-    }
+  // Live status updates when storage changes
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') return;
+    const enabled = changes.enabled ? Boolean(changes.enabled.newValue) : enabledToggle.checked;
+    const apiEndpoint = changes.apiEndpoint ? String(changes.apiEndpoint.newValue || '').trim() : apiEndpointInput.value.trim();
+    updateStatus({ enabled, apiEndpoint });
   });
 
-  // Help link
-  document.getElementById('help').addEventListener('click', (e) => {
-    e.preventDefault();
-    chrome.tabs.create({
-      url: 'https://echopulse.cz/help/meet-coach',
-    });
-  });
-
-  // Update UI based on connection status
-  function updateStatus(connected) {
-    if (connected) {
-      statusDot.classList.add('active');
-      statusText.textContent = 'Connected';
-      connectBtn.style.display = 'none';
-      disconnectBtn.style.display = 'flex';
-    } else {
-      statusDot.classList.remove('active');
-      statusText.textContent = 'Disconnected';
-      connectBtn.style.display = 'flex';
-      disconnectBtn.style.display = 'none';
-    }
-  }
-
-  // Show error message
-  function showError(message) {
-    errorBox.textContent = message;
-    errorBox.classList.add('show');
-  }
+  load();
 });

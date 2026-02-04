@@ -142,6 +142,18 @@ export type WhisperObjectionResult = {
   };
 };
 
+export type LeadPrepareResult = {
+  correlation_id: string;
+  generation_run_id: string;
+  pack_id: string;
+  quality_report: { passes: boolean; failed_checks: string[] };
+  pack: any;
+  contact: any;
+  ingest?: any;
+  extracts?: any[];
+  auto_review?: any;
+};
+
 export const echoApi = {
   getPipedriveStatus: () => apiFetch<{ configured: boolean }>('integrations/pipedrive'),
   savePipedriveKey: (apiKey: string) =>
@@ -236,6 +248,16 @@ export const echoApi = {
     generate: (payload: { contact_id: string; include: string[]; language?: string }) =>
       apiFetch<PackGenerateResult>('packs/generate', { method: 'POST', body: JSON.stringify(payload) }),
     get: (packId: string) => apiFetch<any>(`packs/${packId}`),
+  },
+
+  lead: {
+    prepare: (payload: { contact_id: string; language?: string; include?: string[]; base_url?: string }) =>
+      apiFetch<LeadPrepareResult>('lead/prepare', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+
+  contacts: {
+    patch: (id: string, payload: { company_website?: string | null; linkedin_url?: string | null; manual_notes?: string | null }) =>
+      apiFetch<{ success: boolean; contact: any }>(`contacts/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   },
 
   whisper: {

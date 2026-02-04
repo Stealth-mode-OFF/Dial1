@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Clock3, PhoneCall, PlayCircle, RefreshCw, Sparkles, StopCircle, X } from 'lucide-react';
+import { CheckCircle2, Copy, ExternalLink, PhoneCall, Sparkles, TriangleAlert } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
-import { echoApi, type ApprovedFact, type EvidenceClaim } from '../utils/echoApi';
-import { dialViaTelLink, getExtensionStatus, listenToExtension, requestExtensionDial, type ExtensionStatus } from '../utils/extensionBridge';
+import { echoApi, type ApprovedFact } from '../utils/echoApi';
+import { dialViaTelLink } from '../utils/extensionBridge';
 
 type Hypothesis = {
   hypothesis_id: string;
@@ -19,14 +19,33 @@ type PackLine = {
   hypothesis_ids: string[];
 };
 
-type MeetingPack = {
+type PackObjection = {
+  id: string;
+  trigger: string;
+  response: string;
+  evidence_ids: string[];
+  hypothesis_ids: string[];
+};
+
+type ColdCallCard = {
   opener_variants: PackLine[];
   discovery_questions: PackLine[];
-  objections: Array<{ id: string; trigger: string; response: string; evidence_ids: string[]; hypothesis_ids: string[] }>;
+  objections: PackObjection[];
+  insufficient_evidence: boolean;
+  insufficient_evidence_reasons?: string[];
+};
+
+type MeetingPack = {
+  discovery_questions: PackLine[];
   meeting_asks: PackLine[];
   agenda: PackLine[];
   next_step_conditions: PackLine[];
-  spin?: {
+  insufficient_evidence: boolean;
+  insufficient_evidence_reasons?: string[];
+};
+
+type SpinPack = {
+  spin: null | {
     situation: PackLine[];
     problem: PackLine[];
     implication: PackLine[];
@@ -36,10 +55,6 @@ type MeetingPack = {
   insufficient_evidence_reasons?: string[];
 };
 
-type ColdCallCard = {
-  discovery_questions: PackLine[];
-};
-
 type SalesPack = {
   id: string;
   contact_id: string;
@@ -47,7 +62,19 @@ type SalesPack = {
   hypotheses: Hypothesis[];
   cold_call_prep_card: ColdCallCard | null;
   meeting_booking_pack: MeetingPack | null;
+  spin_demo_pack: SpinPack | null;
+  quality_report?: { passes: boolean; failed_checks: string[] };
   created_at: string;
+};
+
+type PreparedContact = {
+  id: string;
+  name: string;
+  title?: string | null;
+  company?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  company_website?: string | null;
 };
 
 const STORAGE_LAST_PACK_PREFIX = 'echo.lastPackId.';
@@ -60,63 +87,56 @@ const safeHost = (url: string) => {
   }
 };
 
-const lineBadge = (line: { evidence_ids?: string[]; hypothesis_ids?: string[] }) => {
-  const hasEvidence = (line?.evidence_ids || []).length > 0;
-  const hasHypothesis = (line?.hypothesis_ids || []).length > 0;
-  if (hasEvidence) return { text: 'FACT', tone: 'success' as const };
-  if (hasHypothesis) return { text: 'HYP', tone: 'warning' as const };
-  return { text: '—', tone: 'subtle' as const };
+const safeOpen = (url: string) => {
+  if (typeof window === 'undefined') return;
+  if (import.meta.env.VITE_E2E_DISABLE_EXTERNAL_NAV === 'true') return;
+  try {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } catch {
+    // ignore
+  }
+};
+
+const copyToClipboard = async (text: string) => {
+  if (typeof window === 'undefined') return;
+  const clean = (text || '').toString().trim();
+  if (!clean) return;
+  try {
+    await navigator.clipboard.writeText(clean);
+  } catch {
+    // ignore
+  }
 };
 
 export function BookDemoWorkspace() {
-  const { contacts, visibleContacts, showCompletedLeads, activeContact, setActiveContactId, logCall, pipedriveConfigured } = useSales();
-  const [noteText, setNoteText] = useState('');
-  const [claims, setClaims] = useState<EvidenceClaim[]>([]);
-  const [facts, setFacts] = useState<ApprovedFact[]>([]);
-  const [pack, setPack] = useState<SalesPack | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [dialerOpen, setDialerOpen] = useState(false);
-  const [dialerStatus, setDialerStatus] = useState<string | null>(null);
-  const [dialerNotes, setDialerNotes] = useState('');
-  const [dialerDisposition, setDialerDisposition] = useState('meeting');
-  const [dialerSaving, setDialerSaving] = useState(false);
-  const [dialerCalling, setDialerCalling] = useState(false);
-  const [dialerSeconds, setDialerSeconds] = useState(0);
-  const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(() => getExtensionStatus());
+  const {
+    isConfigured,
+    isLoading,
+    error,
+    contacts,
+    visibleContacts,
+    showCompletedLeads,
+    activeContact,
+    setActiveContactId,
+    pipedriveConfigured,
+    setPipedriveKey,
+    refresh,
+  } = useSales();
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  };
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [pack, setPack] = useState<SalesPack | null>(null);
+  const [preparedContact, setPreparedContact] = useState<PreparedContact | null>(null);
+  const [pipedriveKeyDraft, setPipedriveKeyDraft] = useState('');
+  const [companyWebsiteDraft, setCompanyWebsiteDraft] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const contactId = activeContact?.id || '';
   const contactOptions = useMemo(() => {
     const base = (showCompletedLeads ? contacts : visibleContacts).slice(0, 80);
-    if (activeContact && !base.find((c) => c.id === activeContact.id)) {
-      return [activeContact, ...base];
-    }
+    if (activeContact && !base.find((c) => c.id === activeContact.id)) return [activeContact, ...base];
     return base;
   }, [contacts, visibleContacts, showCompletedLeads, activeContact]);
-
-  const refreshIntel = async () => {
-    if (!contactId) return;
-    setBusy(true);
-    setStatus(null);
-    try {
-      const [factsRes, claimsRes] = await Promise.all([
-        echoApi.evidence.listFacts({ contact_id: contactId }),
-        echoApi.evidence.listClaims({ contact_id: contactId, status: 'needs_review' }),
-      ]);
-      setFacts(factsRes.facts || []);
-      setClaims(claimsRes.claims || []);
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : 'Failed to refresh intel');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const loadLastPack = async () => {
     if (!contactId) return;
@@ -139,405 +159,327 @@ export function BookDemoWorkspace() {
   };
 
   useEffect(() => {
-    void refreshIntel();
+    setStatus(null);
     void loadLastPack();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
   useEffect(() => {
-    const unsub = listenToExtension({ onStatus: (next) => setExtensionStatus(next) });
-    return () => unsub();
-  }, []);
+    const next = (preparedContact?.company_website || '').toString().trim();
+    setCompanyWebsiteDraft(next);
+  }, [preparedContact?.company_website]);
 
-  useEffect(() => {
-    if (!dialerCalling) return;
-    const timer = window.setInterval(() => setDialerSeconds((prev) => prev + 1), 1000);
-    return () => window.clearInterval(timer);
-  }, [dialerCalling]);
-
-  useEffect(() => {
-    setDialerStatus(null);
-    setDialerNotes('');
-    setDialerDisposition('meeting');
-    setDialerCalling(false);
-    setDialerSeconds(0);
-  }, [contactId]);
-
-  const ingestNote = async () => {
-    if (!contactId) return;
-    const text = noteText.trim();
-    if (!text) return;
-    setBusy(true);
-    setStatus(null);
-    try {
-      const ingest = await echoApi.evidence.ingestUserNote({
-        contact_id: contactId,
-        note_text: text,
-        note_kind: 'manual_notes',
-      });
-      await echoApi.evidence.extract({ document_id: ingest.document_id, model: 'gpt-4o-mini', prompt_version: 'extractor_v1' });
-      setNoteText('');
-      setStatus('Poznámka uložená + extrahovaná. Zkontroluj claimy.');
-      await refreshIntel();
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : 'Failed to ingest note');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const reviewClaim = async (evidenceId: string, nextStatus: 'approved' | 'rejected') => {
-    setBusy(true);
-    setStatus(null);
-    try {
-      await echoApi.evidence.reviewClaim(evidenceId, { status: nextStatus });
-      await refreshIntel();
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : 'Failed to review claim');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const generateQuestions = async () => {
+  const prepare = async () => {
     if (!contactId) return;
     setBusy(true);
     setStatus(null);
     try {
-      const gen = await echoApi.packs.generate({
+      const res = await echoApi.lead.prepare({
         contact_id: contactId,
-        include: ['cold_call_prep_card', 'meeting_booking_pack'],
         language: 'cs',
+        include: ['cold_call_prep_card', 'meeting_booking_pack', 'spin_demo_pack'],
+        base_url: companyWebsiteDraft.trim() ? companyWebsiteDraft.trim() : undefined,
       });
-      window.localStorage.setItem(`${STORAGE_LAST_PACK_PREFIX}${contactId}`, gen.pack_id);
-      const res = await echoApi.packs.get(gen.pack_id);
-      setPack(res as SalesPack);
-      setStatus(gen.quality_report.passes ? 'Pack připraven.' : `Pack má chyby: ${gen.quality_report.failed_checks.join(', ')}`);
+      window.localStorage.setItem(`${STORAGE_LAST_PACK_PREFIX}${contactId}`, res.pack_id);
+      setPack(res.pack as SalesPack);
+      if (res.contact) setPreparedContact(res.contact as PreparedContact);
+      if (res.quality_report?.passes) setStatus('Připraveno.');
+      else setStatus(`Pozor: ${res.quality_report?.failed_checks?.join(', ') || 'Pack má chyby.'}`);
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : 'Failed to generate pack');
+      setStatus(e instanceof Error ? e.message : 'Prepare failed');
     } finally {
       setBusy(false);
     }
   };
 
-  const approvedFacts = (facts || []).slice(0, 4);
-  const pendingClaims = (claims || []).slice(0, 4);
+  const onConnectPipedrive = async () => {
+    const key = pipedriveKeyDraft.trim();
+    if (!key) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      await setPipedriveKey(key);
+      setPipedriveKeyDraft('');
+      await refresh();
+      setStatus('Pipedrive připojený.');
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : 'Připojení selhalo');
+    } finally {
+      setBusy(false);
+    }
+  };
 
-  const prospectingQuestions = (pack?.cold_call_prep_card?.discovery_questions || []).slice(0, 6);
-  const qualifyingQuestions = (pack?.meeting_booking_pack?.discovery_questions || []).slice(0, 6);
+  const leadTitle = preparedContact?.title || activeContact?.title || null;
+  const leadCompany = preparedContact?.company || activeContact?.company || null;
+  const leadPhone = preparedContact?.phone || activeContact?.phone || null;
+  const leadEmail = preparedContact?.email || activeContact?.email || null;
+
+  const facts = (pack?.approved_facts || []).slice(0, 5);
+  const hypotheses = (pack?.hypotheses || []).slice(0, 3);
+
+  const openers = (pack?.cold_call_prep_card?.opener_variants || []).slice(0, 2);
+  const prospecting = (pack?.cold_call_prep_card?.discovery_questions || []).slice(0, 5);
+  const qualifying = (pack?.meeting_booking_pack?.discovery_questions || []).slice(0, 5);
+  const objections = (pack?.cold_call_prep_card?.objections || []).slice(0, 3);
   const meetingAsks = (pack?.meeting_booking_pack?.meeting_asks || []).slice(0, 2);
 
-  const startDialerCall = async () => {
-    if (!activeContact) {
-      setDialerStatus('Vyber lead.');
-      return;
-    }
-    const phone = activeContact.phone || '';
-    if (!phone.trim()) {
-      setDialerStatus('Lead nemá telefonní číslo.');
-      return;
-    }
-    setDialerStatus(null);
-    const dialRes = await requestExtensionDial(
-      { phone, contact: { id: activeContact.id, name: activeContact.name, company: activeContact.company } },
-      900,
-    );
-    if (!dialRes.ok) {
-      dialViaTelLink(phone);
-    }
-    setDialerCalling(true);
-    setDialerSeconds(0);
-  };
+  const spin = pack?.spin_demo_pack?.spin || null;
+  const spinMap = spin
+    ? {
+        situation: spin.situation.slice(0, 2),
+        problem: spin.problem.slice(0, 2),
+        implication: spin.implication.slice(0, 2),
+        need_payoff: spin.need_payoff.slice(0, 2),
+      }
+    : null;
 
-  const stopDialerCall = () => {
-    setDialerCalling(false);
-  };
+  const openerCopy = openers.map((l) => l.text).join('\n');
+  const meetingAskCopy = meetingAsks.map((l) => l.text).join('\n');
 
-  const submitDialerOutcome = async () => {
-    if (!activeContact) {
-      setDialerStatus('Vyber lead.');
-      return;
+  const scriptText = useMemo(() => {
+    if (!pack) return '';
+    const lines: string[] = [];
+    const add = (title: string, items: Array<{ text: string }>) => {
+      if (!items.length) return;
+      lines.push(title);
+      for (const item of items) lines.push(`- ${item.text}`);
+      lines.push('');
+    };
+    add('Opener', openers);
+    add('Prospecting', prospecting);
+    add('Qualifying', qualifying);
+    if (objections.length) {
+      lines.push('Top objections');
+      for (let i = 0; i < objections.length; i++) {
+        const o = objections[i];
+        const redirect =
+          spin?.implication?.[i]?.text ||
+          spin?.need_payoff?.[0]?.text ||
+          'Když to zůstane stejné další 3 měsíce, co bude největší dopad?';
+        lines.push(`- "${o.trigger || 'Námitka'}" → ${o.response} → ${redirect}`);
+      }
+      lines.push('');
     }
-    if (!pipedriveConfigured) {
-      setDialerStatus('Pipedrive není připojený. Otevři Nastavení → Pipedrive a vlož API key.');
-      return;
-    }
-    setDialerSaving(true);
-    setDialerStatus(null);
-    try {
-      await logCall({
-        contactId: activeContact.id,
-        contactName: activeContact.name,
-        companyName: activeContact.company || undefined,
-        disposition: dialerDisposition,
-        notes: dialerNotes.trim(),
-        duration: dialerSeconds,
-      });
-      setDialerStatus('Zapsáno do Pipedrive.');
-      setDialerCalling(false);
-      setDialerSeconds(0);
-      setDialerNotes('');
-    } catch (e) {
-      setDialerStatus(e instanceof Error ? e.message : 'Zápis selhal');
-    } finally {
-      setDialerSaving(false);
-    }
-  };
+    add('Meeting ask', meetingAsks);
+    return lines.join('\n').trim();
+  }, [pack, objections, openers, prospecting, qualifying, meetingAsks, spin]);
 
   return (
     <div className="workspace" data-testid="book-demo-workspace">
-      <div className="panel stack">
+      <div className="panel head">
+        <div className="panel-head tight">
+          <div>
+            <p className="eyebrow">Lead Brief</p>
+            <h2>{activeContact?.name || 'Vyber lead'}</h2>
+            <div className="muted text-sm">
+              {(leadCompany && `${leadCompany} · `) || ''}
+              {(leadTitle && `${leadTitle} · `) || ''}
+              {leadPhone || '—'} {leadEmail ? `· ${leadEmail}` : ''}
+            </div>
+          </div>
+          <div className="button-row wrap">
+            <button className="btn primary" onClick={() => void prepare()} disabled={!contactId || busy || !pipedriveConfigured} type="button">
+              <Sparkles size={14} /> {busy ? 'Preparing…' : 'Prepare'}
+            </button>
+            <button className="btn outline sm" onClick={() => leadPhone && dialViaTelLink(leadPhone)} disabled={!leadPhone} type="button">
+              <PhoneCall size={14} /> Call
+            </button>
+            <button className="btn ghost sm" onClick={() => void copyToClipboard(openerCopy)} disabled={!openerCopy} type="button">
+              <Copy size={14} /> Copy opener
+            </button>
+            <button className="btn ghost sm" onClick={() => void copyToClipboard(meetingAskCopy)} disabled={!meetingAskCopy} type="button">
+              <Copy size={14} /> Copy meeting ask
+            </button>
+            <button className="btn ghost sm" onClick={() => setShowAdvanced((v) => !v)} type="button">
+              {showAdvanced ? 'Advanced −' : 'Advanced +'}
+            </button>
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <div className="full">
+            <label className="label">Lead</label>
+            <select value={contactId} onChange={(e) => setActiveContactId(e.target.value)} disabled={busy || isLoading}>
+              <option value="" disabled>
+                Vyber lead
+              </option>
+              {contactOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} {c.company ? `· ${c.company}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {!isConfigured && (
+          <div className="banner warning">
+            <strong>Supabase není nastavený.</strong>
+            <div className="muted text-sm">{error || 'Doplň VITE_SUPABASE_URL a VITE_SUPABASE_ANON_KEY.'}</div>
+          </div>
+        )}
+
+        {isConfigured && !pipedriveConfigured && (
+          <div className="banner warning">
+            <div className="icon-title">
+              <TriangleAlert size={16} /> <strong>Pipedrive není připojený</strong>
+            </div>
+            <div className="form-grid" style={{ marginTop: 10 }}>
+              <div className="full">
+                <label className="label">Pipedrive API key</label>
+                <input
+                  value={pipedriveKeyDraft}
+                  onChange={(e) => setPipedriveKeyDraft(e.target.value)}
+                  placeholder="Vlož API key z Pipedrive"
+                  type="password"
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+            <div className="button-row" style={{ marginTop: 10 }}>
+              <button className="btn primary sm" onClick={() => void onConnectPipedrive()} disabled={busy || !pipedriveKeyDraft.trim()} type="button">
+                Připojit
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showAdvanced && (
+          <div className="panel soft" style={{ marginTop: 12 }}>
+            <div className="panel-head tight">
+              <span className="eyebrow">Advanced</span>
+              <span className="pill subtle">
+                {pack?.quality_report?.passes ? (
+                  <>
+                    <CheckCircle2 size={14} /> Pack OK
+                  </>
+                ) : (
+                  'Hidden'
+                )}
+              </span>
+            </div>
+            <label className="label">Company website (optional)</label>
+            <input
+              value={companyWebsiteDraft}
+              onChange={(e) => setCompanyWebsiteDraft(e.target.value)}
+              placeholder="https://firma.cz"
+              autoComplete="off"
+            />
+            <div className="muted text-xs" style={{ marginTop: 8 }}>
+              Pokud je prázdné, zkusíme odvodit web z email domény (bez LinkedIn scrapingu).
+            </div>
+          </div>
+        )}
+
+        {(status || error) && <div className="status-line">{status || error}</div>}
+      </div>
+
+      <div className="panel soft">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Lead</p>
-            <h2>Domluvit demo</h2>
-            <p className="muted text-sm">Intel + otázky. Bez přepínání.</p>
+            <p className="eyebrow">Intel</p>
+            <h2>Fakta + hypotézy</h2>
+            <p className="muted text-sm">Fakta jen z evidence. Hypotézy jsou otázky k ověření.</p>
           </div>
-          <div className="button-row">
-            <button className="btn outline sm" onClick={() => setDialerOpen(true)} disabled={!contactId} type="button">
-              <PhoneCall size={14} /> Dialer
-            </button>
-            <button className="btn ghost" onClick={() => void refreshIntel()} disabled={!contactId || busy} type="button">
-              <RefreshCw size={14} /> Refresh
-            </button>
-          </div>
+          <span className={`pill ${facts.length ? 'success' : 'subtle'}`}>{facts.length ? `${facts.length} facts` : '0 facts'}</span>
         </div>
 
         <div className="panel soft">
           <div className="panel-head tight">
-            <span className="eyebrow">Aktivní lead</span>
-            <span className="pill subtle">{contactId ? 'Active' : 'Pick one'}</span>
+            <span className="eyebrow">Verified facts</span>
+            <span className="pill subtle">{facts.length}</span>
           </div>
-          <select value={contactId} onChange={(e) => setActiveContactId(e.target.value)} disabled={busy}>
-            <option value="" disabled>
-              Vyber lead
-            </option>
-            {contactOptions.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} {c.company ? `· ${c.company}` : ''}
-              </option>
+          <div className="list paged">
+            {facts.length === 0 && <div className="muted">Zatím žádná schválená fakta (script bude víc generický).</div>}
+            {facts.map((f) => (
+              <div key={f.evidence_id} className="list-row" style={{ cursor: 'default' }}>
+                <div>
+                  <div className="item-title">{f.claim}</div>
+                  <div className="muted text-xs">{safeHost(f.source_url)} · {f.confidence}</div>
+                </div>
+                <button className="btn ghost sm" onClick={() => safeOpen(f.source_url)} type="button" title="Open source">
+                  <ExternalLink size={14} />
+                </button>
+              </div>
             ))}
-          </select>
-          {activeContact && (
-            <div className="muted text-sm mt-2">
-              {activeContact.title || 'Role'} {activeContact.company ? `· ${activeContact.company}` : ''}
-            </div>
-          )}
-        </div>
-
-        <div className="panel soft">
-          <div className="panel-head tight">
-            <span className="eyebrow">Poznámka (evidence)</span>
-            <span className="muted text-xs">+ extrakce</span>
           </div>
-          <textarea
-            className="notes"
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            placeholder="Co víš z CRM / callu / webu (bez LinkedIn scrapingu)…"
-          />
-          <button className="btn outline sm" onClick={() => void ingestNote()} disabled={!contactId || busy || !noteText.trim()} type="button">
-            Uložit
-          </button>
         </div>
 
-        {status && <div className="status-line">{status}</div>}
+        <div className="panel soft" style={{ marginTop: 12 }}>
+          <div className="panel-head tight">
+            <span className="eyebrow">Hypotheses</span>
+            <span className="pill subtle">{hypotheses.length}</span>
+          </div>
+          <div className="list paged">
+            {hypotheses.length === 0 && <div className="muted">Žádné hypotézy.</div>}
+            {hypotheses.map((h) => (
+              <div key={h.hypothesis_id} className="list-row" style={{ cursor: 'default' }}>
+                <div>
+                  <div className="item-title">{h.hypothesis}</div>
+                  <div className="muted text-xs">Ověř: {h.how_to_verify}</div>
+                </div>
+                <span className="pill warning">HYP</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="panel focus">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Otázky</p>
-            <h2>Prospecting + Qualifying</h2>
-            <p className="muted text-sm">Evidence‑gated. Pokud není evidence, uvidíš jen hypotézy k ověření.</p>
+            <p className="eyebrow">Script</p>
+            <h2>Cold call + kvalifikace</h2>
+            <p className="muted text-sm">Maximálně krátké. Drž se toho.</p>
           </div>
-          <button className="btn primary" onClick={() => void generateQuestions()} disabled={!contactId || busy} type="button">
-            <Sparkles size={14} /> Připravit pack
+          <button className="btn outline sm" onClick={() => void copyToClipboard(scriptText)} disabled={!scriptText} type="button">
+            <Copy size={14} /> Copy all
           </button>
         </div>
 
-        {!pack && <div className="muted">Vygeneruj pack pro otázky a meeting ask.</div>}
+        {!pack && <div className="muted">Vyber lead a klikni Prepare.</div>}
 
         {pack && (
-          <div className="grid two">
-            <div className="panel soft">
-              <div className="panel-head tight">
-                <span className="eyebrow">Prospecting otázky</span>
-                <span className="pill subtle">{prospectingQuestions.length}</span>
-              </div>
-              <div className="list">
-                {prospectingQuestions.map((q) => {
-                  const badge = lineBadge(q);
-                  return (
-                    <div key={q.id} className="list-row">
-                      <div className="item-title">{q.text}</div>
-                      <span className={`pill ${badge.tone}`}>{badge.text}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="panel soft">
-              <div className="panel-head tight">
-                <span className="eyebrow">Qualifying otázky</span>
-                <span className="pill subtle">{qualifyingQuestions.length}</span>
-              </div>
-              <div className="list">
-                {qualifyingQuestions.map((q) => {
-                  const badge = lineBadge(q);
-                  return (
-                    <div key={q.id} className="list-row">
-                      <div className="item-title">{q.text}</div>
-                      <span className={`pill ${badge.tone}`}>{badge.text}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {pack && (
-          <div className="panel soft">
-            <div className="panel-head tight">
-              <span className="eyebrow">Meeting ask</span>
-              <span className="muted text-sm">2 varianty</span>
-            </div>
-            <div className="list">
-              {meetingAsks.map((a) => {
-                const badge = lineBadge(a);
-                return (
-                  <div key={a.id} className="list-row">
-                    <div className="item-title">{a.text}</div>
-                    <span className={`pill ${badge.tone}`}>{badge.text}</span>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="output-box">
+            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{scriptText}</pre>
           </div>
         )}
       </div>
 
-      <div className="panel stack">
+      <div className="panel soft">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Intel</p>
-            <h2>Fakta + claimy</h2>
-            <p className="muted text-sm">Jen to, co potřebuješ na domluvení.</p>
+            <p className="eyebrow">SPIN</p>
+            <h2>Runbook</h2>
+            <p className="muted text-sm">2 otázky na stage.</p>
           </div>
-          <span className="pill subtle">{approvedFacts.length} facts</span>
+          <span className="pill subtle">{spinMap ? 'Ready' : '—'}</span>
         </div>
 
-        <div className="panel soft">
-          <div className="panel-head tight">
-            <span className="eyebrow">Approved facts</span>
-          </div>
-          <div className="list">
-            {approvedFacts.length === 0 && <div className="muted">Zatím žádná schválená fakta.</div>}
-            {approvedFacts.map((f) => (
-              <div key={f.evidence_id} className="list-row">
-                <div>
-                  <div className="item-title">{f.claim}</div>
-                  <div className="muted text-xs">{safeHost(f.source_url)} · {f.confidence}</div>
-                </div>
-                <span className="pill success">FACT</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {!spinMap && <div className="muted">Prepare vygeneruje SPIN runbook.</div>}
 
-        <div className="panel soft">
-          <div className="panel-head tight">
-            <span className="eyebrow">Needs review</span>
-            <span className="pill subtle">{pendingClaims.length}</span>
+        {spinMap && (
+          <div className="output-box">
+            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+              {[
+                'Situation',
+                ...spinMap.situation.map((l) => `- ${l.text}`),
+                '',
+                'Problem',
+                ...spinMap.problem.map((l) => `- ${l.text}`),
+                '',
+                'Implication',
+                ...spinMap.implication.map((l) => `- ${l.text}`),
+                '',
+                'Need-Payoff',
+                ...spinMap.need_payoff.map((l) => `- ${l.text}`),
+              ]
+                .join('\n')
+                .trim()}
+            </pre>
           </div>
-          <div className="list">
-            {pendingClaims.length === 0 && <div className="muted">Nic nečeká na review.</div>}
-            {pendingClaims.map((c) => (
-              <div key={c.evidence_id} className="list-row">
-                <div>
-                  <div className="item-title">{c.claim}</div>
-                  <div className="muted text-xs">{safeHost(c.source_url)} · {c.confidence}</div>
-                </div>
-                <div className="button-row">
-                  <button className="btn ghost sm" onClick={() => void reviewClaim(c.evidence_id, 'approved')} disabled={busy} type="button" title="Approve">
-                    <Check size={14} />
-                  </button>
-                  <button className="btn ghost sm danger" onClick={() => void reviewClaim(c.evidence_id, 'rejected')} disabled={busy} type="button" title="Reject">
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
-
-      {dialerOpen && (
-        <div className="modal-backdrop" onClick={() => setDialerOpen(false)}>
-          <div className="modal-card panel" onClick={(e) => e.stopPropagation()}>
-            <div className="panel-head">
-              <div>
-                <p className="eyebrow">Dialer</p>
-                <h2>{activeContact?.name || 'Vyber lead'}</h2>
-                <p className="muted text-sm">
-                  {activeContact?.title || 'Role'} {activeContact?.company ? `· ${activeContact.company}` : ''}
-                </p>
-              </div>
-              <button className="btn ghost sm" onClick={() => setDialerOpen(false)} type="button">
-                <X size={14} /> Zavřít
-              </button>
-            </div>
-
-            <div className="panel soft">
-              <div className="button-row wrap">
-                <button className="btn primary" onClick={() => void startDialerCall()} disabled={!activeContact || dialerCalling} type="button">
-                  <PlayCircle size={16} /> Start
-                </button>
-                <button className="btn ghost" onClick={stopDialerCall} disabled={!dialerCalling} type="button">
-                  <StopCircle size={16} /> Stop
-                </button>
-                <span className="pill warning">
-                  <Clock3 size={14} /> {formatTime(dialerSeconds)}
-                </span>
-                <span className="pill subtle">Ext: {extensionStatus.connected ? 'on' : 'off'}</span>
-              </div>
-              <div className="muted text-xs mt-2">Tel: {activeContact?.phone || '—'}</div>
-            </div>
-
-            <div className="panel soft">
-              <div className="panel-head tight">
-                <span className="eyebrow">Outcome → Pipedrive</span>
-                <span className={`pill ${pipedriveConfigured ? 'success' : 'warning'}`}>
-                  {pipedriveConfigured ? 'Pipedrive OK' : 'Pipedrive není připojený'}
-                </span>
-              </div>
-              <div className="muted text-xs">Poznámky</div>
-              <textarea
-                className="notes"
-                value={dialerNotes}
-                onChange={(e) => setDialerNotes(e.target.value)}
-                placeholder="Stručné poznámky z hovoru…"
-              />
-              <div className="action-row mt-2">
-                <select value={dialerDisposition} onChange={(e) => setDialerDisposition(e.target.value)}>
-                  <option value="connected">Connected</option>
-                  <option value="meeting">Meeting</option>
-                  <option value="callback">Callback</option>
-                  <option value="not-interested">Not interested</option>
-                  <option value="no-answer">No answer</option>
-                  <option value="sent">Sent email</option>
-                </select>
-                <button className="btn outline" onClick={() => void submitDialerOutcome()} disabled={dialerSaving} type="button">
-                  <PhoneCall size={14} /> {dialerSaving ? 'Zapisuji…' : 'Zapsat do Pipedrive'}
-                </button>
-              </div>
-              {dialerStatus && <div className="status-line small">{dialerStatus}</div>}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

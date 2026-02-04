@@ -13,7 +13,10 @@ export function KnowledgeWorkspace() {
     setError(null);
     try {
       const list = await echoApi.knowledge.list();
-      setItems(list || []);
+      const safeList = Array.isArray(list)
+        ? list.filter((item): item is KnowledgeModule => Boolean(item && item.id && item.title && item.content))
+        : [];
+      setItems(safeList);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Knowledge fetch failed';
       setError(message);
@@ -98,11 +101,11 @@ export function KnowledgeWorkspace() {
         </div>
         <div className="list">
           {items.length === 0 && <div className="muted">No modules yet.</div>}
-          {items.map((item) => (
+          {items.filter(Boolean).map((item) => (
             <div key={item.id} className="list-row">
               <div>
-                <div className="item-title">{item.title}</div>
-                <div className="muted text-sm">{item.content}</div>
+                <div className="item-title">{item.title || 'Untitled'}</div>
+                <div className="muted text-sm">{item.content || ''}</div>
               </div>
               <button className="btn ghost danger" onClick={() => void remove(item.id)} disabled={isBusy}>
                 <Trash size={14} />

@@ -1,46 +1,37 @@
-// Extension Content Script - Captures Google Meet captions
-// Runs on every page load of meet.google.com
-// Sends transcripts to Echo Dialer backend
+// Extension Content Script - Captures Google Meet captions (CC)
+// Runs on meet.google.com and forwards transcript chunks to Supabase Edge Function.
 
-(function() {
+(function () {
   console.log('[Echo Meet Coach] Content script loaded');
 
-  // Configuration - will be injected from popup
   let CONFIG = {
-    callId: null,
-    apiEndpoint: null, // e.g., https://<project>.supabase.co/functions/v1/make-server-139017f8
+    apiEndpoint: '', // https://<project>.supabase.co/functions/v1/make-server-139017f8
     myName: '',
     enabled: false,
   };
 
-  // Get config from extension storage
-  chrome.storage.local.get(['callId', 'sessionCode', 'apiEndpoint', 'myName'], (result) => {
-    // sessionCode kept for backward compatibility
-    CONFIG.callId = result.callId || result.sessionCode || null;
+  const deriveCallIdFromMeetUrl = (url) => {
+    const raw = (url || '').toString();
+    const match = raw.match(/meet\.google\.com\/([a-zA-Z0-9-]{6,})/i);
+    if (match && match[1]) return match[1].toUpperCase();
+    return null;
+  };
+
+  const getCallId = () => deriveCallIdFromMeetUrl(window.location.href);
+
+  chrome.storage.local.get(['enabled', 'apiEndpoint', 'myName'], (result) => {
+    CONFIG.enabled = Boolean(result.enabled);
     CONFIG.apiEndpoint = (result.apiEndpoint || '').toString().trim();
     CONFIG.myName = (result.myName || '').toString().trim();
-    CONFIG.enabled = !!CONFIG.callId;
     console.log('[Echo Meet Coach] Config loaded:', CONFIG);
   });
 
-  // Listen for config updates from popup
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'local') {
-      if (changes.callId) {
-        CONFIG.callId = changes.callId.newValue;
-      }
-      if (changes.sessionCode && !CONFIG.callId) {
-        CONFIG.callId = changes.sessionCode.newValue;
-      }
-      if (changes.apiEndpoint) {
-        CONFIG.apiEndpoint = changes.apiEndpoint.newValue;
-      }
-      if (changes.myName) {
-        CONFIG.myName = changes.myName.newValue;
-      }
-      CONFIG.enabled = !!CONFIG.callId;
-      console.log('[Echo Meet Coach] Config updated:', CONFIG);
-    }
+    if (areaName !== 'local') return;
+    if (changes.enabled) CONFIG.enabled = Boolean(changes.enabled.newValue);
+    if (changes.apiEndpoint) CONFIG.apiEndpoint = String(changes.apiEndpoint.newValue || '').trim();
+    if (changes.myName) CONFIG.myName = String(changes.myName.newValue || '').trim();
+    console.log('[Echo Meet Coach] Config updated:', CONFIG);
   });
 
   const lastSentBySpeaker = new Map();
@@ -56,7 +47,7 @@
 
   // Notify webapp that extension is available
   postToPage('ECHO_EXTENSION_HELLO', {
-    version: '1.0.0',
+    version: '1.1.0',
     capabilities: { dial: false, meetCaptions: true },
   });
 
@@ -73,8 +64,10 @@
   }
 
   function postToBackground(payload) {
-    if (!CONFIG.enabled || !CONFIG.callId) return;
-    chrome.runtime.sendMessage({ action: 'postTranscript', payload }, (res) => {
+    if (!CONFIG.enabled) return;
+    const callId = getCallId();
+    if (!callId) return;
+    chrome.runtime.sendMessage({ action: 'postTranscript', payload: { ...payload, callId, meeting_url: window.location.href } }, (res) => {
       if (chrome.runtime.lastError) return;
       if (res && res.ok === false) {
         console.warn('[Echo Meet Coach] Background post failed:', res.error);
@@ -91,15 +84,17 @@
     if (last && last === pending.text) return;
     lastSentBySpeaker.set(key, pending.text);
 
+    const speaker = classifySpeaker(pending.speakerName);
+
     postToBackground({
       text: pending.text,
-      speaker: classifySpeaker(pending.speakerName),
+      speaker,
       speakerName: pending.speakerName,
     });
 
     postToPage('ECHO_MEET_CAPTION_CHUNK', {
       text: pending.text,
-      speaker: classifySpeaker(pending.speakerName),
+      speaker,
       captured_at: Date.now(),
       meeting_url: window.location.href,
     });
@@ -125,6 +120,7 @@
     if (all.length < 2 || all.length > 500) return false;
     if (/^(\d{1,2}:\d{2})(\s*(AM|PM))?$/i.test(all)) return false;
     if (/^https?:\/\//i.test(all)) return false;
+    if (/^(turn on captions|captions)$/i.test(all)) return false;
     return true;
   }
 
@@ -177,17 +173,12 @@
     return observer;
   }
 
-  // Health check to Echo backend
   async function healthCheck() {
     if (!CONFIG.apiEndpoint) return;
-
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 5000);
-      const response = await fetch(`${CONFIG.apiEndpoint.replace(/\/$/, '')}/health`, {
-        method: 'GET',
-        signal: controller.signal,
-      });
+      const response = await fetch(`${CONFIG.apiEndpoint.replace(/\/$/, '')}/health`, { method: 'GET', signal: controller.signal });
       clearTimeout(timer);
       console.log('[Echo Meet Coach] Health check:', response.ok ? 'OK' : 'FAILED');
     } catch (error) {
@@ -195,28 +186,18 @@
     }
   }
 
-  // Start monitoring when document is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       console.log('[Echo Meet Coach] DOM ready, starting observer');
       setupMutationObserver();
       healthCheck();
-      postToPage('ECHO_EXTENSION_HELLO', {
-        version: '1.0.0',
-        capabilities: { dial: false, meetCaptions: true },
-      });
     });
   } else {
     console.log('[Echo Meet Coach] DOM already loaded, starting observer');
     setupMutationObserver();
     healthCheck();
-    postToPage('ECHO_EXTENSION_HELLO', {
-      version: '1.0.0',
-      capabilities: { dial: false, meetCaptions: true },
-    });
   }
 
-  // Periodic health check
   setInterval(healthCheck, 30000);
 
   console.log('[Echo Meet Coach] Content script ready');

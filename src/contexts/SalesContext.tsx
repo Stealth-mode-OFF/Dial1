@@ -74,6 +74,7 @@ const STORAGE_USER_KEY = 'echo.user';
 const STORAGE_SETTINGS_KEY = 'echo.settings';
 const STORAGE_COMPLETED_LEADS_KEY = 'echo.completed_leads';
 const STORAGE_SHOW_COMPLETED_KEY = 'echo.show_completed_leads';
+const STORAGE_ACTIVE_CONTACT_KEY = 'echo.active_contact_id';
 
 const defaultStats: Stats = {
   callsToday: 0,
@@ -126,6 +127,16 @@ const loadBooleanFromStorage = (key: string, fallback = false): boolean => {
   }
 };
 
+const loadStringFromStorage = (key: string): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? String(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 const saveToStorage = (key: string, value: unknown) => {
   if (typeof window === 'undefined') return;
   try {
@@ -159,10 +170,13 @@ const deriveStats = (analytics: AnalyticsSummary | null, contactsCount: number):
 };
 
 export function SalesProvider({ children }: { children: React.ReactNode }) {
+  const e2eMode = import.meta.env.VITE_E2E_BYPASS_AUTH === 'true';
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
   const [stats, setStats] = useState<Stats>(defaultStats);
-  const [activeContactId, setActiveContactId] = useState<string | null>(null);
+  const [activeContactId, setActiveContactId] = useState<string | null>(() =>
+    loadStringFromStorage(STORAGE_ACTIVE_CONTACT_KEY),
+  );
   const [pipedriveConfigured, setPipedriveConfigured] = useState(false);
 
   const [user, setUser] = useState<UserProfile>(() => loadFromStorage(STORAGE_USER_KEY, defaultUser));
@@ -196,6 +210,22 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
     saveToStorage(STORAGE_SHOW_COMPLETED_KEY, showCompletedLeads);
   }, [showCompletedLeads]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const lead = params.get('lead');
+    if (lead) setActiveContactId(lead);
+  }, []);
+
+  useEffect(() => {
+    if (!activeContactId) return;
+    try {
+      window.localStorage.setItem(STORAGE_ACTIVE_CONTACT_KEY, activeContactId);
+    } catch {
+      // ignore
+    }
+  }, [activeContactId]);
+
   const fetchContacts = async () => {
     const list = await echoApi.fetchContacts();
     const mapped = list.map(mapContact);
@@ -218,6 +248,35 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
   const refresh = async () => {
     if (!isSupabaseConfigured) {
       setError(supabaseConfigError || 'Add Supabase URL and anon key to enable data.');
+      if (e2eMode) {
+        const demo: Contact[] = [
+          {
+            id: 'demo-1',
+            name: 'Jan Novák',
+            title: 'HR Manager',
+            company: 'ACME s.r.o.',
+            phone: '+420777123456',
+            email: 'jan.novak@acme.cz',
+            status: 'active',
+            score: 72,
+          },
+          {
+            id: 'demo-2',
+            name: 'Petra Svobodová',
+            title: 'Operations Director',
+            company: 'Beta Logistics',
+            phone: '+420777987654',
+            email: 'petra@betalogistics.cz',
+            status: 'active',
+            score: 61,
+          },
+        ];
+        setContacts(demo);
+        setAnalytics(null);
+        setStats(deriveStats(null, demo.length));
+        setPipedriveConfigured(true);
+        setLastUpdated(new Date().toISOString());
+      }
       return;
     }
 

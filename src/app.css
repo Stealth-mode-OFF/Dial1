@@ -431,6 +431,8 @@ body {
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
+  height: 100vh;
+  min-height: 0;
 }
 
 .topbar {
@@ -553,6 +555,9 @@ body {
 .screen {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .workspace {
@@ -560,6 +565,9 @@ body {
   grid-template-columns: 320px 1fr 320px;
   gap: 16px;
   align-items: start;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .workspace.column {
@@ -616,6 +624,52 @@ body {
   border-radius: var(--radius);
   padding: 20px;
   box-shadow: var(--shadow);
+}
+
+.panel.compact {
+  padding: 14px 16px;
+}
+
+.call-layout {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.call-main {
+  display: grid;
+  grid-template-columns: 320px 1fr 320px;
+  gap: 16px;
+  min-height: 0;
+  align-items: start;
+}
+
+.call-wrap {
+  display: grid;
+  grid-template-columns: 180px 1fr auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.mini-notes {
+  min-height: 44px;
+  height: 56px;
+  resize: none;
+}
+
+.call-main > .panel {
+  min-height: 0;
+}
+
+@media (max-width: 980px) {
+  .call-main {
+    grid-template-columns: 1fr;
+  }
+  .call-wrap {
+    grid-template-columns: 1fr;
+  }
 }
 
 .panel.soft {

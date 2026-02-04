@@ -1,220 +1,61 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Activity,
-  Bolt,
-  CalendarCheck,
-  Grid,
-  Moon,
-  PhoneCall,
-  RefreshCw,
-  Settings,
-} from 'lucide-react';
+import { Bolt, PhoneCall } from 'lucide-react';
 import { BookDemoWorkspace } from './pages/BookDemoWorkspace';
 import { DemoWorkspace } from './pages/DemoWorkspace';
-import { OpsWorkspace } from './pages/OpsWorkspace';
-import { useSales } from './contexts/SalesContext';
 
-type View = 'book_demo' | 'demo' | 'ops';
-
-const PRIMARY_NAV: Array<{ id: View; label: string; icon: React.ElementType }> = [
-  { id: 'book_demo', label: 'Domluvit demo', icon: CalendarCheck },
-  { id: 'demo', label: 'Demo', icon: PhoneCall },
-];
-
-const SECONDARY_NAV: Array<{ id: View; label: string; icon: React.ElementType }> = [
-  { id: 'ops', label: 'Statistiky & Nastavení', icon: Settings },
-];
-
-type Theme = 'default' | 'neobrutalist';
+type View = 'lead' | 'call';
 
 export default function App() {
-  const [view, setView] = useState<View>('demo');
-  const [railExpanded, setRailExpanded] = useState(false);
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('echo-theme') as Theme) || 'default';
-    }
-    return 'default';
-  });
-  const { stats, isConfigured, pipedriveConfigured, lastUpdated, error, refresh, isLoading } = useSales();
-  const errorHint = useMemo(() => {
-    if (!error) return null;
-    const msg = error.toLowerCase();
-    if (msg.includes('supabase')) {
-      return 'Chybí Supabase konfigurace. Nastav `VITE_SUPABASE_URL=https://<project>.supabase.co` a `VITE_SUPABASE_ANON_KEY`, pak redeploy.';
-    }
-    if (msg.includes('pipedrive')) {
-      return 'Pipedrive není připojený. Otevři Nastavení → Pipedrive a vlož API key.';
-    }
-    if (msg.includes('network') || msg.includes('fetch')) {
-      return 'Nelze se připojit k serveru. Zkontroluj internet a stav Supabase/Vercel.';
-    }
-    return 'Zkontroluj konfiguraci integrací (Supabase, Pipedrive).';
-  }, [error]);
+  const [view, setView] = useState<View>('lead');
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('echo-theme', theme);
-  }, [theme]);
+    document.documentElement.setAttribute('data-theme', 'default');
+  }, []);
 
-  const viewLabel = useMemo(() => {
-    return [...PRIMARY_NAV, ...SECONDARY_NAV].find((n) => n.id === view)?.label || '';
-  }, [view]);
+  const title = useMemo(() => (view === 'lead' ? 'Lead Brief' : 'Live Call Coach'), [view]);
+  const subtitle = useMemo(
+    () =>
+      view === 'lead'
+        ? 'Jeden lead. Hotové intel + skript. Bez šumu.'
+        : 'Google Meet titulky → jedna další věta + SPIN runbook.',
+    [view],
+  );
 
   return (
-    <div className="shell">
-      <aside
-        data-testid="nav-rail"
-        className={`rail ${railExpanded ? 'expanded' : 'collapsed'}`}
-        onMouseEnter={() => setRailExpanded(true)}
-        onMouseLeave={() => setRailExpanded(false)}
-        onFocusCapture={() => setRailExpanded(true)}
-        onBlurCapture={(e) => {
-          const next = e.relatedTarget as Node | null;
-          if (!next || !e.currentTarget.contains(next)) setRailExpanded(false);
-        }}
-      >
-        <div className="brand">
-          <Bolt size={18} /> <span className="brand-label">Echo</span>
+    <div className="canvas" data-testid="app-root">
+      <header className="topbar" data-testid="app-topbar">
+        <div>
+          <p className="eyebrow">
+            <Bolt size={14} /> Echo OS
+          </p>
+          <h1 data-testid="view-title">{title}</h1>
+          <p className="muted">{subtitle}</p>
         </div>
 
-        <div className="theme-switcher">
+        <div className="button-row" data-testid="nav-tabs">
           <button
-            className={`theme-btn ${theme === 'default' ? 'active' : ''}`}
-            onClick={() => setTheme('default')}
-            title="Dark Mode"
+            className={`btn ghost sm ${view === 'lead' ? 'active' : ''}`}
+            onClick={() => setView('lead')}
+            data-testid="nav-lead"
             type="button"
           >
-            <Moon size={16} />
+            Lead Brief
           </button>
           <button
-            className={`theme-btn ${theme === 'neobrutalist' ? 'active' : ''}`}
-            onClick={() => setTheme('neobrutalist')}
-            title="Neobrutalist"
+            className={`btn ghost sm ${view === 'call' ? 'active' : ''}`}
+            onClick={() => setView('call')}
+            data-testid="nav-call"
             type="button"
           >
-            <Grid size={16} />
+            <PhoneCall size={14} /> Live Call
           </button>
         </div>
+      </header>
 
-        <nav className="rail-nav" data-testid="nav-primary">
-          {PRIMARY_NAV.map((item) => {
-            const Icon = item.icon;
-            const active = item.id === view;
-            return (
-              <button
-                key={item.id}
-                data-testid={`nav-${item.id}`}
-                className={`rail-btn ${active ? 'active' : ''}`}
-                onClick={() => setView(item.id)}
-                aria-label={item.label}
-                type="button"
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <nav className="rail-nav secondary" data-testid="nav-secondary">
-          {SECONDARY_NAV.map((item) => {
-            const Icon = item.icon;
-            const active = item.id === view;
-            return (
-              <button
-                key={item.id}
-                data-testid={`nav-${item.id}`}
-                className={`rail-btn ${active ? 'active' : ''}`}
-                onClick={() => setView(item.id)}
-                aria-label={item.label}
-                type="button"
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
-
-      <main className="canvas">
-        {view !== 'demo' && (
-          <header className="topbar">
-            <div>
-              <p className="eyebrow">Echo OS</p>
-              <h1 data-testid="view-title">{viewLabel}</h1>
-              {view === 'book_demo' && (
-                <p className="muted">Intel + otázky na domluvení dema (bez scrollu, bez šumu).</p>
-              )}
-            </div>
-            <div className="chip-row">
-              <span className={`pill ${isConfigured ? 'success' : 'warning'}`}>
-                {isConfigured ? 'Supabase connected' : 'Supabase missing'}
-              </span>
-              <span className={`pill ${pipedriveConfigured ? 'success' : 'warning'}`}>
-                {pipedriveConfigured ? 'Pipedrive linked' : 'Pipedrive pending'}
-              </span>
-              <span className="pill subtle">
-                <Activity size={14} />{' '}
-                {lastUpdated
-                  ? `Synced ${new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                  : 'Not synced'}
-              </span>
-              <button className="btn ghost" onClick={() => void refresh()} disabled={isLoading} type="button">
-                <RefreshCw size={14} /> Sync
-              </button>
-            </div>
-          </header>
-        )}
-
-        {error && (
-          <div className="banner warning">
-            <div>{error}</div>
-            {errorHint && <div className="muted text-sm mt-2">Jak opravit: {errorHint}</div>}
-          </div>
-        )}
-        {!error && !isConfigured && (
-          <div className="banner warning">
-            Supabase není nastavený. Bez toho nepojede coaching ani sync.
-            <div className="muted text-sm mt-2">
-              Jak opravit: nastav `VITE_SUPABASE_URL=https://&lt;project&gt;.supabase.co` a `VITE_SUPABASE_ANON_KEY` a redeploy.
-            </div>
-          </div>
-        )}
-        {!error && isConfigured && !pipedriveConfigured && (
-          <div className="banner warning">
-            Pipedrive není připojený. Outcome logy se nezapíšou.
-            <div className="muted text-sm mt-2">Jak opravit: Nastavení → Pipedrive → vlož API key.</div>
-          </div>
-        )}
-        {view !== 'demo' && (
-          <div className="banner info">
-            <div className="stat">
-              <span className="label">Calls today</span>
-              <strong>{stats.callsToday}</strong>
-            </div>
-            <div className="stat">
-              <span className="label">Connect rate</span>
-              <strong>{stats.connectRate}%</strong>
-            </div>
-            <div className="stat">
-              <span className="label">Meetings</span>
-              <strong>{stats.meetingsBooked}</strong>
-            </div>
-            <div className="stat">
-              <span className="label">Active leads</span>
-              <strong>{stats.activeLeads}</strong>
-            </div>
-          </div>
-        )}
-
-        <section className="screen">
-          {view === 'book_demo' && <BookDemoWorkspace />}
-          {view === 'demo' && <DemoWorkspace />}
-          {view === 'ops' && <OpsWorkspace />}
-        </section>
-      </main>
+      <section className="screen">
+        {view === 'lead' && <BookDemoWorkspace />}
+        {view === 'call' && <DemoWorkspace />}
+      </section>
     </div>
   );
 }

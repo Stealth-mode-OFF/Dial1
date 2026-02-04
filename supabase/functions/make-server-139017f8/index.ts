@@ -143,6 +143,33 @@ const normalizeBaseUrl = (baseUrl: string) => {
   return u.toString();
 };
 
+const deriveCompanyWebsiteFromEmail = (email: string | null) => {
+  const raw = (email || "").toString().trim().toLowerCase();
+  if (!raw.includes("@")) return null;
+  const domain = raw.split("@").pop() || "";
+  const blocked = new Set([
+    "gmail.com",
+    "googlemail.com",
+    "outlook.com",
+    "hotmail.com",
+    "live.com",
+    "yahoo.com",
+    "icloud.com",
+    "seznam.cz",
+    "email.cz",
+    "centrum.cz",
+    "atlas.cz",
+    "volny.cz",
+  ]);
+  if (!domain || blocked.has(domain)) return null;
+  if (!domain.includes(".")) return null;
+  try {
+    return normalizeBaseUrl(`https://${domain}`);
+  } catch {
+    return null;
+  }
+};
+
 const htmlToText = (html: string) => {
   const withoutScripts = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -216,6 +243,466 @@ const getPipedriveKey = async (userId: string) => {
   } catch (e) {
     console.error("Failed to load Pipedrive key", e);
     return null;
+  }
+};
+
+// --- PRODUCT KNOWLEDGE BASE (CZECH MARKET OPTIMIZED) ---
+const PRODUCT_KNOWLEDGE = `
+PRODUCT: Echo Pulse by Behavery
+TYPE: Employee Retention & Engagement Platform (SaaS)
+MARKET CONTEXT (CZECH REPUBLIC):
+- Lowest unemployment in EU -> High competition for talent.
+- Huge pain points:
+  1. "Fluktuace" (Turnover) in Manufacturing/Logistics (cost of replacing 1 worker = 30-50k CZK + lost productivity).
+  2. "Burnout/Quiet Quitting" in IT/Finance.
+  3. "Toxic Middle Management" (mistři ve výrobě, team leadeři).
+WHAT IT DOES: Monthly automated pulse checks via SMS/Email.
+VS COMPETITION (Arnold, Frank, Behavery, Survio):
+- We are NOT a survey tool (Survio). We are a SIGNAL tool.
+- We don't do "happiness" (soft metrics). We measure "friction" & "risk".
+- Zero setup time.
+`;
+
+const INDUSTRY_KNOWLEDGE = `
+TARGET AUDIENCE & PAIN POINTS:
+1. MANUFACTURING (Výroba) / LOGISTICS:
+   - Persona: HR Director, Plant Manager (Ředitel závodu).
+   - Pain: "Lidi nám odchází ke konkurenci kvůli 500 Kč." "Mistři neumí jednat s lidmi."
+   - Goal: Stability, Shift fulfillment.
+2. IT / TECH HOUSES:
+   - Persona: CTO, COO, HRBP.
+   - Pain: Senior devs leaving due to micromanagement or lack of vision. Remote work alienation.
+   - Goal: Retention of key assets (expensive to replace).
+3. CORPORATE / BUSINESS SERVICES:
+   - Persona: HR Director, CEO.
+   - Pain: "Quiet Quitting", disconnected teams, efficiency drops.
+`;
+
+const CONTACT_SELECT_FIELDS =
+  "id, name, title, company, phone, email, linkedin_url, manual_notes, company_website";
+
+type ResolvedContact = {
+  id: string;
+  name: string;
+  title: string | null;
+  company: string | null;
+  phone: string | null;
+  email: string | null;
+  linkedin_url: string | null;
+  manual_notes: string | null;
+  company_website: string | null;
+};
+
+const resolveContactForUser = async (
+  admin: any,
+  userId: string,
+  rawContactId: string,
+): Promise<{ contactId: string; contact: ResolvedContact } | null> => {
+  let contactId = rawContactId;
+  let contact: ResolvedContact | null = null;
+
+  const { data: contactById } = await admin
+    .from("contacts")
+    .select(CONTACT_SELECT_FIELDS)
+    .eq("id", rawContactId)
+    .single();
+  if (contactById) {
+    contact = contactById;
+    contactId = contactById.id;
+  }
+
+  if (!contact) {
+    const { data: contactByExternal } = await admin
+      .from("contacts")
+      .select(CONTACT_SELECT_FIELDS)
+      .eq("external_id", rawContactId)
+      .limit(1);
+    const contactExternal = Array.isArray(contactByExternal) ? contactByExternal[0] : null;
+    if (contactExternal) {
+      contact = contactExternal;
+      contactId = contactExternal.id;
+    }
+  }
+
+  if (!contact) {
+    const personId = Number(rawContactId);
+    const pipedriveKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+    if (Number.isFinite(personId) && pipedriveKey) {
+      try {
+        const res = await fetch(`https://api.pipedrive.com/v1/persons/${personId}?api_token=${pipedriveKey}`, {
+          headers: { Accept: "application/json" },
+        });
+        const personJson = await res.json().catch(() => null);
+        const person = personJson?.data;
+        if (res.ok && person) {
+          const upsertPayload = {
+            name: person.name || "Unnamed contact",
+            title: person.title || null,
+            company: person.org_name || null,
+            phone: person.phone?.[0]?.value || null,
+            email: person.email?.[0]?.value || null,
+            status: person.active_flag ? "active" : null,
+            source: "pipedrive_person",
+            external_id: String(personId),
+            last_touch: person.update_time || null,
+          };
+          const { data: upserted, error: upsertError } = await admin
+            .from("contacts")
+            .upsert(upsertPayload, { onConflict: "source,external_id" })
+            .select(CONTACT_SELECT_FIELDS)
+            .single();
+          if (!upsertError && upserted) {
+            contact = upserted;
+            contactId = upserted.id;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to upsert Pipedrive person:", e);
+      }
+    }
+  }
+
+  if (!contact) return null;
+  return { contactId, contact };
+};
+
+const ingestCompanySiteAllowlistInternal = async (params: {
+  admin: any;
+  userId: string;
+  correlationId: string;
+  contactId: string;
+  baseUrl: string;
+}) => {
+  const { admin, userId, correlationId, contactId, baseUrl } = params;
+
+  const base = new URL(normalizeBaseUrl(baseUrl));
+  const allowPaths = ["/", "/about", "/team", "/kontakt", "/contact", "/kariera", "/careers", "/blog", "/press", "/news", "/company"];
+  const ua = "EchoEvidenceBot/1.0";
+
+  const robotsUrl = `${base.origin}/robots.txt`;
+  const robotsRes = await fetch(robotsUrl, { headers: { "User-Agent": ua }, redirect: "follow" });
+  const robotsTxt = robotsRes.ok ? await robotsRes.text() : "";
+  const rules = robotsTxt ? parseRobotsForUserAgent(robotsTxt, ua) : [];
+
+  const documents: Array<{ document_id: string; source_url: string; http_status: number | null }> = [];
+  const skipped: Array<{ url: string; reason: string }> = [];
+
+  for (const p of allowPaths.slice(0, 8)) {
+    const url = new URL(p, base.origin);
+    if (!isPathAllowedByRobots(url.pathname, rules)) {
+      skipped.push({ url: url.toString(), reason: "robots_disallow" });
+      continue;
+    }
+
+    try {
+      const res = await fetch(url.toString(), {
+        headers: { "User-Agent": ua, Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1" },
+        redirect: "follow",
+      });
+
+      const httpStatus = res.status;
+      const canonicalUrl = res.url || url.toString();
+      const contentType = res.headers.get("content-type");
+      const raw = await res.text();
+      const contentText = contentType?.includes("text/html") ? htmlToText(raw) : raw.trim();
+      const langMatch = contentType?.includes("text/html")
+        ? raw.match(/<html[^>]*\blang\s*=\s*["']([^"']+)["']/i)
+        : null;
+      const language = langMatch?.[1]?.toLowerCase() || null;
+      const contentSha256 = await sha256Hex(contentText);
+
+      const { data, error: insertError } = await admin
+        .from("evidence_documents")
+        .insert({
+          owner_user_id: userId,
+          correlation_id: correlationId,
+          source_type: "company_website",
+          source_url: url.toString(),
+          canonical_url: canonicalUrl,
+          source_title: null,
+          http_status: httpStatus,
+          content_type: contentType,
+          language,
+          captured_at: new Date().toISOString(),
+          fetched_at: new Date().toISOString(),
+          content_text: contentText,
+          content_sha256: contentSha256,
+          robots_policy: { robots_url: robotsUrl, ok: robotsRes.ok, rules, allowed: true },
+          request_meta: { user_agent: ua, seed: "allowlist" },
+          contact_id: contactId,
+        })
+        .select("id, source_url, http_status")
+        .single();
+
+      if (insertError) {
+        skipped.push({ url: url.toString(), reason: insertError.message });
+      } else {
+        documents.push({ document_id: data.id, source_url: url.toString(), http_status: data.http_status });
+      }
+    } catch (e) {
+      skipped.push({ url: url.toString(), reason: e instanceof Error ? e.message : String(e) });
+    }
+
+    await sleep(1100);
+  }
+
+  await auditEvent(admin, userId, correlationId, "ingest", "company_site_allowlist_ingested", {
+    contact_id: contactId,
+    base_url: base.toString(),
+    document_count: documents.length,
+    skipped_count: skipped.length,
+  });
+
+  return { documents, skipped, base_url: base.toString() };
+};
+
+const autoApproveLowRiskClaims = async (params: {
+  admin: any;
+  userId: string;
+  correlationId: string;
+  contactId: string;
+}) => {
+  const { admin, userId, correlationId, contactId } = params;
+
+  const { data, error } = await admin
+    .from("v_evidence_claims_with_review")
+    .select("evidence_id, claim, confidence, review_status, source_url")
+    .eq("owner_user_id", userId)
+    .eq("contact_id", contactId)
+    .eq("review_status", "needs_review")
+    .eq("confidence", "high")
+    .order("captured_at", { ascending: false });
+
+  if (error) {
+    console.error("autoApproveLowRiskClaims list failed:", error);
+    return { approved: 0, skipped: 0, error: error.message };
+  }
+
+  const isLowRisk = (claim: string) => {
+    const text = claim.toLowerCase();
+    if (/\d/.test(text)) return false;
+    if (/(kč|czk|eur|usd|€|\$)/i.test(text)) return false;
+    if (/(zam[eě]stn|employees|headcount|fte|milion|miliard|obrat|revenue|tržb|profit)/i.test(text)) return false;
+    if (/(nej|top|best|revolu|garant|unik[áa]t|number one)/i.test(text)) return false;
+
+    // Approve only "what they do / offer" type statements.
+    const positiveSignals = [
+      "nabíz",
+      "poskyt",
+      "služb",
+      "produkt",
+      "platform",
+      "řešen",
+      "vyvíj",
+      "výrob",
+      "dodáv",
+      "zaměř",
+      "specializ",
+    ];
+    return positiveSignals.some((s) => text.includes(s));
+  };
+
+  const toApprove = (data || [])
+    .map((row: any) => ({ evidence_id: row.evidence_id as string, claim: row.claim as string }))
+    .filter((row) => row.evidence_id && row.claim && isLowRisk(row.claim))
+    .slice(0, 12);
+
+  if (toApprove.length === 0) {
+    return { approved: 0, skipped: (data || []).length, error: null };
+  }
+
+  const nowIso = new Date().toISOString();
+  const reviewRows = toApprove.map((row) => ({
+    owner_user_id: userId,
+    claim_id: row.evidence_id,
+    status: "approved",
+    approved_claim: null,
+    reviewer_notes: "auto_approved_low_risk",
+    reviewed_at: nowIso,
+    reviewed_by: `${userId}:auto`,
+  }));
+
+  const { error: insertError } = await admin.from("evidence_claim_reviews").insert(reviewRows);
+  if (insertError) {
+    console.error("autoApproveLowRiskClaims insert failed:", insertError);
+    return { approved: 0, skipped: (data || []).length, error: insertError.message };
+  }
+
+  await auditEvent(admin, userId, correlationId, "review", "auto_review_completed", {
+    contact_id: contactId,
+    approved_count: toApprove.length,
+    total_candidates: (data || []).length,
+  });
+
+  return { approved: toApprove.length, skipped: Math.max(0, (data || []).length - toApprove.length), error: null };
+};
+
+const extractEvidenceClaimsInternal = async (params: {
+  admin: any;
+  userId: string;
+  correlationId: string;
+  documentId: string;
+  model?: string;
+  promptVersion?: string;
+}) => {
+  const { admin, userId, correlationId, documentId } = params;
+  const model = params.model?.toString() || "gpt-4o-mini";
+  const promptVersion = params.promptVersion?.toString() || "extractor_v1";
+
+  const { data: doc, error: docError } = await admin
+    .from("evidence_documents")
+    .select("id, owner_user_id, source_url, captured_at, content_text, language, correlation_id")
+    .eq("id", documentId)
+    .eq("owner_user_id", userId)
+    .single();
+
+  if (docError || !doc) {
+    const message = docError?.message || "Document not found";
+    throw new Error(message);
+  }
+
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
+
+  const extractionRunId = crypto.randomUUID();
+  await admin.from("evidence_extraction_runs").insert({
+    id: extractionRunId,
+    owner_user_id: userId,
+    correlation_id: correlationId,
+    document_id: documentId,
+    model,
+    prompt_version: promptVersion,
+    extractor_version: "v1",
+    status: "failed",
+    error: "not_started",
+  });
+
+  await auditEvent(admin, userId, correlationId, "extract", "extraction_started", {
+    document_id: documentId,
+    extraction_run_id: extractionRunId,
+    model,
+    prompt_version: promptVersion,
+  });
+
+  const openai = new OpenAI({ apiKey });
+  const system = [
+    "You are a strict evidence extractor.",
+    "Return ONLY JSON (no markdown) as an array of objects with keys:",
+    "claim, evidence_snippet, confidence.",
+    "Rules:",
+    "- Extract ONLY claims explicitly present in the provided text.",
+    "- evidence_snippet MUST be a verbatim excerpt from the provided text.",
+    "- No inference. No synthesis. No invented numbers or entities.",
+    "- confidence must be one of: high, medium, low.",
+    "- If nothing extractable, return []",
+  ].join("\n");
+
+  const user = [
+    `SOURCE_URL: ${doc.source_url}`,
+    `CAPTURED_AT: ${doc.captured_at}`,
+    doc.language ? `LANGUAGE_HINT: ${doc.language}` : "",
+    "",
+    "PAGE_TEXT:",
+    doc.content_text,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      temperature: 0,
+    });
+
+    const raw = completion.choices?.[0]?.message?.content ?? "";
+    const extracted = JSON.parse(raw);
+    if (!Array.isArray(extracted)) throw new Error("Extractor output is not an array");
+
+    const claimsToInsert: any[] = [];
+    for (const item of extracted) {
+      const claim = item?.claim?.toString().trim();
+      const evidenceSnippet = item?.evidence_snippet?.toString();
+      const confidence = item?.confidence?.toString();
+      if (!claim || !evidenceSnippet || !confidence) throw new Error("Missing claim fields in extractor output");
+      if (!["high", "medium", "low"].includes(confidence)) throw new Error("Invalid confidence value");
+      if (!doc.content_text.includes(evidenceSnippet)) {
+        throw new Error("evidence_snippet not found verbatim in document content");
+      }
+
+      const claimHash = await sha256Hex(
+        `${claim}\n---\n${doc.source_url}\n---\n${evidenceSnippet}`.toLowerCase().trim(),
+      );
+
+      claimsToInsert.push({
+        owner_user_id: userId,
+        correlation_id: correlationId,
+        document_id: documentId,
+        extraction_run_id: extractionRunId,
+        claim,
+        source_url: doc.source_url,
+        evidence_snippet: evidenceSnippet,
+        captured_at: doc.captured_at,
+        confidence,
+        language: doc.language || null,
+        subject_name: null,
+        claim_tags: [],
+        claim_hash: claimHash,
+      });
+    }
+
+    if (claimsToInsert.length > 0) {
+      const { error: insertClaimsError } = await admin
+        .from("evidence_claims")
+        .upsert(claimsToInsert, { onConflict: "owner_user_id,claim_hash", ignoreDuplicates: true });
+      if (insertClaimsError) throw new Error(insertClaimsError.message);
+    }
+
+    await admin
+      .from("evidence_extraction_runs")
+      .update({ status: "success", error: null })
+      .eq("id", extractionRunId)
+      .eq("owner_user_id", userId);
+
+    await auditEvent(admin, userId, correlationId, "extract", "extraction_succeeded", {
+      document_id: documentId,
+      extraction_run_id: extractionRunId,
+      claim_count: claimsToInsert.length,
+    });
+
+    const { data: insertedClaims } = await admin
+      .from("evidence_claims")
+      .select("id, claim, confidence")
+      .eq("extraction_run_id", extractionRunId)
+      .eq("owner_user_id", userId);
+
+    return {
+      correlation_id: correlationId,
+      extraction_run_id: extractionRunId,
+      claims: (insertedClaims || []).map((row: any) => ({
+        evidence_id: row.id,
+        claim: row.claim,
+        confidence: row.confidence,
+      })),
+    };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    await admin
+      .from("evidence_extraction_runs")
+      .update({ status: "failed", error: message })
+      .eq("id", extractionRunId)
+      .eq("owner_user_id", userId);
+
+    await auditEvent(admin, userId, correlationId, "extract", "extraction_failed", {
+      document_id: documentId,
+      extraction_run_id: extractionRunId,
+      error: message,
+    });
+
+    throw new Error(message);
   }
 };
 
@@ -454,83 +941,12 @@ app.post(`${BASE_PATH}/evidence/ingest/company-site-allowlist`, async (c) => {
   if (!contactId) return c.json({ error: "Missing contact_id" }, 400);
   if (!baseUrl) return c.json({ error: "Missing base_url" }, 400);
 
-  const base = new URL(normalizeBaseUrl(baseUrl));
-  const allowPaths = ["/", "/about", "/team", "/kontakt", "/contact", "/kariera", "/careers", "/blog", "/press", "/news", "/company"];
-  const ua = "EchoEvidenceBot/1.0";
-
-  // robots once per domain
-  const robotsUrl = `${base.origin}/robots.txt`;
-  const robotsRes = await fetch(robotsUrl, { headers: { "User-Agent": ua }, redirect: "follow" });
-  const robotsTxt = robotsRes.ok ? await robotsRes.text() : "";
-  const rules = robotsTxt ? parseRobotsForUserAgent(robotsTxt, ua) : [];
-
-  const documents: any[] = [];
-  const skipped: any[] = [];
-
-  for (const p of allowPaths.slice(0, 8)) {
-    const url = new URL(p, base.origin);
-    if (!isPathAllowedByRobots(url.pathname, rules)) {
-      skipped.push({ url: url.toString(), reason: "robots_disallow" });
-      continue;
-    }
-
-    try {
-      const res = await fetch(url.toString(), {
-        headers: { "User-Agent": ua, Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1" },
-        redirect: "follow",
-      });
-
-      const httpStatus = res.status;
-      const canonicalUrl = res.url || url.toString();
-      const contentType = res.headers.get("content-type");
-      const raw = await res.text();
-      const contentText = contentType?.includes("text/html") ? htmlToText(raw) : raw.trim();
-      const langMatch = contentType?.includes("text/html")
-        ? raw.match(/<html[^>]*\blang\s*=\s*["']([^"']+)["']/i)
-        : null;
-      const language = langMatch?.[1]?.toLowerCase() || null;
-      const contentSha256 = await sha256Hex(contentText);
-
-      const { data, error: insertError } = await admin
-        .from("evidence_documents")
-        .insert({
-          owner_user_id: userId,
-          correlation_id: correlationId,
-          source_type: "company_website",
-          source_url: url.toString(),
-          canonical_url: canonicalUrl,
-          source_title: null,
-          http_status: httpStatus,
-          content_type: contentType,
-          language,
-          captured_at: new Date().toISOString(),
-          fetched_at: new Date().toISOString(),
-          content_text: contentText,
-          content_sha256: contentSha256,
-          robots_policy: { robots_url: robotsUrl, ok: robotsRes.ok, rules, allowed: true },
-          request_meta: { user_agent: ua, seed: "allowlist" },
-          contact_id: contactId,
-        })
-        .select("id, source_url, http_status")
-        .single();
-
-      if (insertError) {
-        skipped.push({ url: url.toString(), reason: insertError.message });
-      } else {
-        documents.push({ document_id: data.id, source_url: url.toString(), http_status: data.http_status });
-      }
-    } catch (e) {
-      skipped.push({ url: url.toString(), reason: e instanceof Error ? e.message : String(e) });
-    }
-
-    await sleep(1100);
-  }
-
-  await auditEvent(admin, userId, correlationId, "ingest", "company_site_allowlist_ingested", {
-    contact_id: contactId,
-    base_url: base.toString(),
-    document_count: documents.length,
-    skipped_count: skipped.length,
+  const { documents, skipped } = await ingestCompanySiteAllowlistInternal({
+    admin,
+    userId,
+    correlationId,
+    contactId,
+    baseUrl,
   });
 
   return c.json({ correlation_id: correlationId, documents, skipped });
@@ -700,7 +1116,9 @@ app.post(`${BASE_PATH}/evidence/extract`, async (c) => {
     }
 
     if (claimsToInsert.length > 0) {
-      const { error: insertClaimsError } = await admin.from("evidence_claims").insert(claimsToInsert);
+      const { error: insertClaimsError } = await admin
+        .from("evidence_claims")
+        .upsert(claimsToInsert, { onConflict: "owner_user_id,claim_hash", ignoreDuplicates: true });
       if (insertClaimsError) throw new Error(insertClaimsError.message);
     }
 
@@ -870,7 +1288,9 @@ const validateGeneratedPack = (envelope: any) => {
           .filter((f: any) => eids.includes(f?.evidence_id))
           .map((f: any) => f?.evidence_snippet?.toString() || "");
         const digitToken = text.match(/\d+/)?.[0];
-        if (digitToken && referencedSnippets.length > 0 && !referencedSnippets.some((s: string) => s.includes(digitToken))) {
+        if (digitToken && eids.length === 0) {
+          errors.push(`${path}: numeric token "${digitToken}" requires evidence_ids`);
+        } else if (digitToken && referencedSnippets.length > 0 && !referencedSnippets.some((s: string) => s.includes(digitToken))) {
           errors.push(`${path}: numeric token "${digitToken}" not present in any referenced evidence_snippet`);
         }
       }
@@ -913,91 +1333,64 @@ const validateGeneratedPack = (envelope: any) => {
   return { ok: errors.length === 0, errors };
 };
 
-app.post(`${BASE_PATH}/packs/generate`, async (c) => {
-  const userId = getUserId(c);
-  const correlationId = getCorrelationId(c);
-  const { admin, error } = requireAdmin(c);
-  if (error) return error;
+type PackInclude = "cold_call_prep_card" | "meeting_booking_pack" | "spin_demo_pack";
+const ALLOWED_PACK_INCLUDES = new Set<PackInclude>([
+  "cold_call_prep_card",
+  "meeting_booking_pack",
+  "spin_demo_pack",
+]);
 
-  const body = await c.req.json().catch(() => ({}));
-  const rawContactId = body?.contact_id?.toString();
-  const include = Array.isArray(body?.include) ? body.include.map((s: any) => s?.toString()) : ["cold_call_prep_card"];
-  const language = body?.language?.toString() || "cs";
-  if (!rawContactId) return c.json({ error: "Missing contact_id" }, 400);
+type InternalResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; status: number; error: string; details?: unknown };
 
-  const selectFields = "id, name, title, company, linkedin_url, manual_notes, company_website";
-  let contactId = rawContactId;
-  let contact: any | null = null;
+const coercePackIncludes = (raw: unknown): PackInclude[] => {
+  const values = Array.isArray(raw) ? raw : [];
+  const next = values
+    .map((v) => v?.toString?.() ?? "")
+    .filter((v): v is PackInclude => ALLOWED_PACK_INCLUDES.has(v as PackInclude));
+  return next.length ? next : ["cold_call_prep_card"];
+};
 
-  const { data: contactById } = await admin
-    .from("contacts")
-    .select(selectFields)
-    .eq("id", rawContactId)
-    .single();
-  if (contactById) {
-    contact = contactById;
-    contactId = contactById.id;
-  }
+const generateAndSavePackInternal = async (params: {
+  admin: any;
+  userId: string;
+  correlationId: string;
+  rawContactId: string;
+  include: PackInclude[];
+  language: string;
+  resolvedContact?: { contactId: string; contact: ResolvedContact };
+}): Promise<
+  InternalResult<{
+    correlation_id: string;
+    generation_run_id: string;
+    pack_id: string;
+    status: "success";
+    quality_report: { passes: boolean; failed_checks: string[] };
+    contact_id: string;
+    contact: ResolvedContact;
+    pack: any;
+    insufficient_evidence: boolean;
+  }>
+> => {
+  const { admin, userId, correlationId, rawContactId, include, language } = params;
+
+  let contactId = params.resolvedContact?.contactId || rawContactId;
+  let contact: ResolvedContact | null = params.resolvedContact?.contact || null;
 
   if (!contact) {
-    const { data: contactByExternal } = await admin
-      .from("contacts")
-      .select(selectFields)
-      .eq("external_id", rawContactId)
-      .limit(1);
-    const contactExternal = Array.isArray(contactByExternal) ? contactByExternal[0] : null;
-    if (contactExternal) {
-      contact = contactExternal;
-      contactId = contactExternal.id;
-    }
+    const resolved = await resolveContactForUser(admin, userId, rawContactId);
+    if (!resolved) return { ok: false, status: 404, error: "Contact not found" };
+    contactId = resolved.contactId;
+    contact = resolved.contact;
   }
-
-  if (!contact) {
-    const personId = Number(rawContactId);
-    const pipedriveKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
-    if (Number.isFinite(personId) && pipedriveKey) {
-      try {
-        const res = await fetch(`https://api.pipedrive.com/v1/persons/${personId}?api_token=${pipedriveKey}`, {
-          headers: { Accept: "application/json" },
-        });
-        const personJson = await res.json().catch(() => null);
-        const person = personJson?.data;
-        if (res.ok && person) {
-          const upsertPayload = {
-            name: person.name || "Unnamed contact",
-            title: person.title || null,
-            company: person.org_name || null,
-            phone: person.phone?.[0]?.value || null,
-            email: person.email?.[0]?.value || null,
-            status: person.active_flag ? "active" : null,
-            source: "pipedrive_person",
-            external_id: String(personId),
-            last_touch: person.update_time || null,
-          };
-          const { data: upserted, error: upsertError } = await admin
-            .from("contacts")
-            .upsert(upsertPayload, { onConflict: "source,external_id" })
-            .select(selectFields)
-            .single();
-          if (!upsertError && upserted) {
-            contact = upserted;
-            contactId = upserted.id;
-          }
-        }
-      } catch (e) {
-        console.error("Failed to upsert Pipedrive person for pack generation:", e);
-      }
-    }
-  }
-
-  if (!contact) return c.json({ error: "Contact not found" }, 404);
 
   const { data: approvedFacts, error: factsError } = await admin
     .from("v_approved_facts")
     .select("evidence_id, claim, source_url, evidence_snippet, captured_at, confidence")
     .eq("owner_user_id", userId)
     .eq("contact_id", contactId);
-  if (factsError) return c.json({ error: factsError.message }, 500);
+  if (factsError) return { ok: false, status: 500, error: factsError.message };
 
   const hypotheses: any[] = [];
   const h1 = crypto.randomUUID();
@@ -1005,11 +1398,11 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
   hypotheses.push({
     hypothesis_id: h1,
     hypothesis: insufficientEvidence
-      ? "Insufficient evidence to state company specifics; validate current feedback/pulse workflow and ownership."
-      : "Validate current feedback workflow details before using specific claims.",
+      ? "Insufficient evidence to state company specifics; validate current workflow and ownership."
+      : "Validate workflow details before using specific claims.",
     based_on_evidence_ids: [],
     how_to_verify:
-      "Ask: Do you run regular employee pulse checks today? If yes, how (tool/process) and who owns follow-up actions?",
+      "Ask: How do you currently run this process today? Who owns follow-up actions and what blocks execution?",
     priority: "high",
   });
 
@@ -1023,58 +1416,36 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
   const fallbackColdCall = include.includes("cold_call_prep_card")
     ? {
         opener_variants: [
-          line("op1", `Hi ${contact.name}, did I catch you at an okay time for a quick question?`, [], [h1]),
-          line("op2", `If now is bad, should I call back later or is there someone else who owns team feedback?`, [], [h1]),
-          line("op3", `I’ll be brief—can I ask how you currently collect employee feedback across the team?`, [], [h1]),
+          line("op1", `Dobrý den ${contact.name}, máte teď minutu na krátkou otázku?`, [], [h1]),
+          line("op2", `Jestli se to nehodí, mám zavolat později, nebo je u vás lepší člověk na tenhle typ rozhodnutí?`, [], [h1]),
+          line("op3", `Budu stručný — můžu se zeptat, jak to dnes řešíte?`, [], [h1]),
         ],
         discovery_questions: [
-          line("dq1", "How do you currently collect employee feedback (format, cadence, audience)?", [], [h1]),
-          line("dq2", "What happens after feedback comes in—who reviews it and who owns the action plan?", [], [h1]),
-          line("dq3", "Where do you see the biggest drop-off today: participation, trust/anonymity, or follow-through?", [], [h1]),
-          line("dq4", "When you get a signal, how quickly can managers act on it?", [], [h1]),
-          line("dq5", "What would make feedback feel safer and more honest for people here?", [], [h1]),
-          line("dq6", "If we could improve one outcome this quarter from employee feedback, what should it be?", [], [h1]),
+          line("dq1", "Jak to dnes řešíte (proces, nástroj, frekvence)?", [], [h1]),
+          line("dq2", "Kdo to dnes vlastní a kdo je v tom ještě zapojený?", [], [h1]),
+          line("dq3", "Kde se to dnes nejčastěji zasekne?", [], [h1]),
+          line("dq4", "Co to stojí v čase nebo v riziku, když to zůstane stejné?", [], [h1]),
+          line("dq5", "Co by muselo platit, aby mělo smysl to změnit?", [], [h1]),
         ],
         objections: [
           {
             id: "obj1",
-            trigger: "We already do surveys.",
-            response: "Makes sense—what do you like about your current approach, and what do you wish worked better (participation, trust, or follow-up actions)?",
+            trigger: "Už to nějak řešíme.",
+            response: "Super — co na tom funguje a co byste chtěli, aby fungovalo líp?",
             evidence_ids: [],
             hypothesis_ids: [h1],
           },
           {
             id: "obj2",
-            trigger: "No time.",
-            response: "Understood. If I keep it focused: could we quickly check whether the bottleneck is getting honest input or turning input into action?",
+            trigger: "Nemám čas.",
+            response: "Chápu. Můžu jen ověřit jednu věc: je větší problém získat input, nebo z toho udělat akci?",
             evidence_ids: [],
             hypothesis_ids: [h1],
           },
           {
             id: "obj3",
-            trigger: "Not my area.",
-            response: "Totally fair—who would be the right person for employee feedback and engagement so I don’t waste your time?",
-            evidence_ids: [],
-            hypothesis_ids: [h1],
-          },
-          {
-            id: "obj4",
-            trigger: "Send info.",
-            response: "Happy to. Before I do, what would you want it to answer: participation rates, anonymity, or action planning follow-through?",
-            evidence_ids: [],
-            hypothesis_ids: [h1],
-          },
-          {
-            id: "obj5",
-            trigger: "Budget is tight.",
-            response: "Understood. What would need to be true for this to be worth considering—saving manager time, reducing churn, or faster issue detection?",
-            evidence_ids: [],
-            hypothesis_ids: [h1],
-          },
-          {
-            id: "obj6",
-            trigger: "Not a priority.",
-            response: "Got it. What is a priority right now, and is there any part of feedback/engagement impacting it?",
+            trigger: "Pošlete to do mailu.",
+            response: "Pošlu. Aby to nebylo generické: co má ten mail hlavně zodpovědět — dopad, implementaci, nebo cenu?",
             evidence_ids: [],
             hypothesis_ids: [h1],
           },
@@ -1087,23 +1458,23 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
   const fallbackMeetingPack = include.includes("meeting_booking_pack")
     ? {
         discovery_questions: [
-          line("mq1", "Co vás přimělo řešit demo nebo změnu právě teď?", [], [h1]),
-          line("mq2", "Jak byste poznali, že má follow‑up meeting smysl?", [], [h1]),
-          line("mq3", "Kdo další by měl být u dalšího kroku, aby se rozhodovalo rychle?", [], [h1]),
-          line("mq4", "Co musí být jasné po 15 minutách, aby to stálo za pokračování?", [], [h1]),
+          line("mq1", "Proč to řešíte právě teď?", [], [h1]),
+          line("mq2", "Jak poznáte, že další krok/demíčko dává smysl?", [], [h1]),
+          line("mq3", "Kdo musí být u dalšího kroku, aby se rozhodlo rychle?", [], [h1]),
+          line("mq4", "Co musí být jasné po patnácti minutách, aby to stálo za pokračování?", [], [h1]),
         ],
         meeting_asks: [
-          line("ma1", "If this is relevant, would you be open to a short follow-up to map your current feedback loop end-to-end?", [], [h1]),
-          line("ma2", "If we find a clear bottleneck, would it make sense to include the person who owns the follow-through?", [], [h1]),
+          line("ma1", "Dává smysl dát si krátké demo a projít, jak to u vás dnes funguje end‑to‑end?", [], [h1]),
+          line("ma2", "Pokud to bude relevantní, přizveme i člověka, který vlastní follow‑up a rozhodnutí.", [], [h1]),
         ],
         agenda: [
-          line("ag1", "Current process: how feedback is collected and from whom.", [], [h1]),
-          line("ag2", "Trust/anonymity: what blocks honesty today.", [], [h1]),
-          line("ag3", "Action planning: how signals become actions and accountability.", [], [h1]),
+          line("ag1", "Jak to dnes běží a kde se to láme.", [], [h1]),
+          line("ag2", "Jaký dopad to má na KPI a rizika.", [], [h1]),
+          line("ag3", "Jak vypadá ideální stav a další krok.", [], [h1]),
         ],
         next_step_conditions: [
-          line("ns1", "If feedback is collected but actions stall, we focus on action planning and ownership.", [], [h1]),
-          line("ns2", "If participation or honesty is low, we focus on anonymity and manager enablement.", [], [h1]),
+          line("ns1", "Když je bottleneck v ownershipu, řešíme odpovědnost a workflow.", [], [h1]),
+          line("ns2", "Když je bottleneck v datech, řešíme sběr, kvalitu a akční výstupy.", [], [h1]),
         ],
         insufficient_evidence: insufficientEvidence,
         insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
@@ -1113,28 +1484,24 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
   const fallbackSpinPack = include.includes("spin_demo_pack")
     ? {
         spin: {
-          situation: [line("s1", "How do you currently run feedback cycles across the team?", [], [h1])],
-          problem: [line("p1", "Where does it break down today: participation, honesty, or follow-through?", [], [h1])],
-          implication: [line("i1", "When follow-through stalls, what does that impact most (retention, delivery, morale)?", [], [h1])],
-          need_payoff: [line("n1", "If you could get faster, safer signals and clearer actions, what would change first?", [], [h1])],
+          situation: [line("s1", "Jak to dnes řešíte a kdo to vlastní?", [], [h1])],
+          problem: [line("p1", "Co je dnes největší komplikace nebo bottleneck?", [], [h1])],
+          implication: [line("i1", "Jaký dopad to má na čas, kvalitu, nebo riziko?", [], [h1])],
+          need_payoff: [line("n1", "Kdybyste to vyřešili, co by se zlepšilo jako první?", [], [h1])],
         },
         three_act_demo: {
-          act1: [line("a1", "Confirm current workflow and who owns each step.", [], [h1])],
-          act2: [line("a2", "Show how signals become a prioritized action plan with accountability.", [], [h1])],
-          act3: [line("a3", "Align on success criteria and decision path for a small rollout.", [], [h1])],
-          proof_moments: [line("pm1", "Ask what proof would convince them (participation, honesty, follow-through).", [], [h1])],
-          close: [line("c1", "Agree on the smallest next step and who must be involved.", [], [h1])],
+          act1: [line("a1", "Potvrdíme současný stav a cíle.", [], [h1])],
+          act2: [line("a2", "Ukážeme konkrétní workflow a hodnotu v praxi.", [], [h1])],
+          act3: [line("a3", "Sladíme další krok a success kritéria.", [], [h1])],
+          proof_moments: [line("pm1", "Zmapujeme, co je pro vás důkaz úspěchu.", [], [h1])],
+          close: [line("c1", "Domluvíme nejmenší další krok a kdo musí být u toho.", [], [h1])],
         },
         insufficient_evidence: insufficientEvidence,
         insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
       }
     : null;
 
-  const sanitizeText = (text: string) =>
-    text
-      .replace(/\d+/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+  const sanitizeText = (text: string) => text.replace(/\s+/g, " ").trim();
 
   const normalizeLines = (lines: any[], prefix: string, fallback: any[]) => {
     const fallbackLines = Array.isArray(fallback) ? fallback : [];
@@ -1225,7 +1592,23 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
         source_url: f.source_url,
       }));
 
-      const systemPrompt = `You are a senior B2B sales strategist. Output strict JSON only.\n\nRules:\n- Use language: ${language}.\n- No digits anywhere in text output.\n- Each line must include hypothesis_ids with the provided hypothesis id.\n- evidence_ids may only use the provided evidence ids.\n- Keep each line under 140 characters.\n- Do not invent facts or numbers; if unsure, ask discovery questions.\n\nReturn JSON with only the requested pack objects: cold_call_prep_card, meeting_booking_pack, spin_demo_pack.`;
+      const systemPrompt = `You are a senior B2B sales strategist. Output strict JSON only.
+
+OFFER CONTEXT (what we sell):
+${PRODUCT_KNOWLEDGE}
+${INDUSTRY_KNOWLEDGE}
+
+Rules:
+- Use language: ${language}.
+- Each line must include hypothesis_ids with the provided hypothesis id.
+- evidence_ids may only use the provided evidence ids.
+- If you mention any specific company fact (stack, headcount, revenue, numbers, events), you MUST reference evidence_ids that support it.
+- Avoid digits. If you use digits, you MUST reference evidence_ids whose evidence_snippet contains the exact digit token.
+- Keep each line under 140 characters.
+- No fluff. No generic marketing.
+- Do not invent facts; if unsure, ask discovery questions.
+
+Return JSON with only the requested pack objects: cold_call_prep_card, meeting_booking_pack, spin_demo_pack.`;
 
       const userPrompt = `Contact:\n${JSON.stringify(
         {
@@ -1239,7 +1622,7 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
         },
         null,
         2,
-      )}\n\nCached intel (optional):\n${JSON.stringify(intel || {}, null, 2)}\n\nApproved facts:\n${JSON.stringify(facts, null, 2)}\n\nHypothesis id: ${h1}\nInclude packs: ${include.join(", ")}\n\nExpected JSON shape example:\n{\n  "cold_call_prep_card": {\n    "opener_variants": [{"id":"op1","text":"...","evidence_ids":[],"hypothesis_ids":["${h1}"]}],\n    "discovery_questions": [{"id":"dq1","text":"...","evidence_ids":[],"hypothesis_ids":["${h1}"]}],\n    "objections": [{"id":"obj1","trigger":"...","response":"...","evidence_ids":[],"hypothesis_ids":["${h1}"]}]\n  }\n}\nOnly include pack objects requested.`;
+      )}\n\nCached intel (optional):\n${JSON.stringify(intel || {}, null, 2)}\n\nApproved facts:\n${JSON.stringify(facts, null, 2)}\n\nHypothesis id: ${h1}\nInclude packs: ${include.join(", ")}\n\nExpected JSON shape example:\n{\n  \"cold_call_prep_card\": {\n    \"opener_variants\": [{\"id\":\"op1\",\"text\":\"...\",\"evidence_ids\":[],\"hypothesis_ids\":[\"${h1}\"]}],\n    \"discovery_questions\": [{\"id\":\"dq1\",\"text\":\"...\",\"evidence_ids\":[],\"hypothesis_ids\":[\"${h1}\"]}],\n    \"objections\": [{\"id\":\"obj1\",\"trigger\":\"...\",\"response\":\"...\",\"evidence_ids\":[],\"hypothesis_ids\":[\"${h1}\"]}]\n  }\n}\nOnly include pack objects requested.`;
 
       const completion = await openai.chat.completions.create({
         model,
@@ -1309,7 +1692,7 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
 
   const validation = validateGeneratedPack(envelope);
   const qualityReport = { passes: validation.ok, failed_checks: validation.errors };
-  if (!validation.ok) return c.json({ error: "Pack validation failed", details: qualityReport }, 500);
+  if (!validation.ok) return { ok: false, status: 500, error: "Pack validation failed", details: qualityReport };
 
   const generationRunId = crypto.randomUUID();
   await admin.from("generation_runs").insert({
@@ -1341,10 +1724,10 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
       quality_report: qualityReport,
       generation_run_id: generationRunId,
     })
-    .select("id")
+    .select("id, correlation_id, contact_id, approved_facts, hypotheses, cold_call_prep_card, meeting_booking_pack, spin_demo_pack, quality_report, created_at")
     .single();
 
-  if (packError) return c.json({ error: packError.message }, 500);
+  if (packError || !savedPack) return { ok: false, status: 500, error: packError?.message || "Failed to save pack" };
 
   await auditEvent(admin, userId, correlationId, "generate", "pack_generated", {
     pack_id: savedPack.id,
@@ -1353,12 +1736,148 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
     insufficient_evidence: insufficientEvidence,
   });
 
+  return {
+    ok: true,
+    value: {
+      correlation_id: correlationId,
+      generation_run_id: generationRunId,
+      pack_id: savedPack.id,
+      status: "success",
+      quality_report: qualityReport,
+      contact_id: contactId,
+      contact,
+      pack: savedPack,
+      insufficient_evidence: insufficientEvidence,
+    },
+  };
+};
+
+app.post(`${BASE_PATH}/lead/prepare`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const rawContactId = body?.contact_id?.toString();
+  const language = body?.language?.toString() || "cs";
+  const include = coercePackIncludes(body?.include ?? ["cold_call_prep_card", "meeting_booking_pack", "spin_demo_pack"]);
+  const baseUrl = body?.base_url?.toString() || null;
+
+  if (!rawContactId) return c.json({ error: "Missing contact_id" }, 400);
+
+  const resolved = await resolveContactForUser(admin, userId, rawContactId);
+  if (!resolved) return c.json({ error: "Contact not found" }, 404);
+
+  const derivedSite = deriveCompanyWebsiteFromEmail(resolved.contact.email || null);
+  const companySite = (baseUrl || resolved.contact.company_website || derivedSite || "").toString().trim();
+  let ingest: any = null;
+  const extracts: Array<{ document_id: string; ok: boolean; extraction_run_id?: string; error?: string }> = [];
+
+  if (companySite) {
+    try {
+      const normalized = normalizeBaseUrl(companySite);
+      if (!resolved.contact.company_website || normalizeBaseUrl(resolved.contact.company_website) !== normalized) {
+        await admin
+          .from("contacts")
+          .update({ company_website: normalized, updated_at: new Date().toISOString() })
+          .eq("id", resolved.contactId);
+      }
+    } catch {
+      // ignore invalid URLs
+    }
+
+    try {
+      ingest = await ingestCompanySiteAllowlistInternal({
+        admin,
+        userId,
+        correlationId,
+        contactId: resolved.contactId,
+        baseUrl: companySite,
+      });
+      for (const doc of ingest.documents || []) {
+        try {
+          const res = await extractEvidenceClaimsInternal({
+            admin,
+            userId,
+            correlationId,
+            documentId: doc.document_id,
+            model: "gpt-4o-mini",
+            promptVersion: "extractor_v1",
+          });
+          extracts.push({ document_id: doc.document_id, ok: true, extraction_run_id: res.extraction_run_id });
+        } catch (e) {
+          extracts.push({ document_id: doc.document_id, ok: false, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+    } catch (e) {
+      ingest = { error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  const autoReview = await autoApproveLowRiskClaims({
+    admin,
+    userId,
+    correlationId,
+    contactId: resolved.contactId,
+  });
+
+  const packRes = await generateAndSavePackInternal({
+    admin,
+    userId,
+    correlationId,
+    rawContactId: resolved.contactId,
+    include,
+    language,
+    resolvedContact: resolved,
+  });
+
+  if (!packRes.ok) {
+    return c.json({ error: packRes.error, details: packRes.details ?? null }, packRes.status);
+  }
+
   return c.json({
-    correlation_id: correlationId,
-    generation_run_id: generationRunId,
-    pack_id: savedPack.id,
+    correlation_id: packRes.value.correlation_id,
+    generation_run_id: packRes.value.generation_run_id,
+    pack_id: packRes.value.pack_id,
+    quality_report: packRes.value.quality_report,
+    pack: packRes.value.pack,
+    contact: packRes.value.contact,
+    ingest,
+    extracts,
+    auto_review: autoReview,
+  });
+});
+
+app.post(`${BASE_PATH}/packs/generate`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const rawContactId = body?.contact_id?.toString();
+  const include = coercePackIncludes(body?.include);
+  const language = body?.language?.toString() || "cs";
+  if (!rawContactId) return c.json({ error: "Missing contact_id" }, 400);
+
+  const res = await generateAndSavePackInternal({
+    admin,
+    userId,
+    correlationId,
+    rawContactId,
+    include,
+    language,
+  });
+
+  if (!res.ok) return c.json({ error: res.error, details: res.details ?? null }, res.status);
+
+  return c.json({
+    correlation_id: res.value.correlation_id,
+    generation_run_id: res.value.generation_run_id,
+    pack_id: res.value.pack_id,
     status: "success",
-    quality_report: qualityReport,
+    quality_report: res.value.quality_report,
   });
 });
 
@@ -2014,7 +2533,8 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
             company: p.org_name || null, // TODO: connect to live org enrichment
             org_id: p.org_id?.value,
             phone: p.phone?.[0]?.value || null,
-            role: p.active_flag ? "Contact" : null, // Use Pipedrive active_flag
+            email: p.email?.[0]?.value || null,
+            role: p.job_title || null,
             aiScore: null, // TODO: connect to AI scoring service
             status: 'active'
         };
@@ -2024,6 +2544,50 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
   } catch (e) {
     return c.json({ error: "Internal Error" }, 500);
   }
+});
+
+// Update a contact dossier field (minimal; used by Lead Brief)
+app.patch(`${BASE_PATH}/contacts/:id`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const contactId = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+
+  const updates: Record<string, unknown> = {};
+  if (typeof body?.company_website === "string") {
+    updates.company_website = body.company_website.trim() || null;
+  }
+  if (typeof body?.linkedin_url === "string") {
+    updates.linkedin_url = body.linkedin_url.trim() || null;
+  }
+  if (typeof body?.manual_notes === "string") {
+    updates.manual_notes = body.manual_notes.trim() || null;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return c.json({ error: "No supported fields provided (company_website, linkedin_url, manual_notes)" }, 400);
+  }
+
+  const { data, error: updateError } = await admin
+    .from("contacts")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", contactId)
+    .select(CONTACT_SELECT_FIELDS)
+    .single();
+
+  if (updateError || !data) {
+    return c.json({ error: updateError?.message || "Contact not found" }, updateError ? 500 : 404);
+  }
+
+  await auditEvent(admin, userId, correlationId, "export", "contact_updated", {
+    contact_id: contactId,
+    updated_fields: Object.keys(updates),
+  });
+
+  return c.json({ success: true, contact: data });
 });
 
 // Per-user Pipedrive integration settings (stored server-side)
@@ -2461,38 +3025,6 @@ app.delete(`${BASE_PATH}/contact-intel/:id`, async (c) => {
         return c.json({ error: "Failed to delete intel" }, 500);
     }
 });
-
-// --- PRODUCT KNOWLEDGE BASE (CZECH MARKET OPTIMIZED) ---
-const PRODUCT_KNOWLEDGE = `
-PRODUCT: Echo Pulse by Behavery
-TYPE: Employee Retention & Engagement Platform (SaaS)
-MARKET CONTEXT (CZECH REPUBLIC):
-- Lowest unemployment in EU -> High competition for talent.
-- Huge pain points: 
-  1. "Fluktuace" (Turnover) in Manufacturing/Logistics (cost of replacing 1 worker = 30-50k CZK + lost productivity).
-  2. "Burnout/Quiet Quitting" in IT/Finance.
-  3. "Toxic Middle Management" (mistři ve výrobě, team leadeři).
-WHAT IT DOES: Monthly automated pulse checks via SMS/Email. 
-VS COMPETITION (Arnold, Frank, Behavery, Survio):
-- We are NOT a survey tool (Survio). We are a SIGNAL tool.
-- We don't do "happiness" (soft metrics). We measure "friction" & "risk".
-- Zero setup time.
-`;
-
-const INDUSTRY_KNOWLEDGE = `
-TARGET AUDIENCE & PAIN POINTS:
-1. MANUFACTURING (Výroba) / LOGISTICS:
-   - Persona: HR Director, Plant Manager (Ředitel závodu).
-   - Pain: "Lidi nám odchází ke konkurenci kvůli 500 Kč." "Mistři neumí jednat s lidmi."
-   - Goal: Stability, Shift fulfillment.
-2. IT / TECH HOUSES:
-   - Persona: CTO, COO, HRBP.
-   - Pain: Senior devs leaving due to micromanagement or lack of vision. Remote work alienation.
-   - Goal: Retention of key assets (expensive to replace).
-3. CORPORATE / BUSINESS SERVICES:
-   - Persona: HR Director, CEO.
-   - Pain: "Quiet Quitting", disconnected teams, efficiency drops.
-`;
 
 // OpenAI Integration with Multi-Model Router
 app.post(`${BASE_PATH}/ai/generate`, async (c) => {
