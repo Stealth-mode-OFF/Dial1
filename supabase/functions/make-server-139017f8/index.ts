@@ -3825,4 +3825,11 @@ app.post(`${BASE_PATH}/seed`, async (c) => {
   return c.json({ message: "Seeding disabled. Production mode active." });
 });
 
-Deno.serve(app.fetch);
+// Supabase Edge Functions gateway sometimes forwards requests with an extra
+// `/<function-slug>` prefix (e.g. "/make-server-139017f8/health"). Mount the app
+// under both variants to avoid 404s.
+const wrapper = new Hono();
+wrapper.route("/", app);
+wrapper.route("/make-server-139017f8", app);
+
+Deno.serve(wrapper.fetch);
