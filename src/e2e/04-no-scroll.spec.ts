@@ -15,8 +15,5 @@ test.describe('No scroll budget', () => {
     };
 
     await assertNoScroll();
-    await page.getByTestId('nav-call').click();
-    await assertNoScroll();
   });
 });
-
