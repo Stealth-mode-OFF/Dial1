@@ -1,0 +1,393 @@
+/* ============================================
+   PRODUCTION UI COMPONENTS
+   Status indicators, loading states, errors
+   ============================================ */
+
+/* ============ ERROR BOUNDARY ============ */
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-6);
+  background: var(--bg);
+}
+
+.error-boundary-content {
+  max-width: 480px;
+  text-align: center;
+  padding: var(--space-8);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.error-boundary-icon {
+  font-size: 48px;
+  margin-bottom: var(--space-4);
+}
+
+.error-boundary-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: var(--space-2);
+}
+
+.error-boundary-message {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+.error-boundary-details {
+  text-align: left;
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  background: var(--gray-50);
+  border-radius: var(--radius);
+}
+
+.error-boundary-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.error-boundary-details pre {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--danger);
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: var(--space-2) 0 0;
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+.error-boundary-btn {
+  padding: var(--space-3) var(--space-5);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.error-boundary-btn-primary {
+  background: var(--primary);
+  color: white;
+  border: none;
+}
+
+.error-boundary-btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.error-boundary-btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.error-boundary-btn-secondary:hover {
+  background: var(--gray-50);
+}
+
+/* ============ CONNECTION STATUS ============ */
+.connection-status {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  z-index: 1000;
+  font-size: 11px;
+}
+
+.connection-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.connection-status-text {
+  color: var(--text-secondary);
+}
+
+/* ============ API STATUS BANNER ============ */
+.api-status-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1001;
+  padding: var(--space-3) var(--space-6);
+}
+
+.api-status-banner.config-error {
+  background: var(--amber-500);
+  color: white;
+}
+
+.api-status-banner.connection-error {
+  background: var(--danger);
+  color: white;
+}
+
+.api-status-banner-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.api-status-banner-icon {
+  font-size: 20px;
+}
+
+.api-status-banner-text {
+  flex: 1;
+}
+
+.api-status-banner-text strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.api-status-banner-text p {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-top: 2px;
+}
+
+.api-status-banner-dismiss {
+  padding: var(--space-2);
+  background: rgba(255,255,255,0.2);
+  border: none;
+  border-radius: var(--radius);
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background var(--transition);
+}
+
+.api-status-banner-dismiss:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+/* ============ SKELETON LOADER ============ */
+.skeleton {
+  background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ============ EMPTY STATE ============ */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-10);
+  text-align: center;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: var(--space-4);
+  opacity: 0.5;
+}
+
+.empty-state-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: var(--space-2);
+}
+
+.empty-state-description {
+  font-size: 14px;
+  color: var(--text-muted);
+  max-width: 320px;
+  margin-bottom: var(--space-6);
+}
+
+.empty-state-action {
+  padding: var(--space-3) var(--space-5);
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.empty-state-action:hover {
+  background: var(--primary-hover);
+}
+
+/* ============ SPINNER ============ */
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============ TOAST ============ */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  min-width: 280px;
+  max-width: 400px;
+}
+
+.toast-info { border-left: 3px solid var(--primary); }
+.toast-success { border-left: 3px solid var(--success); }
+.toast-warning { border-left: 3px solid var(--amber-500); }
+.toast-error { border-left: 3px solid var(--danger); }
+
+.toast-icon {
+  font-size: 16px;
+}
+
+.toast-message {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.toast-close {
+  padding: var(--space-1);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  transition: color var(--transition);
+}
+
+.toast-close:hover {
+  color: var(--text);
+}
+
+/* Toast container for stacking */
+.toast-container {
+  position: fixed;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  z-index: 1002;
+}
+
+/* ============ LOADING OVERLAY ============ */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(2px);
+  z-index: 999;
+}
+
+.loading-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.loading-overlay-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* ============ OFFLINE INDICATOR ============ */
+.offline-indicator {
+  position: fixed;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--gray-800);
+  color: white;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  z-index: 1001;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateX(-50%) translateY(100%); opacity: 0; }
+  to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.offline-indicator-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--amber-500);
+  border-radius: 50%;
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 600px) {
+  .error-boundary-content {
+    padding: var(--space-6);
+    margin: var(--space-4);
+  }
+  
+  .error-boundary-actions {
+    flex-direction: column;
+  }
+  
+  .api-status-banner-content {
+    flex-wrap: wrap;
+  }
+  
+  .toast-container {
+    left: var(--space-4);
+    right: var(--space-4);
+    bottom: var(--space-4);
+  }
+  
+  .toast {
+    min-width: auto;
+    max-width: none;
+  }
+}
