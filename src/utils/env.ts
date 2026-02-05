@@ -10,10 +10,6 @@ interface EnvConfig {
   supabaseAnonKey: string;
   supabaseProjectId?: string;
   
-  // Optional integrations
-  pipedriveApiToken?: string;
-  openaiApiKey?: string;
-  
   // App settings
   isDevelopment: boolean;
   isProduction: boolean;
@@ -79,16 +75,15 @@ export function validateEnv(): EnvValidation {
     warnings.push('VITE_SUPABASE_ANON_KEY format looks unusual');
   }
   
-  // Optional: Pipedrive
+  // Server-only keys should never be set in the frontend bundle.
   const pipedriveToken = getEnv('VITE_PIPEDRIVE_API_TOKEN');
-  if (!pipedriveToken) {
-    warnings.push('VITE_PIPEDRIVE_API_TOKEN not set - Pipedrive integration disabled');
+  if (pipedriveToken) {
+    warnings.push('VITE_PIPEDRIVE_API_TOKEN exposed to client - remove it (server-side only)');
   }
-  
-  // Optional: OpenAI (usually server-side only)
+
   const openaiKey = getEnv('VITE_OPENAI_API_KEY');
   if (openaiKey) {
-    warnings.push('VITE_OPENAI_API_KEY exposed to client - consider server-side only');
+    warnings.push('VITE_OPENAI_API_KEY exposed to client - remove it (server-side only)');
   }
   
   return {
@@ -107,8 +102,6 @@ function buildConfig(): EnvConfig {
     supabaseUrl: supabaseUrl || (projectId ? `https://${projectId}.supabase.co` : ''),
     supabaseAnonKey: getEnv('VITE_SUPABASE_ANON_KEY'),
     supabaseProjectId: projectId || undefined,
-    pipedriveApiToken: getEnv('VITE_PIPEDRIVE_API_TOKEN') || undefined,
-    openaiApiKey: getEnv('VITE_OPENAI_API_KEY') || undefined,
     isDevelopment: import.meta.env.DEV,
     isProduction: import.meta.env.PROD,
     appVersion: getEnv('VITE_APP_VERSION') || '1.0.0',
@@ -154,7 +147,6 @@ export function checkEnvironment(): void {
     if (validation.isValid) {
       console.log('✅ Environment configured correctly');
       console.log(`   Supabase: ${config.supabaseUrl.slice(0, 30)}...`);
-      console.log(`   Pipedrive: ${config.pipedriveApiToken ? 'Configured' : 'Not configured'}`);
     }
     
     console.groupEnd();
@@ -163,9 +155,6 @@ export function checkEnvironment(): void {
 
 // ============ FEATURE FLAGS ============
 export const features = {
-  get pipedrive() {
-    return Boolean(getConfig().pipedriveApiToken);
-  },
   get supabase() {
     return Boolean(getConfig().supabaseUrl && getConfig().supabaseAnonKey);
   },

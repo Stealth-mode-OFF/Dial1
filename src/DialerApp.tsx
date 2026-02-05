@@ -146,6 +146,14 @@ const generateAIPrep = async (contact: Contact): Promise<AIPrep> => {
 // ============ UTILITIES ============
 const formatTime = (sec: number) => `${Math.floor(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
 
+const isEditableTarget = (target: EventTarget | null) => {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  const tag = (el.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  return Boolean((el as any).isContentEditable);
+};
+
 // ============ STORAGE ============
 const STORAGE_KEY = 'dial1.session.v3';
 
@@ -332,6 +340,7 @@ function AIPrepPanel({ prep, isLoading, onRefresh }: { prep: AIPrep | null; isLo
 // ============ MAIN ============
 export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => void; currentMode?: string }) {
   const { contacts: salesContacts, isLoading: contactsLoading } = useSales();
+  const externalNavDisabled = import.meta.env.VITE_E2E_DISABLE_EXTERNAL_NAV === 'true';
   
   // Map sales contacts or use fallback
   const contacts: Contact[] = useMemo(() => {
@@ -390,32 +399,11 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
     return () => clearInterval(t);
   }, [callStart]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
-      const k = e.key.toLowerCase();
-      if (k === 'c') { e.preventDefault(); handleCall(); }
-      if (k === 's') { e.preventDefault(); handleSkip(); }
-      if (k === 'd') { e.preventDefault(); handleMeeting(); }
-      if (k === 'n') { e.preventDefault(); notesRef.current?.focus(); }
-      if (k === 'arrowdown') { e.preventDefault(); setActiveIndex(i => Math.min(i + 1, contacts.length - 1)); }
-      if (k === 'arrowup') { e.preventDefault(); setActiveIndex(i => Math.max(i - 1, 0)); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [contacts.length, isInCall]);
-
-  const handleCall = useCallback(() => {
-    if (!contact) return;
-    if (!isInCall) {
-      setIsInCall(true);
-      setCallStart(Date.now());
-      setSession(s => ({ ...s, stats: { ...s.stats, calls: s.stats.calls + 1 } }));
-      window.location.href = `tel:${contact.phone.replace(/\s/g, '')}`;
-    } else {
-      endCall('connected');
-    }
-  }, [contact, isInCall]);
+  const openMeet = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (externalNavDisabled) return;
+    window.open('https://meet.google.com/new', '_blank', 'noopener,noreferrer');
+  }, [externalNavDisabled]);
 
   const endCall = useCallback((outcome: string) => {
     if (callStart) {
@@ -429,6 +417,21 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
     setCallStart(null);
     setCallDuration(0);
   }, [callStart]);
+
+  const handleCall = useCallback(() => {
+    if (!contact) return;
+    if (!isInCall) {
+      setIsInCall(true);
+      setCallStart(Date.now());
+      setSession(s => ({ ...s, stats: { ...s.stats, calls: s.stats.calls + 1 } }));
+      if (!externalNavDisabled && typeof window !== 'undefined') {
+        const normalizedPhone = contact.phone.replace(/[^\d+]/g, '');
+        window.location.href = `tel:${normalizedPhone}`;
+      }
+    } else {
+      endCall('connected');
+    }
+  }, [contact, isInCall, externalNavDisabled, endCall]);
 
   const handleSkip = useCallback(() => {
     if (isInCall) endCall('no-answer');
@@ -454,6 +457,22 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
   const saveNotes = useCallback(() => {
     if (contact) setSession(s => ({ ...s, notesByContact: { ...s.notesByContact, [contact.id]: notes } }));
   }, [contact, notes]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'c') { e.preventDefault(); handleCall(); }
+      if (k === 's') { e.preventDefault(); handleSkip(); }
+      if (k === 'd') { e.preventDefault(); handleMeeting(); }
+      if (k === 'n') { e.preventDefault(); notesRef.current?.focus(); }
+      if (k === 'm') { e.preventDefault(); openMeet(); }
+      if (k === 'arrowdown') { e.preventDefault(); setActiveIndex(i => Math.min(i + 1, contacts.length - 1)); }
+      if (k === 'arrowup') { e.preventDefault(); setActiveIndex(i => Math.max(i - 1, 0)); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [contacts.length, handleCall, handleSkip, handleMeeting, openMeet]);
 
   const connectRate = session.stats.calls > 0 ? Math.round((session.stats.connected / session.stats.calls) * 100) : 0;
   const goalProgress = Math.min(100, Math.round((session.stats.calls / session.stats.goal) * 100));
@@ -608,6 +627,7 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
           <span><kbd>S</kbd> Skip</span>
           <span><kbd>D</kbd> Meeting</span>
           <span><kbd>N</kbd> Notes</span>
+          <span><kbd>M</kbd> Meet</span>
           <span><kbd>↑↓</kbd> Navigate</span>
         </div>
         <span className="footer-status">{activeContacts.length} remaining</span>

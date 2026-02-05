@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { echoApi, type AnalyticsSummary, type CallLogPayload, type EchoContact } from '../utils/echoApi';
+import { echoApi, type AnalyticsSummary, type CallLogPayload, type CallLogResult, type EchoContact } from '../utils/echoApi';
 import { isSupabaseConfigured, supabaseConfigError } from '../utils/supabase/info';
 
 export type Stats = {
@@ -53,7 +53,7 @@ type SalesContextType = {
   activeContact: Contact | null;
   setActiveContactId: (id: string | null) => void;
   refresh: () => Promise<void>;
-  logCall: (payload: CallLogPayload) => Promise<void>;
+  logCall: (payload: CallLogPayload) => Promise<CallLogResult>;
   pipedriveConfigured: boolean;
   setPipedriveKey: (apiKey: string) => Promise<void>;
   clearPipedriveKey: () => Promise<void>;
@@ -310,10 +310,11 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
     setCompletedLeadIds([]);
   };
 
-  const logCall = async (payload: CallLogPayload) => {
-    await echoApi.logCall(payload);
+  const logCall = async (payload: CallLogPayload): Promise<CallLogResult> => {
+    const res = await echoApi.logCall(payload);
     markLeadCompleted(payload.contactId);
     await fetchAnalytics(contacts.length).catch(() => null);
+    return res;
   };
 
   const setPipedriveKey = async (apiKey: string) => {

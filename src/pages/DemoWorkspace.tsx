@@ -406,7 +406,7 @@ export function DemoWorkspace({ chrome }: { chrome?: ScreenChrome }) {
     setWrapSaving(true);
     setWrapStatus(null);
     try {
-      await logCall({
+      const res = await logCall({
         contactId: activeContact.id,
         contactName: activeContact.name,
         companyName: activeContact.company || undefined,
@@ -416,7 +416,7 @@ export function DemoWorkspace({ chrome }: { chrome?: ScreenChrome }) {
       });
       setWrapNotes('');
       setMode('listening');
-      setWrapStatus('Zapsáno do Pipedrive.');
+      setWrapStatus(res?.pipedrive?.synced ? 'Zapsáno do Pipedrive.' : 'Zapsáno (Pipedrive nesync).');
     } catch (e) {
       setWrapStatus(e instanceof Error ? e.message : 'Zápis selhal');
     } finally {

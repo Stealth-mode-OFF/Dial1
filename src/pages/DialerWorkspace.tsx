@@ -7,12 +7,11 @@ import {
   Flame,
   PhoneCall,
   PlayCircle,
-  Sparkles,
   StopCircle,
   Wand2,
 } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
-import { echoApi } from '../utils/echoApi';
+import { echoApi, type PrecallContextResult } from '../utils/echoApi';
 import { dialViaTelLink, getExtensionStatus, listenToExtension, requestExtensionDial, type ExtensionStatus } from '../utils/extensionBridge';
 import { buildFunctionUrl, functionsBase, isSupabaseConfigured, publicAnonKey } from '../utils/supabase/info';
 
@@ -76,6 +75,9 @@ export function DialerWorkspace() {
   const [meetActive, setMeetActive] = useState(false);
   const [meetEvents, setMeetEvents] = useState<TranscriptEvent[]>([]);
   const [meetError, setMeetError] = useState<string | null>(null);
+  const [precallLoading, setPrecallLoading] = useState(false);
+  const [precallError, setPrecallError] = useState<string | null>(null);
+  const [precallData, setPrecallData] = useState<PrecallContextResult | null>(null);
   const transcriptRef = useRef<Array<{ text: string; ts: number }>>([]);
   const lastCoachAtRef = useRef<number>(0);
   const meetLastTsRef = useRef<number | null>(null);
@@ -165,7 +167,69 @@ export function DialerWorkspace() {
     setWhisper(null);
     setBattleCard(null);
     setCoachTip('');
+    setPrecallError(null);
+    setPrecallData(null);
   };
+
+  const loadPrecall = async (contactId: string, ttlHours = 24) => {
+    if (!isSupabaseConfigured) return;
+    setPrecallLoading(true);
+    setPrecallError(null);
+    try {
+      const res = await echoApi.precall.context({
+        contact_id: contactId,
+        language: 'cs',
+        include: ['cold_call_prep_card', 'meeting_booking_pack', 'spin_demo_pack'],
+        ttl_hours: ttlHours,
+        timeline: { activities: 15, notes: 10, deals: 3 },
+      });
+      setPrecallData(res);
+    } catch (e) {
+      setPrecallData(null);
+      setPrecallError(e instanceof Error ? e.message : 'Pre-call context failed');
+    } finally {
+      setPrecallLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeContact?.id) {
+      setPrecallData(null);
+      setPrecallError(null);
+      setPrecallLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setPrecallLoading(true);
+    setPrecallError(null);
+
+    echoApi.precall
+      .context({
+        contact_id: activeContact.id,
+        language: 'cs',
+        include: ['cold_call_prep_card', 'meeting_booking_pack', 'spin_demo_pack'],
+        ttl_hours: 24,
+        timeline: { activities: 15, notes: 10, deals: 3 },
+      })
+      .then((res) => {
+        if (cancelled) return;
+        setPrecallData(res);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setPrecallData(null);
+        setPrecallError(e instanceof Error ? e.message : 'Pre-call context failed');
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setPrecallLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeContact?.id]);
 
   const startCall = async () => {
     if (!activeContact) return;
@@ -283,7 +347,7 @@ export function DialerWorkspace() {
     setSaving(true);
     setStatus(null);
     try {
-      await logCall({
+      const res = await logCall({
         contactId: activeContact.id,
         contactName: activeContact.name,
         companyName: activeContact.company || undefined,
@@ -291,7 +355,14 @@ export function DialerWorkspace() {
         notes: notes.trim(),
         duration: seconds,
       });
-      setStatus(`Logged: ${disposition}`);
+      const pd = res?.pipedrive;
+      if (pd?.synced) {
+        setStatus(`Logged: ${disposition} · Synced to Pipedrive${pd.activity_id ? ` (#${pd.activity_id})` : ''}`);
+      } else if (pd) {
+        setStatus(`Logged: ${disposition} · Pipedrive not synced`);
+      } else {
+        setStatus(`Logged: ${disposition}`);
+      }
       setIsCalling(false);
       setSeconds(0);
       setNotes('');
@@ -374,6 +445,40 @@ export function DialerWorkspace() {
 
     void run();
   }, [lastCaption, liveCoachingEnabled]);
+
+  const latestPipedriveTouch = useMemo(() => {
+    const timeline = precallData?.pipedrive?.timeline;
+    if (!timeline) return null;
+    const candidates: Array<{ ts: number; label: string }> = [];
+    for (const a of timeline.activities || []) {
+      const ts = Date.parse((a.update_time || a.add_time || '') as string);
+      if (Number.isFinite(ts)) candidates.push({ ts, label: `${a.type || 'activity'} · ${a.subject || '—'}` });
+    }
+    for (const n of timeline.notes || []) {
+      const ts = Date.parse((n.update_time || n.add_time || '') as string);
+      if (Number.isFinite(ts)) candidates.push({ ts, label: `note · ${String(n.content || '').slice(0, 80)}` });
+    }
+    for (const d of timeline.deals || []) {
+      const ts = Date.parse((d as any).update_time || (d as any).add_time || '');
+      if (Number.isFinite(ts)) candidates.push({ ts, label: `deal · ${d.title || '—'}` });
+    }
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => b.ts - a.ts);
+    const top = candidates[0];
+    return { when: new Date(top.ts).toLocaleString(), label: top.label };
+  }, [precallData]);
+
+  const packPreview = useMemo(() => {
+    if (!precallData?.pack) return null;
+    const pack = precallData.pack as any;
+    return {
+      id: pack.id,
+      created_at: pack.created_at,
+      quality_report: pack.quality_report,
+      approved_facts: Array.isArray(pack.approved_facts) ? pack.approved_facts.slice(0, 3) : [],
+      hypotheses: Array.isArray(pack.hypotheses) ? pack.hypotheses.slice(0, 3) : [],
+    };
+  }, [precallData]);
 
   return (
     <div className="workspace" data-testid="demo-workspace">
@@ -760,33 +865,79 @@ export function DialerWorkspace() {
             {intelTab === 'packs' && (
               <>
                 <div className="panel-head tight mt-3">
-                  <span className="eyebrow">Packs</span>
+                  <span className="eyebrow">Pre-call</span>
+                  <div className="button-row">
+                    <button
+                      className="btn ghost sm"
+                      onClick={() => activeContact && void loadPrecall(activeContact.id, 0)}
+                      disabled={!activeContact || precallLoading}
+                      type="button"
+                    >
+                      Refresh
+                    </button>
+                    <button
+                      className="btn outline sm"
+                      onClick={() => void copyText(precallData?.precall?.opener || '')}
+                      disabled={!precallData?.precall?.opener}
+                      type="button"
+                    >
+                      <Copy size={14} /> Copy opener
+                    </button>
+                  </div>
                 </div>
-                <div className="muted text-sm">Evidence-gated: if missing, pack becomes validation questions only.</div>
-                <div className="button-row wrap mt-2">
-                  <button
-                    className="btn outline"
-                    onClick={() =>
-                      activeContact &&
-                      void echoApi.packs.generate({ contact_id: activeContact.id, include: ['cold_call_prep_card'], language: 'cs' })
-                    }
-                    disabled={!activeContact || aiBusy}
-                    type="button"
-                  >
-                    <Sparkles size={14} /> Cold call
-                  </button>
-                  <button
-                    className="btn ghost"
-                    onClick={() =>
-                      activeContact &&
-                      void echoApi.packs.generate({ contact_id: activeContact.id, include: ['meeting_booking_pack'], language: 'cs' })
-                    }
-                    disabled={!activeContact || aiBusy}
-                    type="button"
-                  >
-                    Meeting
-                  </button>
-                </div>
+                <div className="muted text-xs">Auto-loads on lead select. Evidence-gated (no guessing without facts).</div>
+
+                {!activeContact && <div className="muted text-sm mt-2">Select a lead to load context.</div>}
+                {activeContact && precallLoading && !precallData && <div className="muted text-sm mt-2">Loading context…</div>}
+                {precallError && <div className="status-line small mt-2">{precallError}</div>}
+
+                {precallData && (
+                  <>
+                    <div className="mt-2 muted text-xs">
+                      Pipedrive:{' '}
+                      {precallData.pipedrive.configured
+                        ? precallData.pipedrive.person_id
+                          ? `connected (person #${precallData.pipedrive.person_id})`
+                          : 'connected (person unresolved)'
+                        : 'not connected'}
+                      {latestPipedriveTouch ? ` · last: ${latestPipedriveTouch.when} · ${latestPipedriveTouch.label}` : ''}
+                    </div>
+
+                    {precallData.precall ? (
+                      <div className="coach-box mt-3">
+                        <div className="tagline">Brief</div>
+                        <p className="muted text-sm mt-2">{precallData.precall.brief}</p>
+                        {precallData.precall.why_now && (
+                          <p className="muted text-sm mt-2">
+                            <span className="tagline">Why now</span> {precallData.precall.why_now}
+                          </p>
+                        )}
+                        {precallData.precall.opener && (
+                          <p className="say-next mt-3">{precallData.precall.opener}</p>
+                        )}
+                        {!!precallData.precall.questions?.length && (
+                          <div className="muted text-sm mt-3">
+                            <div className="tagline">Top questions</div>
+                            {precallData.precall.questions.slice(0, 3).map((q) => (
+                              <div key={q}>- {q}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="muted text-sm mt-3">
+                        Pre-call brief unavailable (check backend `OPENAI_API_KEY`, or refresh).
+                      </div>
+                    )}
+
+                    <details className="mt-3">
+                      <summary className="details-summary">Open full pack</summary>
+                      <pre className="muted text-xs mt-2" style={{ whiteSpace: 'pre-wrap' }}>
+                        {JSON.stringify(packPreview, null, 2)}
+                      </pre>
+                    </details>
+                  </>
+                )}
               </>
             )}
           </div>

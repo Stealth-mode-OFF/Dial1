@@ -1,5 +1,6 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { Spinner } from './components/StatusIndicators';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Lazy load heavy components for better initial load
 const DialerApp = lazy(() => import('./DialerApp').then(m => ({ default: m.DialerApp })));
@@ -57,12 +58,14 @@ export default function App() {
   }, []);
 
   return (
-    <Suspense fallback={<AppLoader />}>
-      {mode === 'meetcoach' ? (
-        <MeetCoachApp onSwitchMode={() => switchMode('dialer')} currentMode="meetcoach" />
-      ) : (
-        <DialerApp onSwitchMode={() => switchMode('meetcoach')} currentMode="dialer" />
-      )}
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<AppLoader />}>
+        {mode === 'meetcoach' ? (
+          <MeetCoachApp onSwitchMode={() => switchMode('dialer')} currentMode="meetcoach" />
+        ) : (
+          <DialerApp onSwitchMode={() => switchMode('meetcoach')} currentMode="dialer" />
+        )}
+      </Suspense>
+    </ErrorBoundary>
   );
 }

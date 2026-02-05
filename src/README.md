@@ -112,7 +112,7 @@ npm install
 npm run dev
 
 # 5. Open browser
-# http://localhost:5173
+# http://localhost:3000
 ```
 
 ---

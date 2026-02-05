@@ -64,6 +64,12 @@ export type CallLogPayload = {
   duration?: number;
 };
 
+export type CallLogResult = {
+  success: boolean;
+  logId: string;
+  pipedrive?: { synced: boolean; activity_id: number | null; error: string | null };
+};
+
 export type AnalyticsSummary = {
   totalCalls: number;
   callsToday?: number;
@@ -154,6 +160,51 @@ export type LeadPrepareResult = {
   auto_review?: any;
 };
 
+export type PrecallBrief = {
+  brief: string;
+  why_now: string;
+  opener: string;
+  risks: string[];
+  questions: string[];
+  generated_at: string | null;
+};
+
+export type PipedriveTimeline = {
+  activities: Array<{
+    id: number | string;
+    type: string | null;
+    subject: string | null;
+    done: boolean;
+    due_date: string | null;
+    add_time: string | null;
+    update_time: string | null;
+  }>;
+  notes: Array<{ id: number | string; add_time: string | null; update_time: string | null; content: string }>;
+  deals: Array<{ id: number | string; title: string | null; status: string | null; value: number | null; currency: string | null }>;
+};
+
+export type PrecallContextResult = {
+  contact: {
+    id: string;
+    name: string;
+    company: string | null;
+    email: string | null;
+    company_website: string | null;
+    title: string | null;
+    linkedin_url: string | null;
+    manual_notes: string | null;
+  };
+  pack: any;
+  pack_id: string | null;
+  generated: boolean;
+  precall: PrecallBrief | null;
+  pipedrive: {
+    configured: boolean;
+    person_id: number | null;
+    timeline: PipedriveTimeline | null;
+  };
+};
+
 export const echoApi = {
   getPipedriveStatus: () => apiFetch<{ configured: boolean }>('integrations/pipedrive'),
   savePipedriveKey: (apiKey: string) =>
@@ -166,7 +217,7 @@ export const echoApi = {
   importPipedrive: () => apiFetch<{ ok?: boolean; count?: number }>('pipedrive/import', { method: 'POST' }),
 
   logCall: (payload: CallLogPayload) =>
-    apiFetch<{ success: boolean; logId: string }>('call-logs', {
+    apiFetch<CallLogResult>('call-logs', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
@@ -253,6 +304,16 @@ export const echoApi = {
   lead: {
     prepare: (payload: { contact_id: string; language?: string; include?: string[]; base_url?: string }) =>
       apiFetch<LeadPrepareResult>('lead/prepare', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+
+  precall: {
+    context: (payload: {
+      contact_id: string;
+      language?: string;
+      include?: string[];
+      ttl_hours?: number;
+      timeline?: { activities?: number; notes?: number; deals?: number };
+    }) => apiFetch<PrecallContextResult>('precall/context', { method: 'POST', body: JSON.stringify(payload) }),
   },
 
   contacts: {

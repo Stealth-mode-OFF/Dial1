@@ -10,17 +10,42 @@ const app = new Hono();
 // Enable logger
 app.use('*', logger(console.log));
 
-const allowedOrigins = (Deno.env.get("ECHO_ALLOWED_ORIGINS") || "")
+const allowedOriginPatterns = (Deno.env.get("ECHO_ALLOWED_ORIGINS") || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const isOriginAllowed = (origin: string | undefined | null) => {
+  if (!origin) return false;
+  if (allowedOriginPatterns.length === 0) return true; // default: allow all
+  const normalized = origin.toString().trim();
+  if (!normalized) return false;
+
+  for (const pattern of allowedOriginPatterns) {
+    if (pattern === "*") return true;
+    if (!pattern.includes("*")) {
+      if (pattern === normalized) return true;
+      continue;
+    }
+
+    const re = new RegExp(`^${escapeRegex(pattern).replace(/\\\*/g, ".*")}$`);
+    if (re.test(normalized)) return true;
+  }
+
+  return false;
+};
 
 // Enable CORS
 app.use(
   "/*",
   cors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : "*",
-    allowHeaders: ["Content-Type", "Authorization", "X-Echo-User", "X-Correlation-Id"],
+    origin: (origin) => {
+      if (allowedOriginPatterns.length === 0) return "*";
+      return isOriginAllowed(origin) ? origin : "";
+    },
+    allowHeaders: ["Content-Type", "Authorization", "apikey", "X-Echo-User", "X-Correlation-Id"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
@@ -135,6 +160,100 @@ const parseJsonStrict = async (res: Response) => {
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const toPdDurationHHMM = (seconds: unknown) => {
+  const secNum = typeof seconds === "number" ? seconds : Number(seconds);
+  if (!Number.isFinite(secNum) || secNum <= 0) return "00:00";
+  const totalMins = Math.floor(secNum / 60);
+  const hh = String(Math.floor(totalMins / 60)).padStart(2, "0");
+  const mm = String(totalMins % 60).padStart(2, "0");
+  return `${hh}:${mm}`;
+};
+
+const formatActivityNoteHtml = (noteText: string) => {
+  const raw = (noteText || "").toString();
+  if (!raw.trim()) return "";
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>")
+    .replace(/(Result:|Outcome:|AI Summary:|Summary:|Score:|Strengths:|Next step:|Next Step:)/g, "<b>$1</b>");
+};
+
+const generateCallNoteForPipedrive = async (params: {
+  language: string;
+  disposition: string;
+  durationSec?: unknown;
+  notes?: unknown;
+  contact?: { name?: string | null; title?: string | null; company?: string | null };
+}) => {
+  const apiKey = (Deno.env.get("OPENAI_API_KEY") || "").toString().trim();
+  if (!apiKey) return null;
+
+  const openai = new OpenAI({ apiKey });
+  const language = params.language || "cs";
+  const notes = typeof params.notes === "string" ? params.notes.trim() : "";
+  const durationHHMM = toPdDurationHHMM(params.durationSec);
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content:
+          `You write short CRM activity notes for B2B sales calls. Output ONLY a JSON object. Language: ${language}.` +
+          ` Be factual and concise. If notes are thin, output validation questions instead of assumptions.`,
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          schema: {
+            outcome: "string (short label)",
+            key_points: "string[] (3 bullets max)",
+            next_step: "string (1 short sentence)",
+          },
+          contact: params.contact || {},
+          disposition: params.disposition,
+          duration: durationHHMM,
+          raw_notes: notes,
+        }),
+      },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const content = completion.choices?.[0]?.message?.content || "{}";
+  try {
+    const parsed = JSON.parse(content);
+    const outcome = (parsed?.outcome || params.disposition || "call").toString().trim();
+    const keyPoints: string[] = Array.isArray(parsed?.key_points)
+      ? parsed.key_points.map((x: any) => String(x)).filter(Boolean).slice(0, 3)
+      : [];
+    const nextStep = (parsed?.next_step || "").toString().trim();
+
+    const lines: string[] = [];
+    lines.push(`Outcome: ${outcome}`);
+    lines.push(`Duration: ${durationHHMM}`);
+    if (keyPoints.length) {
+      lines.push("");
+      lines.push("Summary:");
+      keyPoints.forEach((p) => lines.push(`- ${p}`));
+    } else if (notes) {
+      lines.push("");
+      lines.push("Summary:");
+      lines.push(notes.slice(0, 900));
+    }
+    if (nextStep) {
+      lines.push("");
+      lines.push(`Next step: ${nextStep}`);
+    }
+
+    return lines.join("\n").trim();
+  } catch {
+    return null;
+  }
+};
 
 const normalizeUrl = (url: string) => {
   const u = new URL(url);
@@ -286,7 +405,7 @@ TARGET AUDIENCE & PAIN POINTS:
 `;
 
 const CONTACT_SELECT_FIELDS =
-  "id, name, title, company, phone, email, linkedin_url, manual_notes, company_website";
+  "id, name, title, company, phone, email, linkedin_url, manual_notes, company_website, source, external_id";
 
 type ResolvedContact = {
   id: string;
@@ -298,6 +417,8 @@ type ResolvedContact = {
   linkedin_url: string | null;
   manual_notes: string | null;
   company_website: string | null;
+  source: string | null;
+  external_id: string | null;
 };
 
 const resolveContactForUser = async (
@@ -371,6 +492,290 @@ const resolveContactForUser = async (
 
   if (!contact) return null;
   return { contactId, contact };
+};
+
+const getPipedriveApiKeyForUser = async (userId: string) => {
+  const key = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY") || "";
+  const trimmed = key.toString().trim();
+  return trimmed ? trimmed : null;
+};
+
+const stripHtml = (input: unknown) => {
+  const raw = typeof input === "string" ? input : "";
+  if (!raw) return "";
+  return raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+};
+
+const pipedriveJson = async <T = any>(apiKey: string, path: string) => {
+  const url = `https://api.pipedrive.com/v1/${path}${path.includes("?") ? "&" : "?"}api_token=${apiKey}`;
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = json?.error || json?.message || `Pipedrive request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return json as T;
+};
+
+const resolvePipedrivePersonAndDeal = async (params: {
+  admin: any;
+  userId: string;
+  rawContactId: string;
+  resolved: { contactId: string; contact: ResolvedContact };
+}) => {
+  const { admin, userId, rawContactId, resolved } = params;
+  const apiKey = await getPipedriveApiKeyForUser(userId);
+  if (!apiKey) {
+    return { configured: false as const, apiKey: null, personId: null, orgId: null, dealId: null, leadId: null };
+  }
+
+  const directPersonId = Number(rawContactId);
+  if (Number.isFinite(directPersonId) && !Number.isNaN(directPersonId)) {
+    return { configured: true as const, apiKey, personId: directPersonId, orgId: null, dealId: null, leadId: null };
+  }
+
+  const source = (resolved.contact.source || "").toString().trim().toLowerCase();
+  const externalId = (resolved.contact.external_id || "").toString().trim();
+
+  if (source === "pipedrive_person" && externalId) {
+    const personId = Number(externalId);
+    if (Number.isFinite(personId) && !Number.isNaN(personId)) {
+      return { configured: true as const, apiKey, personId, orgId: null, dealId: null, leadId: null };
+    }
+  }
+
+  const leadMatch = rawContactId.match(/^(lead:|lead-|lead_)?(\d+)$/i);
+  const candidateLeadId = leadMatch?.[2] || (source === "pipedrive" && externalId ? externalId : null);
+
+  const fetchLead = async (leadId: string) => {
+    const leadJson: any = await pipedriveJson(apiKey, `leads/${encodeURIComponent(leadId)}`);
+    const lead = leadJson?.data || {};
+    const personIdRaw =
+      lead.person_id?.value ??
+      lead.person_id ??
+      lead.person?.id ??
+      lead.person?.value ??
+      null;
+    const orgIdRaw =
+      lead.organization_id?.value ??
+      lead.organization_id ??
+      lead.org_id?.value ??
+      lead.org_id ??
+      null;
+    const personId = Number(personIdRaw);
+    const orgId = orgIdRaw ? Number(orgIdRaw) : null;
+    return {
+      leadId,
+      personId: Number.isFinite(personId) && !Number.isNaN(personId) ? personId : null,
+      orgId: orgId !== null && Number.isFinite(orgId) && !Number.isNaN(orgId) ? orgId : null,
+    };
+  };
+
+  if (candidateLeadId) {
+    try {
+      const lead = await fetchLead(candidateLeadId);
+      return {
+        configured: true as const,
+        apiKey,
+        personId: lead.personId,
+        orgId: lead.orgId,
+        dealId: null,
+        leadId: lead.leadId,
+      };
+    } catch (e) {
+      console.error("Pipedrive lead resolve failed (non-blocking):", e);
+    }
+  }
+
+  // Optional fallback: look up person by email.
+  const email = (resolved.contact.email || "").toString().trim();
+  if (email) {
+    try {
+      const searchJson: any = await pipedriveJson(
+        apiKey,
+        `persons/search?term=${encodeURIComponent(email)}&fields=email&exact_match=true&limit=1`,
+      );
+      const item = searchJson?.data?.items?.[0]?.item;
+      const personId = Number(item?.id);
+      if (Number.isFinite(personId) && !Number.isNaN(personId)) {
+        return { configured: true as const, apiKey, personId, orgId: null, dealId: null, leadId: null };
+      }
+    } catch (e) {
+      console.error("Pipedrive person email search failed (non-blocking):", e);
+    }
+  }
+
+  // We have a key, but couldn't resolve a person.
+  return { configured: true as const, apiKey, personId: null, orgId: null, dealId: null, leadId: candidateLeadId };
+};
+
+const fetchPipedriveTimeline = async (params: {
+  apiKey: string;
+  personId: number;
+  limits: { activities: number; notes: number; deals: number };
+}) => {
+  const { apiKey, personId, limits } = params;
+  const [activitiesJson, notesJson, dealsJson] = await Promise.all([
+    pipedriveJson<any>(apiKey, `activities?person_id=${encodeURIComponent(String(personId))}&limit=${limits.activities}`),
+    pipedriveJson<any>(apiKey, `notes?person_id=${encodeURIComponent(String(personId))}&limit=${limits.notes}&sort=add_time%20DESC`),
+    pipedriveJson<any>(apiKey, `persons/${encodeURIComponent(String(personId))}/deals?status=open&limit=${limits.deals}`),
+  ]);
+
+  const activities = (activitiesJson?.data || []).map((a: any) => ({
+    id: a?.id,
+    type: a?.type || null,
+    subject: a?.subject || null,
+    done: Boolean(a?.done),
+    due_date: a?.due_date || null,
+    add_time: a?.add_time || null,
+    update_time: a?.update_time || null,
+    deal_id: a?.deal_id || null,
+    org_id: a?.org_id || null,
+    note: stripHtml(a?.note || ""),
+  }));
+
+  const notes = (notesJson?.data || []).map((n: any) => ({
+    id: n?.id,
+    add_time: n?.add_time || null,
+    update_time: n?.update_time || null,
+    deal_id: n?.deal_id || null,
+    org_id: n?.org_id || null,
+    content: stripHtml(n?.content || ""),
+  }));
+
+  const deals = (dealsJson?.data || []).map((d: any) => ({
+    id: d?.id,
+    title: d?.title || null,
+    value: d?.value ?? null,
+    currency: d?.currency || null,
+    status: d?.status || null,
+    stage_id: d?.stage_id ?? null,
+    add_time: d?.add_time || null,
+    update_time: d?.update_time || null,
+    org_id: d?.org_id?.value ?? d?.org_id ?? null,
+  }));
+
+  return { activities, notes, deals };
+};
+
+const parseMaybeDate = (value: unknown) => {
+  const str = typeof value === "string" ? value : "";
+  if (!str) return null;
+  const ms = Date.parse(str);
+  return Number.isFinite(ms) ? new Date(ms) : null;
+};
+
+const isOlderThanHours = (date: Date | null, hours: number) => {
+  if (!date) return true;
+  if (!Number.isFinite(hours) || hours <= 0) return true;
+  return Date.now() - date.getTime() > hours * 60 * 60 * 1000;
+};
+
+const getLatestPackForContact = async (admin: any, userId: string, contactId: string) => {
+  const { data, error } = await admin
+    .from("sales_packs")
+    .select(
+      "id, correlation_id, contact_id, approved_facts, hypotheses, lead_dossier, cold_call_prep_card, meeting_booking_pack, spin_demo_pack, quality_report, created_at",
+    )
+    .eq("owner_user_id", userId)
+    .eq("contact_id", contactId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return null;
+  return data || null;
+};
+
+const generatePrecallBrief = async (params: {
+  contact: ResolvedContact;
+  timeline: { activities: any[]; notes: any[]; deals: any[] } | null;
+  approvedFacts: any[];
+  language: string;
+}) => {
+  const apiKey = (Deno.env.get("OPENAI_API_KEY") || "").toString().trim();
+  if (!apiKey) return null;
+
+  const openai = new OpenAI({ apiKey });
+  const language = params.language || "cs";
+  const contact = params.contact;
+  const facts = (params.approvedFacts || []).slice(0, 6).map((f: any) => ({
+    claim: f?.claim || "",
+    source_url: f?.source_url || "",
+  }));
+  const timeline = params.timeline || { activities: [], notes: [], deals: [] };
+  const topActivities = (timeline.activities || []).slice(0, 6).map((a: any) => ({
+    type: a.type,
+    subject: a.subject,
+    done: a.done,
+    due_date: a.due_date,
+    add_time: a.add_time,
+  }));
+  const topNotes = (timeline.notes || []).slice(0, 5).map((n: any) => ({
+    add_time: n.add_time,
+    content: (n.content || "").toString().slice(0, 500),
+  }));
+  const topDeals = (timeline.deals || []).slice(0, 3).map((d: any) => ({
+    title: d.title,
+    status: d.status,
+    value: d.value,
+    currency: d.currency,
+  }));
+
+  const system = `You are an expert B2B SDR pre-call assistant. Output ONLY a JSON object. Language: ${language}.`;
+  const user = {
+    task:
+      "Create pre-call context for a cold call. Keep it concise, actionable, and evidence-gated. If evidence is weak, produce validation questions instead of claims.",
+    schema: {
+      brief: "string (2-4 short sentences)",
+      why_now: "string (1 short sentence)",
+      opener: "string (1-2 sentences, Czech)",
+      risks: "string[] (2-4 items)",
+      questions: "string[] (3 items)",
+    },
+    contact: {
+      name: contact.name,
+      title: contact.title,
+      company: contact.company,
+      email: contact.email,
+      company_website: contact.company_website,
+      linkedin_url: contact.linkedin_url,
+      manual_notes: contact.manual_notes,
+    },
+    pipedrive: {
+      deals: topDeals,
+      recent_activities: topActivities,
+      recent_notes: topNotes,
+    },
+    approved_facts: facts,
+  };
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: JSON.stringify(user) },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const content = completion.choices?.[0]?.message?.content || "{}";
+  try {
+    const parsed = JSON.parse(content);
+    const now = new Date().toISOString();
+    return {
+      brief: (parsed?.brief || "").toString(),
+      why_now: (parsed?.why_now || "").toString(),
+      opener: (parsed?.opener || "").toString(),
+      risks: Array.isArray(parsed?.risks) ? parsed.risks.map((x: any) => String(x)).filter(Boolean).slice(0, 6) : [],
+      questions: Array.isArray(parsed?.questions)
+        ? parsed.questions.map((x: any) => String(x)).filter(Boolean).slice(0, 6)
+        : [],
+      generated_at: now,
+      model: "gpt-4o-mini",
+    };
+  } catch {
+    return null;
+  }
 };
 
 const ingestCompanySiteAllowlistInternal = async (params: {
@@ -1903,6 +2308,132 @@ app.get(`${BASE_PATH}/packs/:packId`, async (c) => {
 
   if (packError || !data) return c.json({ error: "Pack not found" }, 404);
   return c.json(data);
+});
+
+// --- PRE-CALL CONTEXT (FAST + CACHED) ---
+app.post(`${BASE_PATH}/precall/context`, async (c) => {
+  const userId = getUserId(c);
+  const correlationId = getCorrelationId(c);
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const body = await c.req.json().catch(() => ({}));
+  const rawContactId = body?.contact_id?.toString();
+  const language = body?.language?.toString() || "cs";
+  const include = coercePackIncludes(
+    body?.include ?? ["cold_call_prep_card", "meeting_booking_pack", "spin_demo_pack"],
+  );
+  const ttlHoursRaw = Number(body?.ttl_hours ?? 24);
+  const ttlHours = Number.isFinite(ttlHoursRaw) && ttlHoursRaw >= 0 ? ttlHoursRaw : 24;
+  const timeline = body?.timeline || {};
+  const timelineLimits = {
+    activities: Math.max(0, Math.min(50, Number(timeline.activities ?? 15) || 15)),
+    notes: Math.max(0, Math.min(50, Number(timeline.notes ?? 10) || 10)),
+    deals: Math.max(0, Math.min(20, Number(timeline.deals ?? 3) || 3)),
+  };
+
+  if (!rawContactId) return c.json({ error: "Missing contact_id" }, 400);
+
+  const resolved = await resolveContactForUser(admin, userId, rawContactId);
+  if (!resolved) return c.json({ error: "Contact not found" }, 404);
+
+  const pd = await resolvePipedrivePersonAndDeal({ admin, userId, rawContactId, resolved });
+  let pdTimeline: { activities: any[]; notes: any[]; deals: any[] } | null = null;
+  if (pd.configured && pd.apiKey && pd.personId) {
+    try {
+      pdTimeline = await fetchPipedriveTimeline({
+        apiKey: pd.apiKey,
+        personId: pd.personId,
+        limits: timelineLimits,
+      });
+    } catch (e) {
+      console.error("Pipedrive timeline fetch failed (non-blocking):", e);
+    }
+  }
+
+  let pack: any = await getLatestPackForContact(admin, userId, resolved.contactId);
+  let generated = false;
+
+  if (!pack || isOlderThanHours(parseMaybeDate(pack?.created_at), ttlHours)) {
+    const res = await generateAndSavePackInternal({
+      admin,
+      userId,
+      correlationId,
+      rawContactId: resolved.contactId,
+      include,
+      language,
+      resolvedContact: resolved,
+    });
+    if (!res.ok) return c.json({ error: res.error, details: res.details ?? null }, res.status);
+    pack = res.value.pack;
+    generated = true;
+  }
+
+  const leadDossier = (pack?.lead_dossier && typeof pack.lead_dossier === "object") ? pack.lead_dossier : {};
+  const existingBrief = (leadDossier as any)?.precall_brief ?? null;
+  const existingBriefDate = parseMaybeDate(existingBrief?.generated_at || existingBrief?.generatedAt || null);
+
+  let precall: any =
+    existingBrief && !generated && !isOlderThanHours(existingBriefDate, ttlHours)
+      ? existingBrief
+      : null;
+
+  if (!precall) {
+    try {
+      const brief = await generatePrecallBrief({
+        contact: resolved.contact,
+        timeline: pdTimeline,
+        approvedFacts: (pack?.approved_facts || []) as any[],
+        language,
+      });
+      if (brief) {
+        const nextLeadDossier = { ...(leadDossier as any), precall_brief: brief };
+        const { error: updateError } = await admin
+          .from("sales_packs")
+          .update({ lead_dossier: nextLeadDossier, updated_at: new Date().toISOString() })
+          .eq("id", pack.id)
+          .eq("owner_user_id", userId);
+        if (updateError) {
+          console.error("sales_packs precall update failed (non-blocking):", updateError);
+        }
+        pack = { ...pack, lead_dossier: nextLeadDossier };
+        precall = brief;
+      }
+    } catch (e) {
+      console.error("Precall brief generation failed (non-blocking):", e);
+    }
+  }
+
+  return c.json({
+    contact: {
+      id: resolved.contactId,
+      name: resolved.contact.name,
+      company: resolved.contact.company,
+      email: resolved.contact.email,
+      company_website: resolved.contact.company_website,
+      title: resolved.contact.title,
+      linkedin_url: resolved.contact.linkedin_url,
+      manual_notes: resolved.contact.manual_notes,
+    },
+    pack,
+    pack_id: pack?.id || null,
+    generated,
+    precall: precall
+      ? {
+          brief: precall.brief || "",
+          why_now: precall.why_now || "",
+          opener: precall.opener || "",
+          risks: Array.isArray(precall.risks) ? precall.risks : [],
+          questions: Array.isArray(precall.questions) ? precall.questions : [],
+          generated_at: precall.generated_at || null,
+        }
+      : null,
+    pipedrive: {
+      configured: Boolean(pd.configured && pd.apiKey),
+      person_id: pd.personId,
+      timeline: pdTimeline,
+    },
+  });
 });
 
 // --- REAL-TIME WHISPERING: OBJECTIONS (DETERMINISTIC + EVIDENCE-GATED) ---
@@ -3584,73 +4115,64 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
       console.error("KV log save failed (non-blocking):", e);
     }
 
-    // --- PIPEDRIVE SYNC START ---
-    const pipedriveKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
     const admin = getAdminClient();
 
-    const toPdDurationHHMM = (seconds: unknown) => {
-      const secNum = typeof seconds === "number" ? seconds : Number(seconds);
-      if (!Number.isFinite(secNum) || secNum <= 0) return "00:00";
-      const totalMins = Math.floor(secNum / 60);
-      const hh = String(Math.floor(totalMins / 60)).padStart(2, "0");
-      const mm = String(totalMins % 60).padStart(2, "0");
-      return `${hh}:${mm}`;
-    };
-
-    const syncPipedriveActivity = async (personId: number, dealId?: number | null, orgId?: number | null) => {
-      let subject = `Echo Call: ${disposition}`;
-      let type = "call";
-      if (disposition === "sent") {
-        subject = "Echo Email Sent";
-        type = "email";
+    let resolved: { contactId: string; contact: ResolvedContact } | null = null;
+    if (admin && typeof contactId === "string" && contactId.trim()) {
+      try {
+        resolved = await resolveContactForUser(admin, userId, contactId.trim());
+      } catch {
+        resolved = null;
       }
+    }
 
-      const safeNotes = typeof notes === "string" ? notes.trim() : "";
-      const pdNote = safeNotes || `Logged via Echo. Disposition: ${disposition}`;
-
-      const activityBody: any = {
-        subject,
-        type,
-        person_id: personId,
-        done: 1,
-        duration: toPdDurationHHMM(duration),
-        note: pdNote,
-      };
-      if (dealId) activityBody.deal_id = dealId;
-      if (orgId) activityBody.org_id = orgId;
-
-      const pdRes = await fetch(`https://api.pipedrive.com/v1/activities?api_token=${pipedriveKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(activityBody),
-      });
-      if (!pdRes.ok) {
-        const err = await pdRes.text();
-        console.error("Failed to sync to Pipedrive:", err);
-        return { ok: false, error: err };
+    // Save to DB calls table (best-effort)
+    if (admin) {
+      try {
+        const connected = disposition === "connected" || disposition === "meeting";
+        const durationSec = typeof duration === "number" ? duration : Number(duration);
+        await admin.from("calls").insert({
+          contact_id: resolved?.contactId || null,
+          status: "completed",
+          outcome: typeof disposition === "string" ? disposition : null,
+          connected,
+          duration_sec: Number.isFinite(durationSec) ? durationSec : null,
+          notes: typeof notes === "string" ? notes : null,
+        });
+      } catch (e) {
+        console.error("DB calls insert failed (non-blocking):", e);
       }
-      return { ok: true };
+    }
+
+    // --- PIPEDRIVE SYNC START ---
+    const pipedriveKey = await getPipedriveApiKeyForUser(userId);
+    const pipedriveResult: { attempted: boolean; synced: boolean; activity_id?: number; error?: string } = {
+      attempted: false,
+      synced: false,
     };
 
     if (pipedriveKey) {
+      pipedriveResult.attempted = true;
       try {
-        // Back-compat: if contactId is numeric, treat as Pipedrive person_id.
-        const directPersonId = Number(contactId);
-        if (Number.isFinite(directPersonId) && !Number.isNaN(directPersonId)) {
-          await syncPipedriveActivity(directPersonId);
-        } else {
-          const leadMatch = typeof contactId === "string" ? contactId.match(/^(lead:|lead-|lead_)?(\d+)$/i) : null;
-          const leadId = leadMatch?.[2] || null;
+        const rawId = typeof contactId === "string" ? contactId.trim() : "";
+        let personId: number | null = null;
+        let orgId: number | null = null;
+        let dealId: number | null = null;
 
-          if (leadId) {
-            const leadRes = await fetch(`https://api.pipedrive.com/v1/leads/${leadId}?api_token=${pipedriveKey}`, {
-              headers: { Accept: "application/json" },
-            });
-            const leadJson = await leadRes.json().catch(() => null);
-            if (!leadRes.ok || !leadJson?.success) {
-              console.error("Failed to fetch Pipedrive lead for activity sync:", leadJson || leadRes.status);
-            } else {
-              const lead = leadJson.data || {};
+        if (resolved && admin) {
+          const pd = await resolvePipedrivePersonAndDeal({ admin, userId, rawContactId: rawId, resolved });
+          personId = pd.personId;
+          orgId = pd.orgId;
+        } else {
+          const directPersonId = Number(rawId);
+          if (Number.isFinite(directPersonId) && !Number.isNaN(directPersonId)) {
+            personId = directPersonId;
+          } else {
+            const leadMatch = rawId.match(/^(lead:|lead-|lead_)?(\d+)$/i);
+            const leadId = leadMatch?.[2] || null;
+            if (leadId) {
+              const leadJson: any = await pipedriveJson(pipedriveKey, `leads/${encodeURIComponent(leadId)}`);
+              const lead = leadJson?.data || {};
               const personIdRaw =
                 lead.person_id?.value ??
                 lead.person_id ??
@@ -3663,57 +4185,99 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
                 lead.org_id?.value ??
                 lead.org_id ??
                 null;
-              const personId = Number(personIdRaw);
-              const orgId = orgIdRaw ? Number(orgIdRaw) : null;
-              if (Number.isFinite(personId) && !Number.isNaN(personId)) {
-                await syncPipedriveActivity(personId, null, Number.isFinite(orgId as any) ? (orgId as any) : null);
-              } else {
-                console.error("Pipedrive lead missing person_id; cannot sync activity", { lead_id: leadId });
-              }
+              const candidate = Number(personIdRaw);
+              if (Number.isFinite(candidate) && !Number.isNaN(candidate)) personId = candidate;
+              const candidateOrg = orgIdRaw ? Number(orgIdRaw) : null;
+              if (candidateOrg !== null && Number.isFinite(candidateOrg) && !Number.isNaN(candidateOrg)) orgId = candidateOrg;
             }
-          } else if (admin) {
-            // Current app: contactId is UUID. Resolve to Pipedrive lead -> person_id via stored external_id.
-            const { data: contactRow, error: contactErr } = await admin
-              .from("contacts")
-              .select("id, source, external_id")
-              .eq("id", contactId)
-              .single();
+          }
+        }
 
-            if (!contactErr && contactRow?.source === "pipedrive" && contactRow?.external_id) {
-              const mappedLeadId = contactRow.external_id.toString().trim();
-              const leadRes = await fetch(`https://api.pipedrive.com/v1/leads/${mappedLeadId}?api_token=${pipedriveKey}`, {
-                headers: { Accept: "application/json" },
-              });
-              const leadJson = await leadRes.json().catch(() => null);
-              if (!leadRes.ok || !leadJson?.success) {
-                console.error("Failed to fetch Pipedrive lead for activity sync:", leadJson || leadRes.status);
-              } else {
-                const lead = leadJson.data || {};
-                const personIdRaw =
-                  lead.person_id?.value ??
-                  lead.person_id ??
-                  lead.person?.id ??
-                  lead.person?.value ??
-                  null;
-                const orgIdRaw =
-                  lead.organization_id?.value ??
-                  lead.organization_id ??
-                  lead.org_id?.value ??
-                  lead.org_id ??
-                  null;
-                const personId = Number(personIdRaw);
-                const orgId = orgIdRaw ? Number(orgIdRaw) : null;
-                if (Number.isFinite(personId) && !Number.isNaN(personId)) {
-                  await syncPipedriveActivity(personId, null, Number.isFinite(orgId as any) ? (orgId as any) : null);
-                } else {
-                  console.error("Pipedrive lead missing person_id; cannot sync activity", { lead_id: mappedLeadId });
-                }
-              }
+        if (!personId) {
+          pipedriveResult.error = "Pipedrive person_id unresolved";
+        } else {
+          // Link to an open deal if present (best-effort)
+          try {
+            const dealsJson: any = await pipedriveJson(
+              pipedriveKey,
+              `persons/${encodeURIComponent(String(personId))}/deals?status=open&limit=1`,
+            );
+            const deal = dealsJson?.data?.[0] || null;
+            const candidateDealId = Number(deal?.id);
+            if (Number.isFinite(candidateDealId) && !Number.isNaN(candidateDealId)) dealId = candidateDealId;
+            const orgRaw = deal?.org_id?.value ?? deal?.org_id ?? null;
+            const candidateOrg = orgRaw ? Number(orgRaw) : null;
+            if (!orgId && candidateOrg !== null && Number.isFinite(candidateOrg) && !Number.isNaN(candidateOrg)) orgId = candidateOrg;
+          } catch (e) {
+            console.error("Pipedrive open-deal lookup failed (non-blocking):", e);
+          }
+
+          let subject = `Echo Call: ${disposition}`;
+          let type = "call";
+          if (disposition === "sent") {
+            subject = "Echo Email Sent";
+            type = "email";
+          }
+
+          const safeNotes = typeof notes === "string" ? notes.trim() : "";
+          const aiNote =
+            await Promise.race([
+              generateCallNoteForPipedrive({
+                language: "cs",
+                disposition: typeof disposition === "string" ? disposition : "call",
+                durationSec: duration,
+                notes: safeNotes,
+                contact: {
+                  name: resolved?.contact?.name || contactName || null,
+                  title: resolved?.contact?.title || null,
+                  company: resolved?.contact?.company || companyName || null,
+                },
+              }),
+              sleep(2500).then(() => null),
+            ]);
+
+          const noteText = (aiNote || safeNotes || `Logged via Echo. Disposition: ${disposition}`).toString();
+          const htmlNote = formatActivityNoteHtml(noteText);
+
+          const activityBody: any = {
+            subject,
+            type,
+            person_id: personId,
+            done: 1,
+            duration: toPdDurationHHMM(duration),
+            note: htmlNote || noteText,
+          };
+          if (dealId) activityBody.deal_id = dealId;
+          if (orgId) activityBody.org_id = orgId;
+
+          let lastErr: string | null = null;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const pdRes = await fetch(`https://api.pipedrive.com/v1/activities?api_token=${pipedriveKey}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify(activityBody),
+            });
+            const parsed = await pdRes.json().catch(() => null);
+            if (pdRes.ok && parsed?.data?.id) {
+              pipedriveResult.synced = true;
+              pipedriveResult.activity_id = Number(parsed.data.id);
+              lastErr = null;
+              break;
             }
+
+            lastErr = parsed?.error || parsed?.message || `HTTP ${pdRes.status}`;
+            const retryable = pdRes.status === 429 || pdRes.status >= 500;
+            if (!retryable || attempt === 2) break;
+            await sleep(350 * (attempt + 1) + Math.floor(Math.random() * 250));
+          }
+
+          if (!pipedriveResult.synced && lastErr) {
+            pipedriveResult.error = lastErr;
           }
         }
       } catch (pdErr) {
         console.error("Pipedrive Sync Error:", pdErr);
+        pipedriveResult.error = pdErr instanceof Error ? pdErr.message : String(pdErr);
       }
     }
     // --- PIPEDRIVE SYNC END ---
@@ -3722,7 +4286,17 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
     // In a real app, we'd find the campaign and update the specific contact's status inside it
     // For this MVP, we will rely on the frontend to filter 'pending' vs 'called' based on local state or reload.
     
-    return c.json({ success: true, logId });
+    return c.json({
+      success: true,
+      logId,
+      pipedrive: pipedriveResult.attempted
+        ? {
+            synced: pipedriveResult.synced,
+            activity_id: pipedriveResult.activity_id || null,
+            error: pipedriveResult.error || null,
+          }
+        : { synced: false, activity_id: null, error: "not_configured" },
+    });
   } catch (error) {
     console.error("Error logging call:", error);
     return c.json({ error: "Failed to log call" }, 500);
