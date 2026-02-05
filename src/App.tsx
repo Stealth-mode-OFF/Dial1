@@ -28,6 +28,12 @@ function AppLoader() {
 export default function App() {
   const [mode, setMode] = useState<AppMode>('dialer');
 
+  // Function to switch modes and update URL
+  const switchMode = (newMode: AppMode) => {
+    setMode(newMode);
+    window.location.hash = newMode === 'meetcoach' ? '#meet' : '#dialer';
+  };
+
   // URL-based routing
   React.useEffect(() => {
     const path = window.location.pathname;
@@ -52,7 +58,11 @@ export default function App() {
 
   return (
     <Suspense fallback={<AppLoader />}>
-      {mode === 'meetcoach' ? <MeetCoachApp /> : <DialerApp />}
+      {mode === 'meetcoach' ? (
+        <MeetCoachApp onSwitchMode={() => switchMode('dialer')} currentMode="meetcoach" />
+      ) : (
+        <DialerApp onSwitchMode={() => switchMode('meetcoach')} currentMode="dialer" />
+      )}
     </Suspense>
   );
 }

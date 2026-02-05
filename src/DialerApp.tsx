@@ -330,7 +330,7 @@ function AIPrepPanel({ prep, isLoading, onRefresh }: { prep: AIPrep | null; isLo
 }
 
 // ============ MAIN ============
-export function DialerApp() {
+export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => void; currentMode?: string }) {
   const { contacts: salesContacts, isLoading: contactsLoading } = useSales();
   
   // Map sales contacts or use fallback
@@ -470,6 +470,15 @@ export function DialerApp() {
               <span className="logo-tag">Sales Intelligence</span>
             </div>
           </div>
+          {onSwitchMode && (
+            <button 
+              onClick={onSwitchMode} 
+              className="mode-switch-btn"
+              title="Switch to Meet Coach"
+            >
+              <span>→ Meet Coach</span>
+            </button>
+          )}
         </div>
         
         <div className="header-center">

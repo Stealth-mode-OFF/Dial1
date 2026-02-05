@@ -492,7 +492,7 @@ function ClosingPanel({ techniques, onSelect }: {
 }
 
 // ============ MAIN ============
-export function MeetCoachApp() {
+export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => void; currentMode?: string }) {
   const [lead] = useState<Lead>(DEMO_LEAD);
   const [script, setScript] = useState<DemoScript | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -562,6 +562,15 @@ export function MeetCoachApp() {
               <span className="meet-logo-tag">SPIN Demo Assistant</span>
             </div>
           </div>
+          {onSwitchMode && (
+            <button 
+              onClick={onSwitchMode} 
+              className="mode-switch-btn"
+              title="Switch to Dialer"
+            >
+              <span>← Dialer</span>
+            </button>
+          )}
         </div>
 
         <div className="meet-header-center">
