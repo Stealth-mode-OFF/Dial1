@@ -1,96 +1,167 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const enabledToggle = document.getElementById('enabledToggle');
-  const apiEndpointInput = document.getElementById('apiEndpoint');
-  const authTokenInput = document.getElementById('authToken');
-  const myNameInput = document.getElementById('myName');
-  const saveBtn = document.getElementById('saveBtn');
-  const statusDot = document.getElementById('statusDot');
-  const statusText = document.getElementById('statusText');
-  const infoBox = document.getElementById('infoBox');
-  const errorBox = document.getElementById('errorBox');
-  const advancedToggle = document.getElementById('advancedToggle');
-  const advancedSection = document.getElementById('advancedSection');
+// Extension Popup Script
+// Configure Dial1 URL + debug, and show forwarding health.
 
-  function showError(message) {
-    errorBox.textContent = message;
-    errorBox.classList.add('show');
+function $(id) {
+  return document.getElementById(id);
+}
+
+function formatAge(ms) {
+  if (ms == null || !Number.isFinite(ms)) return '—';
+  if (ms < 1000) return 'just now';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  return `${m}m ago`;
+}
+
+function normalizeBaseUrl(input) {
+  const raw = (input || '').toString().trim();
+  if (!raw) return '';
+  try {
+    const u = new URL(raw.includes('://') ? raw : `https://${raw}`);
+    return `${u.origin}/`;
+  } catch {
+    return '';
   }
+}
 
-  function clearError() {
-    errorBox.textContent = '';
-    errorBox.classList.remove('show');
+async function getActiveTabOrigin() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url) return '';
+  try {
+    return new URL(tab.url).origin;
+  } catch {
+    return '';
   }
+}
 
-  function updateStatus({ enabled, apiEndpoint }) {
-    const ok = Boolean(enabled && apiEndpoint);
-    if (ok) {
-      statusDot.classList.add('active');
-      statusText.textContent = 'Enabled';
-      infoBox.classList.add('show');
-      infoBox.textContent = 'Listening to Meet captions…';
-    } else if (enabled && !apiEndpoint) {
-      statusDot.classList.remove('active');
-      statusText.textContent = 'Needs endpoint';
-      infoBox.classList.remove('show');
-    } else {
-      statusDot.classList.remove('active');
-      statusText.textContent = 'Disabled';
-      infoBox.classList.remove('show');
-    }
-  }
+async function requestOriginPermission(origin) {
+  return await new Promise((resolve) => {
+    chrome.permissions.request({ origins: [`${origin}/*`] }, (granted) => resolve(Boolean(granted)));
+  });
+}
 
-  function load() {
-    chrome.storage.local.get(['enabled', 'apiEndpoint', 'authToken', 'myName'], (result) => {
-      const enabled = Boolean(result.enabled);
-      const apiEndpoint = (result.apiEndpoint || '').toString().trim();
-      const authToken = (result.authToken || '').toString().trim();
-      const myName = (result.myName || '').toString().trim();
-
-      enabledToggle.checked = enabled;
-      apiEndpointInput.value = apiEndpoint;
-      authTokenInput.value = authToken;
-      myNameInput.value = myName;
-
-      clearError();
-      updateStatus({ enabled, apiEndpoint });
+async function loadSettings() {
+  return await new Promise((resolve) => {
+    chrome.storage.local.get(['dial1BaseUrl', 'enabled', 'debugMeet'], (res) => {
+      resolve({
+        dial1BaseUrl: res.dial1BaseUrl || 'https://dial1.vercel.app/',
+        enabled: res.enabled !== false,
+        debugMeet: Boolean(res.debugMeet),
+      });
     });
+  });
+}
+
+async function saveSettings(next) {
+  return await new Promise((resolve) => chrome.storage.local.set(next, () => resolve(true)));
+}
+
+async function getStatus() {
+  return await new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: 'POPUP_GET_STATUS' }, (res) => resolve(res || { ok: false }));
+  });
+}
+
+async function pingDial1() {
+  return await new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: 'POPUP_PING_DIAL1' }, (res) => resolve(res || { ok: false }));
+  });
+}
+
+function setError(text) {
+  const el = $('error');
+  el.textContent = text || '';
+  el.style.display = text ? 'block' : 'none';
+}
+
+function setInfo(text) {
+  const el = $('info');
+  el.textContent = text || '';
+  el.style.display = text ? 'block' : 'none';
+}
+
+function setStatusDot(connected) {
+  const dot = $('statusDot');
+  const label = $('statusLabel');
+  if (connected) {
+    dot.classList.add('active');
+    label.textContent = 'Active';
+  } else {
+    dot.classList.remove('active');
+    label.textContent = 'Idle';
   }
+}
 
-  function save() {
-    const enabled = Boolean(enabledToggle.checked);
-    const apiEndpoint = (apiEndpointInput.value || '').toString().trim();
-    const authToken = (authTokenInput.value || '').toString().trim();
-    const myName = (myNameInput.value || '').toString().trim();
+async function render() {
+  const res = await getStatus();
+  if (!res?.ok) return;
 
-    clearError();
+  const status = res.status || {};
+  const cfg = res.config || {};
 
-    if (enabled && (!apiEndpoint || apiEndpoint.includes('<project>'))) {
-      showError('Set a valid API Endpoint in Advanced Settings.');
-      advancedSection.classList.add('show');
-      updateStatus({ enabled, apiEndpoint: '' });
-      return;
-    }
+  const now = Date.now();
+  $('meetLast').textContent = status.lastMeetCaptionAt ? formatAge(now - status.lastMeetCaptionAt) : '—';
+  $('fwdLast').textContent = status.lastForwardedAt ? formatAge(now - status.lastForwardedAt) : '—';
+  $('dial1Found').textContent = status.dial1Found ? 'Yes' : 'No';
+  $('lastErr').textContent = status.lastError ? status.lastError : '—';
 
-    chrome.storage.local.set({ enabled, apiEndpoint, authToken, myName }, () => {
-      updateStatus({ enabled, apiEndpoint });
-    });
-  }
+  const active = cfg.enabled && (status.lastForwardedAt || status.lastMeetCaptionAt);
+  setStatusDot(Boolean(active));
+}
 
-  enabledToggle.addEventListener('change', save);
-  saveBtn.addEventListener('click', save);
+document.addEventListener('DOMContentLoaded', async () => {
+  const settings = await loadSettings();
 
-  advancedToggle.addEventListener('click', (e) => {
-    e.preventDefault();
-    advancedSection.classList.toggle('show');
+  $('dial1Url').value = settings.dial1BaseUrl;
+  $('enabled').checked = settings.enabled;
+  $('debug').checked = settings.debugMeet;
+
+  $('useCurrentTab').addEventListener('click', async () => {
+    setError('');
+    const origin = await getActiveTabOrigin();
+    if (!origin) return setError('Could not read current tab URL.');
+    $('dial1Url').value = `${origin}/`;
+    setInfo('Dial1 URL set from current tab.');
   });
 
-  // Live status updates when storage changes
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== 'local') return;
-    const enabled = changes.enabled ? Boolean(changes.enabled.newValue) : enabledToggle.checked;
-    const apiEndpoint = changes.apiEndpoint ? String(changes.apiEndpoint.newValue || '').trim() : apiEndpointInput.value.trim();
-    updateStatus({ enabled, apiEndpoint });
+  $('openDial1').addEventListener('click', async () => {
+    const base = normalizeBaseUrl($('dial1Url').value) || 'https://dial1.vercel.app/';
+    await chrome.tabs.create({ url: base });
   });
 
-  load();
+  $('save').addEventListener('click', async () => {
+    setError('');
+    setInfo('');
+    const base = normalizeBaseUrl($('dial1Url').value);
+    if (!base) return setError('Enter a valid Dial1 URL (e.g. https://dial1.vercel.app).');
+
+    // Request optional permission if needed (e.g. vercel preview).
+    const origin = new URL(base).origin;
+    const granted = await requestOriginPermission(origin);
+    if (!granted) {
+      // Not fatal for dial1.vercel.app / localhost (already in host_permissions),
+      // but for other domains it may prevent the bridge from loading.
+      setInfo('Permission not granted. If this is a custom domain, forwarding may not work.');
+    }
+
+    await saveSettings({
+      dial1BaseUrl: base,
+      enabled: $('enabled').checked,
+      debugMeet: $('debug').checked,
+    });
+    setInfo('Saved.');
+    await render();
+  });
+
+  $('ping').addEventListener('click', async () => {
+    setError('');
+    const res = await pingDial1();
+    if (!res?.ok) return setError(res?.error || 'Ping failed.');
+    setInfo('Dial1 bridge responded.');
+  });
+
+  await render();
+  setInterval(render, 1000);
 });
+

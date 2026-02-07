@@ -7,3 +7,6 @@ build
 .vercel
 .env*.local
 supabase/.temp/
+
+# Local debug artifacts
+dial1_repo_digest.txt
