@@ -31,8 +31,8 @@ The extension does NOT talk to Supabase or any backend.
 ## Configure
 
 1. Open Dial1 Meet Coach in a tab:
-   - Local: `http://localhost:5173/meet-coach` (or whatever route maps to Meet Coach)
-   - Production: `https://dial1.vercel.app/...`
+   - Local: `http://localhost:5173/meet` or `http://localhost:5173/#meet`
+   - Production: `https://dial1.vercel.app/meet` or `https://dial1.vercel.app/#meet`
 2. Click the extension icon -> popup
 3. Set `Dial1 URL` to the Dial1 tab origin:
    - Example: `http://localhost:5173/`
@@ -80,4 +80,3 @@ Note: if you enter a Vercel preview URL (like `https://dial1-xxxx.vercel.app/`),
 1. Reload the Dial1 tab.
 2. Re-open the extension popup and click `Ping Dial1`.
 3. Ensure the Dial1 URL in popup matches the tab (same origin).
-
