@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSales } from './contexts/SalesContext';
 import { echoApi } from './utils/echoApi';
 import { isSupabaseConfigured } from './utils/supabase/info';
+import { SettingsWorkspace } from './pages/SettingsWorkspace';
 
 // ============ TYPES ============
 interface Contact {
@@ -39,107 +40,32 @@ interface DailyStats {
   goal: number;
 }
 
-// ============ FALLBACK DATA ============
-const FALLBACK_CONTACTS: Contact[] = [
-  { id: '1', name: 'Jan Novák', company: 'TechCorp s.r.o.', phone: '+420 777 123 456', email: 'jan@techcorp.cz', title: 'CEO', status: 'new', priority: 'high', industry: 'Software' },
-  { id: '2', name: 'Marie Svobodová', company: 'Digital Solutions', phone: '+420 608 234 567', email: 'marie@digital.cz', title: 'Marketing Director', status: 'new', priority: 'high', industry: 'Marketing' },
-  { id: '3', name: 'Petr Kučera', company: 'Innovation Hub', phone: '+420 721 345 678', email: 'petr@innovhub.cz', title: 'CTO', status: 'contacted', priority: 'medium', industry: 'Technology' },
-  { id: '4', name: 'Eva Procházková', company: 'StartUp Factory', phone: '+420 602 456 789', email: 'eva@startup.cz', title: 'Founder', status: 'new', priority: 'high', industry: 'Venture Capital' },
-  { id: '5', name: 'Tomáš Veselý', company: 'Cloud Systems', phone: '+420 773 567 890', email: 'tomas@cloud.cz', title: 'VP Sales', status: 'interested', priority: 'high', industry: 'Cloud Services' },
-];
-
 // ============ AI PREP - Real API + Fallback ============
 const generateAIPrep = async (contact: Contact): Promise<AIPrep> => {
-  // Try real OpenAI API first
-  if (isSupabaseConfigured) {
-    try {
-      const result = await echoApi.ai.sectorBattleCard({
-        companyName: contact.company,
-        industry: contact.industry,
-        personTitle: contact.title,
-      });
-      
-      if (result) {
-        return {
-          companyInsight: result.companyContext || result.insight || `${contact.company} v oboru ${contact.industry}`,
-          painPoints: result.painPoints || result.challenges || [],
-          openingLine: result.openingLine || result.opener || '',
-          qualifyingQuestions: result.qualifyingQuestions || result.questions || [],
-          objectionHandlers: result.objectionHandlers || result.objections || [],
-          competitorMentions: result.competitors || [],
-          recentNews: result.recentNews || result.news,
-          decisionMakerTips: result.decisionMakerTips || result.dmTips || '',
-          isFromApi: true,
-        };
-      }
-    } catch (err) {
-      console.warn('AI API failed, using fallback:', err);
-    }
+  if (!isSupabaseConfigured) {
+    throw new Error('AI is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
   }
 
-  // Intelligent fallback
-  await new Promise(r => setTimeout(r, 400));
-  const firstName = contact.name.split(' ')[0];
+  const result = await echoApi.ai.sectorBattleCard({
+    companyName: contact.company,
+    industry: contact.industry,
+    personTitle: contact.title,
+  });
 
-  const industryData: Record<string, { pains: string[]; competitors: string[] }> = {
-    'Software': {
-      pains: ['Dlouhé sales cykly snižující cash flow', 'Nízká konverze leadů na demo', 'Nedostatek kvalitních dat pro personalizaci'],
-      competitors: ['Salesforce', 'HubSpot', 'Pipedrive'],
-    },
-    'Marketing': {
-      pains: ['Obtížné měření ROI kampaní', 'Fragmentace dat mezi platformami', 'Slabý alignment se sales'],
-      competitors: ['HubSpot', 'Marketo', 'Mailchimp'],
-    },
-    'Technology': {
-      pains: ['Škálování bez ztráty kvality', 'Technický dluh v legacy systémech', 'Hiring a retence talentů'],
-      competitors: ['Microsoft', 'Google', 'AWS'],
-    },
-    'Cloud Services': {
-      pains: ['Konkurence hyperscalerů', 'Security compliance', 'Churn enterprise klientů'],
-      competitors: ['AWS', 'Azure', 'Google Cloud'],
-    },
-    'default': {
-      pains: ['Efektivita obchodního týmu', 'Kvalifikace leadů', 'Zkrácení sales cyklu'],
-      competitors: ['Salesforce', 'HubSpot', 'Outreach'],
-    },
-  };
-
-  const data = industryData[contact.industry || 'default'] || industryData['default'];
-
-  const openingByTitle: Record<string, string> = {
-    'CEO': `${firstName}, volám protože spolupracuji s CEO v ${contact.industry || 'B2B'} a řeším s nimi růst revenue. Máte 90 sekund?`,
-    'CTO': `${firstName}, jako CTO jistě řešíte jak dát sales týmu lepší nástroje. Mám konkrétní řešení - máte chvíli?`,
-    'VP Sales': `${firstName}, pracuji s VP Sales podobných firem. Vím, že řešíte prediktabilitu pipeline. Krátký call?`,
-    'Founder': `${firstName}, jako founder ${contact.company} víte, že každý deal je klíčový. Ukážu vám jak zvýšit close rate.`,
-    'Marketing Director': `${firstName}, marketing a sales alignment je věčná výzva. Mám řešení - stojí za 2 minuty?`,
-  };
-
-  const decisionTips: Record<string, string> = {
-    'CEO': 'DECISION MAKER - Mluv strategicky. ROI, růst, konkurenční výhoda. Respektuj jeho čas.',
-    'CTO': 'TECHNICAL INFLUENCER - Zajímá ho integrace, security, maintenance. Zjisti kdo má budget.',
-    'VP Sales': 'DIRECT BUYER - Zná pain přesně. Mluv o metrikách: connect rate, pipeline velocity, win rate.',
-    'Founder': 'ULTIMATE DECISION MAKER - Rychlý, pragmatický. Chce výsledky, ne features.',
-    'Marketing Director': 'INFLUENCER - Spolupracuje se sales. Zjisti vztah s VP Sales nebo CRO.',
-  };
+  if (!result) {
+    throw new Error('AI response was empty.');
+  }
 
   return {
-    companyInsight: `${contact.company} působí v ${contact.industry || 'B2B'}. ${contact.title} má pravděpodobně přehled o sales výzvách. Zaměř se na byznysový dopad, ne technické detaily.`,
-    painPoints: data.pains,
-    openingLine: openingByTitle[contact.title || ''] || `${firstName}, spolupracuji s firmami v ${contact.industry || 'vašem oboru'}. Máte 2 minuty na krátký insight?`,
-    qualifyingQuestions: [
-      'Jaká je vaše priorita pro tento kvartál?',
-      'Jak vypadá váš současný sales proces?',
-      'Kdo ještě rozhoduje o nástrojích pro sales?',
-    ],
-    objectionHandlers: [
-      { objection: '"Nemám čas"', response: `Rozumím. Právě proto volám - ukážu vám jak ušetřit 5h týdně. Kdy se hodí 15 minut?` },
-      { objection: '"Pošlete email"', response: 'Jasně. Co konkrétně teď řešíte v sales? Pošlu vám relevantní case study.' },
-      { objection: '"Už něco máme"', response: 'Co používáte? Většina klientů k nám přešla právě od podobných řešení.' },
-      { objection: '"Je to drahé"', response: 'Kolik stojí jeden ztracený deal? ROI vidíte první měsíc.' },
-    ],
-    competitorMentions: data.competitors,
-    decisionMakerTips: decisionTips[contact.title || ''] || 'Zjisti rozhodovací proces a kdo má budget.',
-    isFromApi: false,
+    companyInsight: result.companyContext || result.insight || `${contact.company}`,
+    painPoints: result.painPoints || result.challenges || [],
+    openingLine: result.openingLine || result.opener || '',
+    qualifyingQuestions: result.qualifyingQuestions || result.questions || [],
+    objectionHandlers: result.objectionHandlers || result.objections || [],
+    competitorMentions: result.competitors || [],
+    recentNews: result.recentNews || result.news,
+    decisionMakerTips: result.decisionMakerTips || result.dmTips || '',
+    isFromApi: true,
   };
 };
 
@@ -339,10 +265,11 @@ function AIPrepPanel({ prep, isLoading, onRefresh }: { prep: AIPrep | null; isLo
 
 // ============ MAIN ============
 export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => void; currentMode?: string }) {
-  const { contacts: salesContacts, isLoading: contactsLoading } = useSales();
+  const { contacts: salesContacts, isLoading: contactsLoading, pipedriveConfigured, error: salesError } = useSales();
   const externalNavDisabled = import.meta.env.VITE_E2E_DISABLE_EXTERNAL_NAV === 'true';
+  const [showSettings, setShowSettings] = useState(false);
   
-  // Map sales contacts or use fallback
+  // Map sales contacts (no demo fallbacks).
   const contacts: Contact[] = useMemo(() => {
     if (salesContacts && salesContacts.length > 0) {
       return salesContacts
@@ -360,11 +287,11 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
           orgId: c.orgId || undefined,
         }));
     }
-    return FALLBACK_CONTACTS;
+    return [];
   }, [salesContacts]);
 
   const [session, setSession] = useState<StoredSession>(loadSession);
-  const [activeIndex, setActiveIndex] = useState(Math.min(session.currentIndex, contacts.length - 1));
+  const [activeIndex, setActiveIndex] = useState(0);
   const [isInCall, setIsInCall] = useState(false);
   const [callStart, setCallStart] = useState<number | null>(null);
   const [callDuration, setCallDuration] = useState(0);
@@ -372,22 +299,40 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
   const [showConfetti, setShowConfetti] = useState(false);
   const [aiPrep, setAiPrep] = useState<AIPrep | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const contact = contacts[activeIndex] || null;
   const activeContacts = useMemo(() => contacts.filter(c => !session.completedIds.includes(c.id)), [contacts, session.completedIds]);
+  const hasContacts = contacts.length > 0;
+
+  useEffect(() => {
+    // Clamp / restore index when contacts change.
+    if (!contacts.length) {
+      setActiveIndex(0);
+      return;
+    }
+    const next = Math.min(Math.max(0, session.currentIndex || 0), contacts.length - 1);
+    setActiveIndex(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts.length]);
 
   // Load AI prep
   const loadAiPrep = useCallback(async () => {
     if (!contact) return;
     setAiLoading(true);
+    setAiError(null);
     try {
       const prep = await generateAIPrep(contact);
       setAiPrep(prep);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'AI unavailable';
+      setAiPrep(null);
+      setAiError(msg);
     } finally {
       setAiLoading(false);
     }
-  }, [contact?.id]);
+  }, [contact]);
 
   useEffect(() => { loadAiPrep(); }, [contact?.id]);
   useEffect(() => { saveSession({ ...session, currentIndex: activeIndex }); }, [session, activeIndex]);
@@ -420,6 +365,7 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
 
   const handleCall = useCallback(() => {
     if (!contact) return;
+    if (!hasContacts) return;
     if (!isInCall) {
       setIsInCall(true);
       setCallStart(Date.now());
@@ -434,12 +380,14 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
   }, [contact, isInCall, externalNavDisabled, endCall]);
 
   const handleSkip = useCallback(() => {
+    if (!hasContacts) return;
     if (isInCall) endCall('no-answer');
-    setActiveIndex(i => (i + 1) % contacts.length);
+    setActiveIndex(i => Math.min(i + 1, contacts.length - 1));
   }, [isInCall, contacts.length, endCall]);
 
   const handleMeeting = useCallback(() => {
     if (!contact) return;
+    if (!hasContacts) return;
     setSession(s => ({ ...s, stats: { ...s.stats, meetings: s.stats.meetings + 1 }, completedIds: [...s.completedIds, contact.id] }));
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 2000);
@@ -449,6 +397,7 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
 
   const handleNotInterested = useCallback(() => {
     if (!contact) return;
+    if (!hasContacts) return;
     setSession(s => ({ ...s, completedIds: [...s.completedIds, contact.id] }));
     if (isInCall) endCall('connected');
     setActiveIndex(i => Math.min(i + 1, contacts.length - 1));
@@ -461,6 +410,7 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isEditableTarget(e.target)) return;
+      if (!hasContacts) return;
       const k = e.key.toLowerCase();
       if (k === 'c') { e.preventDefault(); handleCall(); }
       if (k === 's') { e.preventDefault(); handleSkip(); }
@@ -472,7 +422,7 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [contacts.length, handleCall, handleSkip, handleMeeting, openMeet]);
+  }, [hasContacts, contacts.length, handleCall, handleSkip, handleMeeting, openMeet]);
 
   const connectRate = session.stats.calls > 0 ? Math.round((session.stats.connected / session.stats.calls) * 100) : 0;
   const goalProgress = Math.min(100, Math.round((session.stats.calls / session.stats.goal) * 100));
@@ -498,6 +448,15 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
               <span>→ Meet Coach</span>
             </button>
           )}
+          <button
+            onClick={() => setShowSettings(true)}
+            className="mode-switch-btn"
+            title="Settings"
+            style={{ marginLeft: 8 }}
+            type="button"
+          >
+            <span>⚙ Settings</span>
+          </button>
         </div>
         
         <div className="header-center">
@@ -527,14 +486,23 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
           <div className="queue-list">
             {contactsLoading ? (
               <div className="queue-loading">Loading contacts...</div>
-            ) : (
+            ) : contacts.length ? (
               contacts.map((c, i) => (
                 <ContactRow key={c.id} contact={c} isActive={i === activeIndex} onClick={() => setActiveIndex(i)} />
               ))
+            ) : (
+              <div className="queue-loading" style={{ lineHeight: 1.4 }}>
+                {pipedriveConfigured
+                  ? 'No contacts loaded. Check Pipedrive has people with phone numbers, then hit Refresh in Settings.'
+                  : 'Pipedrive is not configured. Open Settings and paste your API key.'}
+                {salesError ? <div style={{ marginTop: 8, opacity: 0.7 }}>{salesError}</div> : null}
+              </div>
             )}
           </div>
           <div className="queue-footer">
-            <span className="api-status">{isSupabaseConfigured ? '● Connected' : '○ Demo Mode'}</span>
+            <span className="api-status">
+              {pipedriveConfigured ? '● Pipedrive connected' : '○ Pipedrive not configured'}
+            </span>
           </div>
         </aside>
 
@@ -617,7 +585,29 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
         </section>
 
         {/* AI Panel */}
-        <AIPrepPanel prep={aiPrep} isLoading={aiLoading} onRefresh={loadAiPrep} />
+        <div style={{ position: 'relative' }}>
+          <AIPrepPanel prep={aiPrep} isLoading={aiLoading} onRefresh={loadAiPrep} />
+          {aiError && (
+            <div
+              style={{
+                position: 'absolute',
+                right: 16,
+                bottom: 16,
+                maxWidth: 360,
+                padding: 12,
+                background: '#fff',
+                border: '2px solid #111',
+                borderRadius: 12,
+                boxShadow: '6px 6px 0 #111',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace',
+                fontSize: 12,
+              }}
+            >
+              <div style={{ fontWeight: 800, marginBottom: 6 }}>AI unavailable</div>
+              <div style={{ opacity: 0.8 }}>{aiError}</div>
+            </div>
+          )}
+        </div>
       </main>
 
       {/* Footer */}
@@ -647,6 +637,52 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
                 style={{ background: ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6'][i % 4] }}
               />
             ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            className="confetti"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              background: 'rgba(0,0,0,0.55)',
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1000,
+            }}
+            onClick={() => setShowSettings(false)}
+          >
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              style={{
+                position: 'absolute',
+                top: 24,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 'min(1100px, calc(100vw - 32px))',
+                maxHeight: 'calc(100vh - 48px)',
+                overflow: 'auto',
+                background: '#fafbfc',
+                borderRadius: 16,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: 12 }}>
+                <button className="action-btn action-secondary" onClick={() => setShowSettings(false)} type="button">
+                  Close
+                </button>
+              </div>
+              <div style={{ padding: 16 }}>
+                <SettingsWorkspace />
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

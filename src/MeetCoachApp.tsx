@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { echoApi } from './utils/echoApi';
 import { isSupabaseConfigured } from './utils/supabase/info';
 import { MeetCaptionsPanel } from './components/MeetCaptionsPanel';
+import { useSales } from './contexts/SalesContext';
 
 // ============ TYPES ============
 interface Lead {
@@ -64,168 +65,23 @@ const SPIN_PHASES: SPINPhase[] = [
   { id: 'need-payoff', name: 'Need-Payoff', shortName: 'N', description: 'Nabídni řešení', color: '#10b981', icon: '✨' },
 ];
 
-const DEMO_LEAD: Lead = {
-  id: '1',
-  name: 'Martin Dvořák',
-  company: 'TechScale Solutions',
-  title: 'VP of Sales',
-  industry: 'SaaS',
-  email: 'martin@techscale.cz',
-  painPoints: ['Nízká konverze leadů', 'Dlouhý sales cyklus', 'Nekonzistentní messaging'],
-  currentSolution: 'Salesforce + Excel',
-  budget: '50-100k CZK/měsíc',
-  timeline: 'Q1 2026',
-  decisionProcess: 'VP Sales → CEO → Board',
-};
-
 // ============ AI SCRIPT GENERATOR ============
-const generateDemoScript = async (lead: Lead): Promise<DemoScript> => {
+const generateDemoScript = async (lead: Lead): Promise<DemoScript | null> => {
   // Try real API
-  if (isSupabaseConfigured) {
-    try {
-      const result = await echoApi.ai.generate({
-        prompt: `Generate a 20-minute SPIN selling demo script for:
-          Lead: ${lead.name}, ${lead.title} at ${lead.company}
-          Industry: ${lead.industry}
-          Pain points: ${lead.painPoints?.join(', ')}
-          Current solution: ${lead.currentSolution}
-          Format: JSON with blocks for each SPIN phase`,
-        type: 'demo-script'
-      });
-      if (result?.script) {
-        return { ...result.script, isFromApi: true };
-      }
-    } catch (err) {
-      console.warn('API failed, using fallback script generator:', err);
-    }
+  if (!isSupabaseConfigured) return null;
+  try {
+    const result = await echoApi.ai.generate({
+      prompt: `Generate a 20-minute SPIN selling call script for:
+        Lead: ${lead.name}, ${lead.title || ''} at ${lead.company}
+        Industry: ${lead.industry || ''}
+        Format: JSON with blocks for each SPIN phase`,
+      type: 'spin-script',
+    });
+    if (result?.script) return { ...result.script, isFromApi: true };
+  } catch (err) {
+    console.warn('AI script generation failed:', err);
   }
-
-  // Intelligent fallback
-  await new Promise(r => setTimeout(r, 600));
-
-  const blocks: ScriptBlock[] = [
-    {
-      phase: 'situation',
-      title: 'Úvod & Situace',
-      duration: '4 min',
-      content: `Děkuji za čas, ${lead.name}. Cílem dnešního callu je ukázat vám, jak ${lead.company} může zvýšit efektivitu sales týmu. Než začnu, rád bych lépe pochopil vaši současnou situaci.`,
-      questions: [
-        `Jak velký je váš sales tým v ${lead.company}?`,
-        'Jaké nástroje aktuálně používáte pro řízení pipeline?',
-        'Kolik hovorů denně váš tým typicky odbavuje?',
-        'Jak měříte úspěšnost vašich sales aktivit?',
-      ],
-      tips: [
-        '⏱️ Nepřekračuj 4 minuty na situační otázky',
-        '📝 Zapisuj si klíčové metriky, které zmiňuje',
-        '🎯 Hledej vstupy pro problémové otázky',
-      ],
-      transitions: [
-        'Rozumím. A jak jste spokojeni s výsledky?',
-        'Zajímavé. Co by podle vás mohlo fungovat lépe?',
-      ],
-    },
-    {
-      phase: 'problem',
-      title: 'Identifikace problémů',
-      duration: '5 min',
-      content: `Teď když rozumím vaší situaci, pojďme se podívat na oblasti, které by mohly být efektivnější.`,
-      questions: [
-        'S jakými největšími výzvami se váš tým potýká při cold callingu?',
-        'Jak často se stává, že sales rep nemá dostatek informací o leadovi?',
-        'Kolik času strávíte přípravou před každým hovorem?',
-        `Zmínil jste ${lead.currentSolution} - co na něm nefunguje tak, jak byste chtěli?`,
-      ],
-      tips: [
-        '🎯 Propojuj problémy s pain pointy z researche',
-        '😤 Nech ho vyjádřit frustraci - to buduje urgenci',
-        '📊 Kvantifikuj problémy kde to jde (čas, peníze)',
-      ],
-      transitions: [
-        'To zní jako významná ztráta času...',
-        'Chápu. A jaký má tohle dopad na vaše výsledky?',
-      ],
-    },
-    {
-      phase: 'implication',
-      title: 'Důsledky problémů',
-      duration: '5 min',
-      content: `Pojďme se podívat na to, co tyto problémy vlastně znamenají pro ${lead.company} v širším kontextu.`,
-      questions: [
-        'Když váš tým stráví tolik času přípravou, kolik hovorů denně to stojí?',
-        'Pokud by každý rep měl o 20% více času na hovory, jaký by to mělo dopad na pipeline?',
-        'Jak tyto problémy ovlivňují morálku týmu a retenci?',
-        'Co to znamená pro vaše Q1 targety, když sales cyklus trvá tak dlouho?',
-      ],
-      tips: [
-        '💰 Převáděj na peníze - ztracené dealy, náklady',
-        '⏰ Ukazuj časový tlak - konkurence, trh',
-        '😰 Buduj urgenci bez agresivity',
-      ],
-      transitions: [
-        'To je významný dopad. Pojďme se podívat, jak to můžeme vyřešit.',
-        'Přesně proto jsem vás oslovil. Mám řešení.',
-      ],
-    },
-    {
-      phase: 'need-payoff',
-      title: 'Řešení & Demo',
-      duration: '6 min',
-      content: `Teď vám ukážu, jak Dial1 řeší přesně tyto problémy, které jste zmínil.`,
-      questions: [
-        'Kdybyste měli všechny informace o leadu během 5 sekund, jak by to změnilo váš přístup?',
-        'Co kdyby váš tým měl real-time coaching během každého hovoru?',
-        'Jak by vypadal váš ideální den sales repa?',
-        'Pokud bychom dokázali zkrátit přípravu o 80%, co byste s tím časem dělali?',
-      ],
-      tips: [
-        '🖥️ Ukazuj produkt, nemluv o něm',
-        '🎯 Propojuj features s jeho konkrétními problémy',
-        '✨ Nech ho představit si úspěch',
-      ],
-      transitions: [
-        'Jak by tohle fungovalo ve vašem týmu?',
-        'Vidíte, jak by to pomohlo s tím problémem, co jste zmínil?',
-      ],
-    },
-  ];
-
-  const closingTechniques = [
-    {
-      name: 'Assumptive Close',
-      script: `Super, ${lead.name}. Takže další krok by byl nastavit pilotní projekt pro váš tým. Hodil by se vám začátek příštího týdne, nebo preferujete týden poté?`,
-    },
-    {
-      name: 'Summary Close',
-      script: `Pojďme shrnout: zmínil jste ${lead.painPoints?.[0] || 'problémy s efektivitou'}, ${lead.painPoints?.[1] || 'dlouhý sales cyklus'}, a potřebu lepších dat. Dial1 řeší všechny tři. Kdy můžeme začít?`,
-    },
-    {
-      name: 'ROI Close',
-      script: `Pokud váš tým má 10 lidí a každý ušetří 2 hodiny denně, to je 400 hodin měsíčně. Při průměrné mzdě to je ${Math.round(400 * 300 / 1000)}k CZK. Investice do Dial1 se vrátí první měsíc. Dává to smysl?`,
-    },
-    {
-      name: 'Timeline Close',
-      script: `Zmínil jste, že chcete zlepšit výsledky do Q1. Implementace trvá 2 týdny. Pokud začneme příští týden, budete ready do konce ledna. Jak to zní?`,
-    },
-  ];
-
-  const objectionHandlers = [
-    { objection: '"Musím to probrat s týmem"', response: `Jasně. Co kdyby se CEO připojil na krátký 15min call příští týden? Můžu připravit executive summary.` },
-    { objection: '"Je to drahé"', response: `Chápu. Kolik stojí jeden ztracený deal? Při vašem ACV to je ${Math.round(parseInt(lead.budget || '50000') * 0.1)}k. Dial1 vám pomůže zachránit minimálně 2 dealy měsíčně.` },
-    { objection: '"Už něco máme"', response: `Co používáte? Většina klientů k nám přešla právě od ${lead.currentSolution || 'podobných řešení'}. Klíčový rozdíl je AI coaching v reálném čase.` },
-    { objection: '"Nemáme čas na implementaci"', response: `Setup trvá 30 minut. Váš tým může začít používat Dial1 ještě dnes. Ukážu vám jak.` },
-    { objection: '"Potřebuji více informací"', response: `Jasně. Co konkrétně byste chtěl vědět? Mezitím vám pošlu case study od podobné firmy v ${lead.industry || 'vašem oboru'}.` },
-    { objection: '"Teď není dobrý čas"', response: `Rozumím. Kdy bude lepší? Nechci, abyste promeškal příležitost zlepšit Q1 čísla. Co třeba krátký check-in za 2 týdny?` },
-  ];
-
-  return {
-    lead,
-    totalDuration: '20 min',
-    blocks,
-    closingTechniques,
-    objectionHandlers,
-    isFromApi: false,
-  };
+  return null;
 };
 
 // ============ LIVE WHISPER SYSTEM ============
@@ -494,9 +350,20 @@ function ClosingPanel({ techniques, onSelect }: {
 
 // ============ MAIN ============
 export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => void; currentMode?: string }) {
-  const [lead] = useState<Lead>(DEMO_LEAD);
   const [script, setScript] = useState<DemoScript | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const { contacts, activeContact, setActiveContactId, pipedriveConfigured, isLoading: salesLoading, error: salesError } = useSales();
+  const lead: Lead | null = useMemo(() => {
+    if (!activeContact) return null;
+    return {
+      id: activeContact.id,
+      name: activeContact.name || '',
+      company: activeContact.company || '',
+      title: activeContact.title || undefined,
+      email: activeContact.email || undefined,
+      industry: undefined,
+    };
+  }, [activeContact]);
   const [currentPhase, setCurrentPhase] = useState<SPINPhase['id']>('situation');
   const [isLive, setIsLive] = useState(false);
   const [meetTime, setMeetTime] = useState(0);
@@ -509,14 +376,24 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
 
   // Load script
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
+      if (!lead) {
+        setScript(null);
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(true);
       const s = await generateDemoScript(lead);
+      if (cancelled) return;
       setScript(s);
       setIsLoading(false);
     };
-    load();
-  }, [lead]);
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [lead?.id]);
 
   // Timer
   useEffect(() => {
@@ -560,7 +437,7 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
             <span className="meet-logo-icon">MC</span>
             <div className="meet-logo-text">
               <span className="meet-logo-name">Meet Coach</span>
-              <span className="meet-logo-tag">SPIN Demo Assistant</span>
+              <span className="meet-logo-tag">Live Coaching</span>
             </div>
           </div>
           {onSwitchMode && (
@@ -584,7 +461,7 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
 
         <div className="meet-header-right">
           <div className="meet-timer">
-            <span className="meet-timer-label">Demo Time</span>
+            <span className="meet-timer-label">Call Time</span>
             <span className="meet-timer-value">{formatTime(meetTime)}</span>
           </div>
           <button 
@@ -611,7 +488,30 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
       <main className="meet-main">
         {/* Left - Lead Info */}
         <aside className="meet-sidebar">
-          <LeadCard lead={lead} />
+          <div className="meet-api-status" style={{ marginBottom: 10 }}>
+            {pipedriveConfigured ? '● Pipedrive connected' : '○ Pipedrive not configured'}
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Active lead</div>
+            <select
+              value={activeContact?.id || ''}
+              onChange={(e) => setActiveContactId(e.target.value || null)}
+              disabled={salesLoading}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '2px solid #111' }}
+            >
+              <option value="" disabled>
+                {pipedriveConfigured ? 'Select a person…' : 'Configure Pipedrive in Settings'}
+              </option>
+              {contacts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}{c.company ? ` · ${c.company}` : ''}
+                </option>
+              ))}
+            </select>
+            {salesError ? <div className="muted text-xs" style={{ marginTop: 8 }}>{salesError}</div> : null}
+          </div>
+
+          {lead ? <LeadCard lead={lead} /> : null}
           
           <div className="meet-nav">
             <button 
@@ -646,9 +546,9 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
           {isLoading ? (
             <div className="meet-loading">
               <div className="meet-loading-spinner" />
-              <span>Generuji demo script pro {lead.name}...</span>
+              <span>Generuji script…</span>
             </div>
-          ) : script && (
+          ) : script ? (
             <>
               {view === 'script' && (
                 <div className="script-container">
@@ -704,6 +604,12 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
                 </div>
               )}
             </>
+          ) : (
+            <div className="meet-loading">
+              <span style={{ textAlign: 'center', maxWidth: 520 }}>
+                Vyber lead vlevo. AI SPIN script vyžaduje backend AI (OPENAI_API_KEY v Supabase secrets). Live captions fungují vpravo i bez toho.
+              </span>
+            </div>
           )}
         </section>
 

@@ -5,8 +5,6 @@ import { echoApi } from '../utils/echoApi';
 import { getExtensionStatus, listenToExtension, type ExtensionStatus } from '../utils/extensionBridge';
 import { supabaseConfigError, supabaseUrl, publicAnonKey } from '../utils/supabase/info';
 
-const STORAGE_PIPEDRIVE_KEY = 'echo.pipedrive.api_key';
-
 export function SettingsWorkspace() {
   const {
     pipedriveConfigured,
@@ -34,8 +32,6 @@ export function SettingsWorkspace() {
   const [lastCaption, setLastCaption] = useState<string>('');
   const [lastCaptionAt, setLastCaptionAt] = useState<number | null>(null);
 
-  const hasStoredKey = Boolean(apiKey.trim());
-
   useEffect(() => {
     const unsub = listenToExtension({
       onStatus: (s) => setExtensionStatus(s),
@@ -58,14 +54,6 @@ export function SettingsWorkspace() {
   }, [extensionStatus.connected, extensionStatus.capabilities.meetCaptions, lastCaption]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const savedKey = window.localStorage.getItem(STORAGE_PIPEDRIVE_KEY);
-    if (savedKey && !apiKey) {
-      setApiKey(savedKey);
-    }
-  }, [apiKey]);
-
-  useEffect(() => {
     setProfile({
       name: user.name,
       role: user.role,
@@ -85,10 +73,7 @@ export function SettingsWorkspace() {
     setStatus(null);
     try {
       await setPipedriveKey(apiKey.trim());
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(STORAGE_PIPEDRIVE_KEY, apiKey.trim());
-      }
-      setStatus('Pipedrive key saved (stored locally).');
+      setStatus('Pipedrive key saved (stored server-side).');
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to save key';
       setStatus(message);
@@ -102,9 +87,6 @@ export function SettingsWorkspace() {
     setStatus(null);
     try {
       await clearPipedriveKey();
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(STORAGE_PIPEDRIVE_KEY);
-      }
       setApiKey('');
       setStatus('Pipedrive key removed.');
     } catch (e) {
@@ -220,7 +202,7 @@ export function SettingsWorkspace() {
             <input
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="API key (stored locally)"
+              placeholder="API key (stored server-side)"
             />
             <div className="button-row wrap">
               <button className="btn primary" onClick={saveKey} disabled={busy}>
@@ -233,7 +215,6 @@ export function SettingsWorkspace() {
                 Import contacts
               </button>
             </div>
-            {hasStoredKey && <div className="muted text-xs">Key is remembered on this device.</div>}
             {!pipedriveConfigured && (
               <div className="muted text-xs mt-2">
                 Jak opravit: otevři Pipedrive → Settings → API → zkopíruj key a vlož ho sem. Potom klikni Save key.
