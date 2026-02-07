@@ -63,6 +63,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "preview": "vite preview --port 3000 --strictPort",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:e2e": "playwright test --project=chromium",
     "health": "node scripts/health-check.js"
