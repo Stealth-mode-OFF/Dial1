@@ -3,5 +3,6 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "vite",
-  "outputDirectory": "build"
+  "outputDirectory": "build",
+  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
 }
