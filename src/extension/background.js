@@ -219,13 +219,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const cfg = await getConfig();
       const tab = await findDial1Tab(cfg.dial1BaseUrl);
       if (!tab?.id) return sendResponse?.({ ok: false, error: 'No Dial1 tab found' });
-      chrome.tabs.sendMessage(tab.id, { type: 'PING' }, (res) => {
-        if (chrome.runtime.lastError) {
-          sendResponse?.({ ok: false, error: chrome.runtime.lastError.message });
-          return;
-        }
-        sendResponse?.({ ok: true, res });
-      });
+      const tryPing = () =>
+        new Promise((resolve) => {
+          chrome.tabs.sendMessage(tab.id, { type: 'PING' }, (res) => {
+            if (chrome.runtime.lastError) {
+              resolve({ ok: false, error: chrome.runtime.lastError.message });
+              return;
+            }
+            resolve({ ok: true, res });
+          });
+        });
+
+      let r = await tryPing();
+      if (!r.ok) {
+        await ensureBridgeInTab(tab.id, cfg.dial1BaseUrl);
+        r = await tryPing();
+      }
+      sendResponse?.(r);
     })().catch((e) => sendResponse?.({ ok: false, error: String(e?.message || e) }));
     return true;
   }
@@ -234,4 +244,3 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 log('Background ready');
-

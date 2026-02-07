@@ -169,7 +169,16 @@
 
     const candidates = [];
     document
-      .querySelectorAll('[aria-live=\"polite\"], [aria-live=\"assertive\"], [role=\"log\"], [aria-live]')
+      .querySelectorAll(
+        [
+          '[aria-live="polite"]',
+          '[aria-live="assertive"]',
+          '[role="log"]',
+          '[aria-live]',
+          // Fallback heuristics: Meet sometimes nests captions in log-like containers.
+          '[role="region"][aria-label*="captions" i]',
+        ].join(','),
+      )
       .forEach((el) => {
         if (!(el instanceof HTMLElement)) return;
         const raw = (el.innerText || el.textContent || '').toString();
@@ -180,6 +189,9 @@
         if (looksCaptionLike(text)) score += 5;
         if (raw.includes('\n')) score += 2;
         if (text.length >= 10 && text.length <= 160) score += 2;
+        // Slightly prefer nodes that update (aria-live tends to).
+        const ariaLive = el.getAttribute('aria-live');
+        if (ariaLive === 'polite' || ariaLive === 'assertive') score += 1;
         if (score >= 5) candidates.push({ el, score });
       });
 
@@ -288,4 +300,3 @@
     boot();
   }
 })();
-

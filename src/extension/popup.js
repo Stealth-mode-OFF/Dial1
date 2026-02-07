@@ -36,6 +36,16 @@ async function getActiveTabOrigin() {
 }
 
 async function requestOriginPermission(origin) {
+  // Do not prompt for origins we already declare in manifest host_permissions.
+  if (
+    origin === "https://dial1.vercel.app" ||
+    origin === "http://localhost:5173" ||
+    origin === "http://127.0.0.1:5173" ||
+    origin === "http://localhost:3000" ||
+    origin === "http://127.0.0.1:3000"
+  ) {
+    return true;
+  }
   return await new Promise((resolve) => {
     chrome.permissions.request({ origins: [`${origin}/*`] }, (granted) => resolve(Boolean(granted)));
   });
@@ -164,4 +174,3 @@ document.addEventListener('DOMContentLoaded', async () => {
   await render();
   setInterval(render, 1000);
 });
-
