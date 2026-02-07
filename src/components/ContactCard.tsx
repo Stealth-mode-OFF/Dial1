@@ -1,6 +1,6 @@
 import { ArrowRight, Zap, Users } from 'lucide-react';
 import { Button } from './ui/button';
-import type { Contact } from '../App';
+import type { Contact } from '../types/legacy';
 
 type ContactCardProps = {
   contact: Contact;

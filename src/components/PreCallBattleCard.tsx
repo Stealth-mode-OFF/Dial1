@@ -10,7 +10,7 @@ import {
   Phone, Shield, Target, AlertCircle, Flame, Clock, 
   CheckCircle2, TrendingUp, Zap, ArrowRight, Loader2
 } from 'lucide-react';
-import type { Contact } from '../App';
+import type { Contact } from '../types/legacy';
 import { buildFunctionUrl, publicAnonKey, isSupabaseConfigured } from '../utils/supabase/info';
 
 type PreCallBattleCardProps = {

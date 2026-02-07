@@ -6,7 +6,7 @@ import {
   CheckCircle2, X, Calendar, Phone, Mail, 
   ArrowRight, Loader2, Trophy, TrendingDown, Meh, Send, Edit3, Linkedin, Globe, MapPin, Building2
 } from 'lucide-react';
-import type { Contact } from '../App';
+import type { Contact } from '../types/legacy';
 import { buildFunctionUrl, publicAnonKey, isSupabaseConfigured } from '../utils/supabase/info';
 
 type Disposition = 'meeting' | 'callback' | 'not-interested';

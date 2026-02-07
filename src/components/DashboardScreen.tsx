@@ -6,7 +6,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
-import type { EnergyLevel, MoodLevel, Campaign } from '../App';
+import type { EnergyLevel, MoodLevel, Campaign } from '../types/legacy';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 
 type DashboardScreenProps = {

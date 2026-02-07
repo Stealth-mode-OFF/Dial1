@@ -4,7 +4,7 @@ import {
   ChevronRight, BrainCircuit, RefreshCw, Briefcase, 
   Users, CheckCircle2, AlertTriangle, Play, Zap, Phone, TrendingUp
 } from 'lucide-react';
-import type { Contact } from '../../App';
+import type { Contact } from '../../types/legacy';
 import { buildFunctionUrl, publicAnonKey, isSupabaseConfigured } from '../../utils/supabase/info';
 import { Button } from '../ui/button';
 

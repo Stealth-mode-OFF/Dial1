@@ -1,17 +1,17 @@
 import React from 'react';
 import { Bell, Command, Search } from 'lucide-react';
-import { useSales } from '../contexts/SalesContext';
-
-type NavItem = 'command-center' | 'live-campaigns' | 'intelligence' | 'meet-coach' | 'configuration';
+import { useAuth } from '../app/AuthContext';
+import { useWorkspace } from '../app/WorkspaceContext';
 
 interface TopBarProps {
-  onNavigate?: (tab: NavItem) => void;
+  onNavigateSettings?: () => void;
 }
 
-export function TopBar({ onNavigate }: TopBarProps) {
-  const { user } = useSales();
-  const firstName = user?.name?.split(' ')?.[0] || user?.name || 'Alex';
-  const role = (user?.role || 'Senior AE').toUpperCase();
+export function TopBar({ onNavigateSettings }: TopBarProps) {
+  const { user } = useAuth();
+  const { workspace } = useWorkspace();
+  const label = user?.email ?? 'User';
+  const workspaceName = workspace?.name ?? '';
 
   return (
     <div
@@ -134,7 +134,7 @@ export function TopBar({ onNavigate }: TopBarProps) {
 
         <button
           aria-label="User menu"
-          onClick={() => onNavigate?.('configuration')}
+          onClick={onNavigateSettings}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -167,11 +167,13 @@ export function TopBar({ onNavigate }: TopBarProps) {
               color: 'var(--figma-black)',
             }}
           >
-            {user?.avatarInitials || 'AS'}
+            {(label[0] || 'U').toUpperCase()}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1, alignItems: 'flex-start', paddingRight: 4 }}>
-            <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--figma-black)' }}>{firstName}</div>
-            <div style={{ fontSize: 10, fontFamily: 'var(--figma-font-body)', fontWeight: 700, opacity: 0.7 }}>{role}</div>
+            <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--figma-black)' }}>{label}</div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--figma-font-body)', fontWeight: 700, opacity: 0.7 }}>
+              {workspaceName ? `Workspace: ${workspaceName}` : ''}
+            </div>
           </div>
         </button>
       </div>

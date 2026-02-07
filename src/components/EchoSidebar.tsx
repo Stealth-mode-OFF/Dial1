@@ -1,14 +1,12 @@
 import React from 'react';
 import { 
-  LayoutDashboard,
-  Phone,
-  BarChart3,
-  UserRound,
   Settings,
+  Users,
+  PhoneCall,
   Zap,
 } from 'lucide-react';
 
-type NavItem = 'command-center' | 'live-campaigns' | 'intelligence' | 'meet-coach' | 'configuration';
+export type NavItem = 'contacts' | 'calls' | 'settings';
 
 interface EchoSidebarProps {
   activeTab: NavItem;
@@ -17,10 +15,8 @@ interface EchoSidebarProps {
 
 export function EchoSidebar({ activeTab, setActiveTab }: EchoSidebarProps) {
   const navItems = [
-    { id: 'command-center', label: 'DESK', icon: LayoutDashboard, activeBg: 'neo-bg-yellow' },
-    { id: 'live-campaigns', label: 'DIALER', icon: Phone, activeBg: 'neo-bg-pink' },
-    { id: 'intelligence', label: 'STATS', icon: BarChart3, activeBg: 'neo-bg-blue' },
-    { id: 'meet-coach', label: 'COACH', icon: UserRound, activeBg: 'neo-bg-yellow-soft' },
+    { id: 'contacts', label: 'CONTACTS', icon: Users },
+    { id: 'calls', label: 'CALLS', icon: PhoneCall },
   ];
 
   return (
@@ -41,7 +37,7 @@ export function EchoSidebar({ activeTab, setActiveTab }: EchoSidebarProps) {
       {/* Brand */}
       <div style={{ padding: '16px 12px 0 12px' }}>
         <button
-          onClick={() => setActiveTab('command-center')}
+          onClick={() => setActiveTab('contacts')}
           aria-label="EchoOS Home"
           title="EchoOS"
           style={{
@@ -66,10 +62,8 @@ export function EchoSidebar({ activeTab, setActiveTab }: EchoSidebarProps) {
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           let activeBg = 'var(--figma-white)';
-          if (isActive && item.id === 'command-center') activeBg = 'var(--figma-yellow)';
-          if (isActive && item.id === 'live-campaigns') activeBg = 'var(--figma-pink)';
-          if (isActive && item.id === 'intelligence') activeBg = 'var(--figma-blue)';
-          if (isActive && item.id === 'meet-coach') activeBg = 'var(--figma-yellow)';
+          if (isActive && item.id === 'contacts') activeBg = 'var(--figma-yellow)';
+          if (isActive && item.id === 'calls') activeBg = 'var(--figma-blue)';
           return (
             <button
               key={item.id}
@@ -103,7 +97,7 @@ export function EchoSidebar({ activeTab, setActiveTab }: EchoSidebarProps) {
       {/* Footer */}
       <div style={{ padding: '0 12px 18px 12px' }}>
         <button
-          onClick={() => setActiveTab('configuration')}
+          onClick={() => setActiveTab('settings')}
           aria-label="Settings"
           title="Settings"
           style={{

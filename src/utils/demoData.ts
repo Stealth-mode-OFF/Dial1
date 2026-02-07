@@ -1,4 +1,4 @@
-import type { Campaign, Contact } from '../App';
+import type { Campaign, Contact } from '../types/legacy';
 
 export const demoContacts: Contact[] = [
   {
