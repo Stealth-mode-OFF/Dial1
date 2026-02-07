@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { echoApi } from './utils/echoApi';
 import { isSupabaseConfigured } from './utils/supabase/info';
+import { MeetCaptionsPanel } from './components/MeetCaptionsPanel';
 
 // ============ TYPES ============
 interface Lead {
@@ -708,6 +709,7 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
 
         {/* Right - Live Whisper */}
         <aside className="meet-whisper">
+          <MeetCaptionsPanel />
           {script && (
             <WhisperPanel 
               whispers={whispers}
@@ -720,9 +722,9 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
       {/* Footer */}
       <footer className="meet-footer">
         <div className="meet-shortcuts">
-          <span><kbd>1-4</kbd> Switch Phase</span>
+          <span><kbd>1-9</kbd> Cards</span>
+          <span><kbd>c</kbd> Clear feed</span>
           <span><kbd>Space</kbd> Start/Pause</span>
-          <span><kbd>Tab</kbd> Next Section</span>
         </div>
         <span className="meet-footer-status">
           {isLive ? '🔴 Live Session' : '⏸ Paused'}
