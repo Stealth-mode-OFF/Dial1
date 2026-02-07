@@ -62,7 +62,14 @@ function sleep(ms) {
 }
 
 async function fetchJson(url, apiKey) {
-  const res = await fetch(url, { headers: { "x-api-key": apiKey } });
+  const res = await fetch(url, {
+    headers: {
+      "x-api-key": apiKey,
+      // Some deployments accept bearer tokens; sending both is harmless for valid keys.
+      Authorization: `Bearer ${apiKey}`,
+      Accept: "application/json",
+    },
+  });
   const text = await res.text();
   let json = null;
   try {
