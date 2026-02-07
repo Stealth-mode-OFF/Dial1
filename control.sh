@@ -8,7 +8,7 @@ echo ""
 echo "1. Setup Backend (Create DB + Seed Data)"
 echo "2. Test Backend Connection"
 echo "3. Start Dev Server"
-echo "4. View Live App (http://localhost:3000)"
+echo "4. View Live App (http://localhost:5173)"
 echo "5. Show Database Schema"
 echo "6. View Backend Logs"
 echo ""
@@ -34,7 +34,7 @@ case $choice in
   4)
     echo ""
     echo "🌐 Opening app in browser..."
-    "$BROWSER" http://localhost:3000 || open http://localhost:3000 || xdg-open http://localhost:3000
+    "$BROWSER" http://localhost:5173 || open http://localhost:5173 || xdg-open http://localhost:5173
     ;;
   5)
     echo ""

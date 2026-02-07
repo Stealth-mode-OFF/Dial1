@@ -63,7 +63,8 @@
             "vite": "^6.4.1"
       },
       "scripts": {
-            "dev": "vite",
+            "dev": "vite --host :: --port 5173 --strictPort",
+            "dev:open": "vite --host :: --port 5173 --strictPort --open",
             "build": "vite build",
             "typecheck": "tsc -p tsconfig.json --noEmit",
             "test:e2e": "playwright test --project=chromium",

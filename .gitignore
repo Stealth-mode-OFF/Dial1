@@ -14,6 +14,10 @@ dial1_repo_digest.txt
 # Local transcript exports
 tmp/tldv-*
 
+# Local dev logs/pids
+tmp/vite-*.log
+tmp/*.pid
+
 # Never commit env dumps from Vercel CLI
 .env.production
 .env.check

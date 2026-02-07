@@ -8,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: 'http://127.0.0.1:5173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -21,8 +21,8 @@ export default defineConfig({
   ],
   webServer: {
     command:
-      'bash -lc "export VITE_E2E_BYPASS_AUTH=true; export VITE_E2E_DISABLE_EXTERNAL_NAV=true; npm run dev -- --host 127.0.0.1 --port 3000 --strictPort"',
-    url: 'http://127.0.0.1:3000',
+      'bash -lc "export VITE_E2E_BYPASS_AUTH=true; export VITE_E2E_DISABLE_EXTERNAL_NAV=true; npm run dev"',
+    url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },

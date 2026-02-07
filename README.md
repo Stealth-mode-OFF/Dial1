@@ -28,7 +28,7 @@ React 18 + TypeScript + Vite 6.4.1 | Framer Motion | Supabase Edge Functions | H
 
 ```bash
 npm install          # Závislosti
-npm run dev          # Dev server (localhost:3000)
+npm run dev          # Dev server (http://localhost:5173)
 npm run build        # Production build
 npm run typecheck    # Type checking
 ```
@@ -63,4 +63,3 @@ Nastav env vars v Vercel Dashboard: VITE_SUPABASE_URL, VITE_SUPABASE_PROJECT_ID,
 ---
 
 **Status**: ✅ Production Ready | **Version**: 0.1.0 | **Updated**: Feb 5, 2026
-
