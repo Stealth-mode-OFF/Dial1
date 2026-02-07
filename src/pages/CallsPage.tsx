@@ -75,7 +75,7 @@ export function CallsPage() {
     }));
   }, [sessions, contactsById]);
 
-  if (wsLoading || !workspaceId) return <LoadingScreen label="Loading workspace…" />;
+  if (wsLoading || !workspace) return <LoadingScreen label="Loading workspace…" />;
   if (loading) return <LoadingScreen label="Loading calls…" />;
 
   return (
@@ -133,4 +133,3 @@ export function CallsPage() {
     </div>
   );
 }
-

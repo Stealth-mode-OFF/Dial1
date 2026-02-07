@@ -7,7 +7,6 @@ type AuthGateProps = {
 };
 
 export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
-  const bypassAuth = import.meta.env.VITE_E2E_BYPASS_AUTH === 'true';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
@@ -36,10 +35,6 @@ export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
   };
 
   useEffect(() => {
-    if (bypassAuth) {
-      setIsAuthenticated(true);
-      return;
-    }
     if (!supabaseClient) {
       setIsAuthenticated(false);
       return;
@@ -56,7 +51,7 @@ export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
     });
 
     return () => subscription.unsubscribe();
-  }, [bypassAuth]);
+  }, []);
 
   // Show loading while checking auth
   if (isAuthenticated === null) {

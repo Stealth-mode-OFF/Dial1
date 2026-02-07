@@ -83,7 +83,7 @@ export function ContactsPage({ contactId }: { contactId?: string }) {
     };
   }, [adapter, workspaceId, query, selectedId]);
 
-  if (wsLoading || !workspaceId) return <LoadingScreen label="Loading workspace…" />;
+  if (wsLoading || !workspace) return <LoadingScreen label="Loading workspace…" />;
   if (loading) return <LoadingScreen label="Loading contacts…" />;
 
   return (
@@ -155,7 +155,7 @@ export function ContactsPage({ contactId }: { contactId?: string }) {
             <ContactDetail
               key={selected.id}
               contact={selected}
-              workspaceId={workspaceId}
+              workspaceId={workspaceId!}
               onEdit={() => setEditor({ open: true, mode: 'edit', initial: selected })}
               onDeleted={() => navigate('/contacts')}
             />
@@ -169,7 +169,7 @@ export function ContactsPage({ contactId }: { contactId?: string }) {
 
       {editor.open ? (
         <ContactEditor
-          workspaceId={workspaceId}
+          workspaceId={workspaceId!}
           mode={editor.mode}
           initial={editor.initial}
           onClose={() => setEditor({ open: false })}
