@@ -4,6 +4,7 @@ import type {
   DataAdapter,
   ListContactsParams,
   ListParams,
+  SignUpResult,
   StartCallSessionInput,
   UpsertContactInput,
 } from './adapter';
@@ -19,8 +20,20 @@ function limitOrDefault(params: ListParams | undefined, fallback: number): numbe
 export function createSupabaseAdapter(supabase: SupabaseClient): DataAdapter {
   return {
     async signUp(email, password) {
-      const { error } = await supabase.auth.signUp({ email, password });
+      // Ensure the confirmation email brings the user back to this app.
+      const emailRedirectTo =
+        typeof window !== 'undefined' && window.location?.origin
+          ? `${window.location.origin}/`
+          : undefined;
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: emailRedirectTo ? { emailRedirectTo } : undefined,
+      });
       if (error) throw error;
+      const result: SignUpResult = { requiresEmailConfirmation: !data.session };
+      return result;
     },
 
     async signIn(email, password) {
@@ -233,4 +246,3 @@ export function createSupabaseAdapter(supabase: SupabaseClient): DataAdapter {
     },
   } as DataAdapter & { getActiveWorkspaceById: (workspaceId: string) => Promise<Workspace> };
 }
-

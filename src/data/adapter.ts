@@ -32,8 +32,16 @@ export type AddCallNoteInput = {
   bodyText: string;
 };
 
+export type SignUpResult = {
+  /**
+   * When email confirmations are enabled in Supabase, `signUp` succeeds but no
+   * session is created until the user clicks the confirmation link.
+   */
+  requiresEmailConfirmation: boolean;
+};
+
 export interface DataAdapter {
-  signUp(email: string, password: string): Promise<void>;
+  signUp(email: string, password: string): Promise<SignUpResult>;
   signIn(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
   getMe(): Promise<User | null>;
@@ -54,4 +62,3 @@ export interface DataAdapter {
   addCallNote(input: AddCallNoteInput): Promise<CallNote>;
   listCallNotes(workspaceId: string, callSessionId: string, params?: ListParams): Promise<CallNote[]>;
 }
-

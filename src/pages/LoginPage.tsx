@@ -18,6 +18,27 @@ export function LoginPage() {
     if (user) replace('/contacts');
   }, [user]);
 
+  const explainError = (raw: string) => {
+    if (!raw) return null;
+    const msg = raw.toLowerCase();
+    if (msg.includes('invalid login credentials')) {
+      return 'Nesprávný e-mail nebo heslo.';
+    }
+    if (msg.includes('email not confirmed')) {
+      return 'Účet čeká na potvrzení e-mailu. Ověř e-mail a zkus to znovu.';
+    }
+    if (msg.includes('signup') && msg.includes('disabled')) {
+      return 'Registrace je vypnutá v Supabase. Zapni ji v Supabase Auth, nebo si uživatele vytvoř ručně.';
+    }
+    if (msg.includes('signups not allowed')) {
+      return 'Registrace je vypnutá v Supabase. Zapni ji v Supabase Auth, nebo si uživatele vytvoř ručně.';
+    }
+    if (msg.includes('user already registered') || msg.includes('already registered')) {
+      return 'Účet s tímto e-mailem už existuje. Zkus se přihlásit.';
+    }
+    return raw;
+  };
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -26,16 +47,22 @@ export function LoginPage() {
 
     try {
       if (mode === 'signup') {
-        await adapter.signUp(email.trim(), password);
-        setMessage('Account created. You can sign in now.');
-        setMode('signin');
+        const result = await adapter.signUp(email.trim(), password);
+        if (result.requiresEmailConfirmation) {
+          setMessage('Účet vytvořen. Zkontroluj e-mail a potvrď registraci. Potom se tady přihlas.');
+          setMode('signin');
+        } else {
+          // If email confirmations are disabled, Supabase may create a session immediately.
+          setMessage('Účet vytvořen. Přihlašuji…');
+          replace('/contacts');
+        }
         return;
       }
       await adapter.signIn(email.trim(), password);
       replace('/contacts');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      setError(explainError(msg) || msg);
     } finally {
       setBusy(false);
     }
@@ -119,4 +146,3 @@ export function LoginPage() {
     </div>
   );
 }
-
