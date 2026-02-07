@@ -488,27 +488,35 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
       <main className="meet-main">
         {/* Left - Lead Info */}
         <aside className="meet-sidebar">
-          <div className="meet-api-status" style={{ marginBottom: 10 }}>
+          <div className="meet-api-status">
             {pipedriveConfigured ? '● Pipedrive connected' : '○ Pipedrive not configured'}
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Active lead</div>
+
+          <div className="meet-lead-picker">
+            <div className="meet-lead-label">Active lead</div>
             <select
+              className="meet-lead-select"
               value={activeContact?.id || ''}
               onChange={(e) => setActiveContactId(e.target.value || null)}
-              disabled={salesLoading}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '2px solid #111' }}
+              disabled={salesLoading || !pipedriveConfigured || contacts.length === 0}
             >
               <option value="" disabled>
-                {pipedriveConfigured ? 'Select a person…' : 'Configure Pipedrive in Settings'}
+                {!pipedriveConfigured
+                  ? 'Configure Pipedrive in Settings'
+                  : salesLoading
+                    ? 'Loading contacts...'
+                    : contacts.length === 0
+                      ? 'No contacts found (import in Settings)'
+                      : 'Select a person...'}
               </option>
               {contacts.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}{c.company ? ` · ${c.company}` : ''}
+                  {c.name}
+                  {c.company ? ` · ${c.company}` : ''}
                 </option>
               ))}
             </select>
-            {salesError ? <div className="muted text-xs" style={{ marginTop: 8 }}>{salesError}</div> : null}
+            {salesError ? <div className="meet-lead-error">{salesError}</div> : null}
           </div>
 
           {lead ? <LeadCard lead={lead} /> : null}
@@ -535,9 +543,7 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
           </div>
 
           {script && (
-            <div className="meet-api-status">
-              {script.isFromApi ? '● AI Generated' : '○ Smart Template'}
-            </div>
+            <div className="meet-api-status meet-api-status--footer">● AI script</div>
           )}
         </aside>
 

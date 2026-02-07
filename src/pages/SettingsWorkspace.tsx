@@ -73,7 +73,8 @@ export function SettingsWorkspace() {
     setStatus(null);
     try {
       await setPipedriveKey(apiKey.trim());
-      setStatus('Pipedrive key saved (stored server-side).');
+      await refresh();
+      setStatus('Pipedrive key saved (stored server-side) + data refreshed.');
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to save key';
       setStatus(message);
@@ -88,7 +89,8 @@ export function SettingsWorkspace() {
     try {
       await clearPipedriveKey();
       setApiKey('');
-      setStatus('Pipedrive key removed.');
+      await refresh();
+      setStatus('Pipedrive key removed + data refreshed.');
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to remove key';
       setStatus(message);

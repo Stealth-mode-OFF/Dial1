@@ -634,11 +634,47 @@
 }
 
 .meet-api-status {
-  margin-top: auto;
   font-size: 11px;
   color: var(--text-muted);
   text-align: center;
   padding: var(--space-2);
+}
+
+.meet-api-status--footer {
+  margin-top: auto;
+}
+
+/* Lead picker */
+.meet-lead-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.meet-lead-label {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.meet-lead-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 2px solid #111;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.meet-lead-select:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.meet-lead-error {
+  margin-top: var(--space-1);
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* ============ CONTENT ============ */
