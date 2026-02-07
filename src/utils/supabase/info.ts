@@ -4,13 +4,26 @@ const SUPABASE_URL_ENV = 'VITE_SUPABASE_URL';
 const SUPABASE_PROJECT_ENV = 'VITE_SUPABASE_PROJECT_ID';
 const SUPABASE_ANON_ENV = 'VITE_SUPABASE_ANON_KEY';
 
-const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID?.toString().trim() || '';
-const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL?.toString().trim() || '';
-const publicAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.toString().trim() || '';
+// Vercel CLI / some dotenv flows may inject literal "\n" sequences into env vars.
+// Strip those to avoid producing invalid URLs/keys in the browser.
+const cleanEnv = (value: unknown) => {
+  let v = typeof value === 'string' ? value : '';
+  v = v.trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1).trim();
+  }
+  // Remove literal escape sequences.
+  v = v.replace(/\\r\\n|\\n|\\r/g, '').trim();
+  return v;
+};
+
+const projectId = cleanEnv(import.meta.env.VITE_SUPABASE_PROJECT_ID?.toString() || '');
+const rawSupabaseUrl = cleanEnv(import.meta.env.VITE_SUPABASE_URL?.toString() || '');
+const publicAnonKey = cleanEnv(import.meta.env.VITE_SUPABASE_ANON_KEY?.toString() || '');
 
 const FUNCTIONS_SUFFIX = "/functions/v1/make-server-139017f8";
 
-const normalizeUrl = (value: string) => value.replace(/\/$/, "");
+const normalizeUrl = (value: string) => value.replace(/\/+$/, "");
 const resolveSupabaseUrl = () => {
   if (rawSupabaseUrl) return normalizeUrl(rawSupabaseUrl);
   if (projectId) return `https://${projectId}.supabase.co`;

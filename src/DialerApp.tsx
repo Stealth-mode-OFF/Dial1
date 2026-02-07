@@ -263,6 +263,46 @@ function AIPrepPanel({ prep, isLoading, onRefresh }: { prep: AIPrep | null; isLo
   );
 }
 
+function SettingsOverlay({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      onOpenChange(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onOpenChange]);
+
+  if (!open) return null;
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={() => onOpenChange(false)}>
+      <div
+        className="panel modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        style={{ width: 'min(980px, 100%)' }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Settings</p>
+            <h2>Configuration</h2>
+            <p className="muted text-sm">Supabase + Pipedrive integration.</p>
+          </div>
+          <button className="btn ghost sm" onClick={() => onOpenChange(false)} type="button">
+            Esc
+          </button>
+        </div>
+        <SettingsWorkspace />
+      </div>
+    </div>
+  );
+}
+
 // ============ MAIN ============
 export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => void; currentMode?: string }) {
   const { contacts: salesContacts, isLoading: contactsLoading, pipedriveConfigured, error: salesError } = useSales();
@@ -640,52 +680,7 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
           </motion.div>
         )}
       </AnimatePresence>
-
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div
-            className="confetti"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              background: 'rgba(0,0,0,0.55)',
-              position: 'fixed',
-              inset: 0,
-              zIndex: 1000,
-            }}
-            onClick={() => setShowSettings(false)}
-          >
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 20, opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              style={{
-                position: 'absolute',
-                top: 24,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                width: 'min(1100px, calc(100vw - 32px))',
-                maxHeight: 'calc(100vh - 48px)',
-                overflow: 'auto',
-                background: '#fafbfc',
-                borderRadius: 16,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: 12 }}>
-                <button className="action-btn action-secondary" onClick={() => setShowSettings(false)} type="button">
-                  Close
-                </button>
-              </div>
-              <div style={{ padding: 16 }}>
-                <SettingsWorkspace />
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <SettingsOverlay open={showSettings} onOpenChange={setShowSettings} />
     </div>
   );
 }

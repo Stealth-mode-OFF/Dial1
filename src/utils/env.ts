@@ -25,7 +25,14 @@ interface EnvValidation {
 // ============ RAW ENV ACCESS ============
 const getEnv = (key: string): string => {
   const value = import.meta.env[key];
-  return typeof value === 'string' ? value.trim() : '';
+  if (typeof value !== 'string') return '';
+  let v = value.trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1).trim();
+  }
+  // Remove literal escape sequences that occasionally leak from env dumps.
+  v = v.replace(/\\r\\n|\\n|\\r/g, '').trim();
+  return v;
 };
 
 // ============ VALIDATORS ============
