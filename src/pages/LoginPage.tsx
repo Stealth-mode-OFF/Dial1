@@ -27,6 +27,9 @@ export function LoginPage() {
     if (msg.includes('email not confirmed')) {
       return 'Účet čeká na potvrzení e-mailu. Ověř e-mail a zkus to znovu.';
     }
+    if (msg.includes('redirect') && (msg.includes('not allowed') || msg.includes('not authorized'))) {
+      return 'Registrace selhala kvůli Supabase Auth nastavení (Redirect URL). Přidej https://dial1.vercel.app a/nebo svou doménu do Supabase Auth → URL Configuration → Redirect URLs.';
+    }
     if (msg.includes('signup') && msg.includes('disabled')) {
       return 'Registrace je vypnutá v Supabase. Zapni ji v Supabase Auth, nebo si uživatele vytvoř ručně.';
     }

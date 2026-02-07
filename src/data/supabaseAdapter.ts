@@ -20,19 +20,34 @@ function limitOrDefault(params: ListParams | undefined, fallback: number): numbe
 export function createSupabaseAdapter(supabase: SupabaseClient): DataAdapter {
   return {
     async signUp(email, password) {
-      // Ensure the confirmation email brings the user back to this app.
+      // Prefer confirming back to the current origin, but don't hard-fail
+      // if Supabase rejects the redirect URL (common misconfig in Auth settings).
       const emailRedirectTo =
         typeof window !== 'undefined' && window.location?.origin
           ? `${window.location.origin}/`
           : undefined;
 
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: emailRedirectTo ? { emailRedirectTo } : undefined,
-      });
-      if (error) throw error;
-      const result: SignUpResult = { requiresEmailConfirmation: !data.session };
+      const attempt = async (withRedirect: boolean) => {
+        return supabase.auth.signUp({
+          email,
+          password,
+          options: withRedirect && emailRedirectTo ? { emailRedirectTo } : undefined,
+        });
+      };
+
+      let res = await attempt(true);
+      if (res.error) {
+        const msg = (res.error.message || '').toLowerCase();
+        const redirectRejected =
+          msg.includes('redirect') && (msg.includes('not allowed') || msg.includes('not authorized'));
+        if (redirectRejected) {
+          // Retry without forcing redirect URL.
+          res = await attempt(false);
+        }
+      }
+
+      if (res.error) throw res.error;
+      const result: SignUpResult = { requiresEmailConfirmation: !res.data.session };
       return result;
     },
 

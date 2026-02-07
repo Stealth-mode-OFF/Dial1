@@ -19,3 +19,6 @@ src/supabase/
 supabase/.temp/
 .vercel
 .env*.local
+
+# Local debug artifacts
+dial1_repo_digest.txt
