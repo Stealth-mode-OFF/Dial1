@@ -66,9 +66,10 @@ const SPIN_PHASES: SPINPhase[] = [
 ];
 
 // ============ AI SCRIPT GENERATOR ============
-const generateDemoScript = async (lead: Lead): Promise<DemoScript | null> => {
-  // Try real API
-  if (!isSupabaseConfigured) return null;
+const generateDemoScript = async (lead: Lead): Promise<{ script: DemoScript | null; error: string | null }> => {
+  if (!isSupabaseConfigured) {
+    return { script: null, error: 'Supabase není nakonfigurován. Nastav VITE_SUPABASE_URL v Settings.' };
+  }
   try {
     const result = await echoApi.ai.generate({
       prompt: `Generate a 20-minute SPIN selling call script for:
@@ -77,11 +78,13 @@ const generateDemoScript = async (lead: Lead): Promise<DemoScript | null> => {
         Format: JSON with blocks for each SPIN phase`,
       type: 'spin-script',
     });
-    if (result?.script) return { ...result.script, isFromApi: true };
+    if (result?.script) return { script: { ...result.script, isFromApi: true }, error: null };
+    return { script: null, error: 'AI nevrátilo script. Zkontroluj OPENAI_API_KEY v Supabase secrets.' };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : 'AI script generation failed';
     console.warn('AI script generation failed:', err);
+    return { script: null, error: msg };
   }
-  return null;
 };
 
 // ============ LIVE WHISPER SYSTEM ============
@@ -371,6 +374,7 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
   const [whispers, setWhispers] = useState<WhisperSuggestion[]>([]);
   const [selectedClosing, setSelectedClosing] = useState<string | null>(null);
   const [view, setView] = useState<'script' | 'objections' | 'closing'>('script');
+  const [scriptError, setScriptError] = useState<string | null>(null);
 
   const phaseStartRef = useRef(Date.now());
 
@@ -380,13 +384,16 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
     const load = async () => {
       if (!lead) {
         setScript(null);
+        setScriptError(null);
         setIsLoading(false);
         return;
       }
       setIsLoading(true);
-      const s = await generateDemoScript(lead);
+      setScriptError(null);
+      const { script: s, error: err } = await generateDemoScript(lead);
       if (cancelled) return;
       setScript(s);
+      setScriptError(err);
       setIsLoading(false);
     };
     void load();
@@ -424,6 +431,26 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
     }
     setIsLive(!isLive);
   }, [isLive]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); toggleLive(); }
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setWhispers([]);
+      }
+      const num = parseInt(e.key, 10);
+      if (num >= 1 && num <= 4) {
+        e.preventDefault();
+        handlePhaseChange(SPIN_PHASES[num - 1].id);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleLive, handlePhaseChange]);
 
   const currentPhaseData = SPIN_PHASES.find(p => p.id === currentPhase)!;
   const currentBlock = script?.blocks.find(b => b.phase === currentPhase);
@@ -613,7 +640,11 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
           ) : (
             <div className="meet-loading">
               <span style={{ textAlign: 'center', maxWidth: 520 }}>
-                Vyber lead vlevo. AI SPIN script vyžaduje backend AI (OPENAI_API_KEY v Supabase secrets). Live captions fungují vpravo i bez toho.
+                {scriptError ? (
+                  <><strong style={{ color: 'var(--danger)' }}>Chyba:</strong> {scriptError}</>
+                ) : (
+                  'Vyber lead vlevo. AI SPIN script vyžaduje backend AI (OPENAI_API_KEY v Supabase secrets). Live captions fungují vpravo i bez toho.'
+                )}
               </span>
             </div>
           )}
@@ -634,8 +665,8 @@ export function MeetCoachApp({ onSwitchMode, currentMode }: { onSwitchMode?: () 
       {/* Footer */}
       <footer className="meet-footer">
         <div className="meet-shortcuts">
-          <span><kbd>1-9</kbd> Cards</span>
-          <span><kbd>c</kbd> Clear feed</span>
+          <span><kbd>1-4</kbd> SPIN Phase</span>
+          <span><kbd>c</kbd> Clear whispers</span>
           <span><kbd>Space</kbd> Start/Pause</span>
         </div>
         <span className="meet-footer-status">

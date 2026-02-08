@@ -61,8 +61,10 @@ export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
   // Show loading while checking auth
   if (isAuthenticated === null) {
     return (
-      <div className="min-h-screen neo-grid-bg text-black flex items-center justify-center">
-        <div className="neo-panel-shadow bg-white px-6 py-4 font-mono font-bold">Loading…</div>
+      <div className="auth-page">
+        <div className="auth-card">
+          <div className="auth-loading-text">Loading…</div>
+        </div>
       </div>
     );
   }
@@ -87,24 +89,16 @@ export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
 
     try {
       if (isRegistering) {
-      const { error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-      });
-      if (error) {
-        setError(explainError(error.message) || error.message);
-      } else {
-        setMessage(
-          'Check your inbox for a confirmation link. After verifying, log in here.',
-        );
-      }
+        const { error } = await supabaseClient.auth.signUp({ email, password });
+        if (error) {
+          setError(explainError(error.message) || error.message);
+        } else {
+          setMessage('Zkontroluj e-mail a potvrď registraci. Pak se přihlas.');
+        }
         return;
       }
 
-      const { error } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) {
         setError(explainError(error.message) || error.message);
       } else {
@@ -117,80 +111,82 @@ export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
   };
 
   return (
-    <div className="min-h-screen neo-grid-bg flex items-center justify-center px-4">
-      <div className="w-full max-w-lg neo-panel-shadow bg-white p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="neo-tag neo-tag-yellow">SECURE ACCESS</div>
-            <h1 className="neo-display text-4xl font-black mt-3">ECHO PULSE</h1>
-            <p className="font-mono text-sm font-bold opacity-70 mt-1">
-              Přihlášení pro tvůj sales tým. Použij e-mail a heslo.
-            </p>
-            {configError && (
-              <p className="mt-2 font-mono text-xs" style={{ color: 'var(--neo-red)' }}>
-                {configError} (Doména: {currentHost}). Přidej ji do Supabase Auth → URL Configuration.
-              </p>
-            )}
+    <div className="auth-page">
+      <div className="auth-card">
+        {/* Header */}
+        <div className="auth-header">
+          <div className="auth-logo">
+            <span className="auth-logo-icon">D1</span>
+            <div className="auth-logo-text">
+              <span className="auth-logo-name">Dial1</span>
+              <span className="auth-logo-tag">Sales Intelligence</span>
+            </div>
           </div>
-          <div className="neo-panel bg-black text-white w-12 h-12 flex items-center justify-center font-black">ID</div>
+          <div className="auth-badge">SECURE</div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <label className="block font-mono text-xs font-bold uppercase tracking-[0.2em] opacity-80">
-            Email
+        <h1 className="auth-title">Přihlášení</h1>
+        <p className="auth-subtitle">Přihlášení pro tvůj sales tým. Použij e-mail a heslo.</p>
+
+        {configError && (
+          <div className="auth-config-error">
+            {configError} (Doména: {currentHost}). Přidej ji do Supabase Auth → URL Configuration.
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="auth-form">
+          <div className="auth-field">
+            <label className="auth-label" htmlFor="auth-email">E-mail</label>
             <input
+              id="auth-email"
               type="email"
               required
               disabled={loading}
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="mt-2 neo-input w-full px-3 py-2 font-mono"
+              onChange={(e) => setEmail(e.target.value)}
+              className="auth-input"
               placeholder="you@company.com"
+              autoComplete="email"
             />
-          </label>
-          <label className="block font-mono text-xs font-bold uppercase tracking-[0.2em] opacity-80">
-            Password
+          </div>
+
+          <div className="auth-field">
+            <label className="auth-label" htmlFor="auth-password">Heslo</label>
             <input
+              id="auth-password"
               type="password"
               required
               disabled={loading}
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="mt-2 neo-input w-full px-3 py-2 font-mono"
-              placeholder="••••••••••"
+              onChange={(e) => setPassword(e.target.value)}
+              className="auth-input"
+              placeholder="••••••••"
+              autoComplete={isRegistering ? 'new-password' : 'current-password'}
             />
-          </label>
-          {message && (
-            <div className="font-mono text-sm" style={{ color: 'var(--neo-green)' }}>{message}</div>
-          )}
-          {error && <div className="font-mono text-sm" style={{ color: 'var(--neo-red)' }}>{error}</div>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="neo-btn neo-bg-yellow w-full px-4 py-3 text-sm font-black uppercase tracking-[0.2em] disabled:opacity-50"
-          >
-            {loading
-              ? 'Processing…'
-              : isRegistering
-              ? 'Register'
-              : 'Sign In'}
+          </div>
+
+          {message && <div className="auth-message auth-message--success">{message}</div>}
+          {error && <div className="auth-message auth-message--error">{error}</div>}
+
+          <button type="submit" disabled={loading} className="auth-submit">
+            {loading ? 'Načítám…' : isRegistering ? 'Registrovat' : 'Přihlásit se'}
           </button>
         </form>
-        <div className="text-center font-mono text-xs font-bold uppercase tracking-[0.2em] opacity-80">
+
+        {/* Toggle */}
+        <div className="auth-toggle">
           <button
             type="button"
-            onClick={() => {
-              setIsRegistering((prev) => !prev);
-              setError(null);
-              setMessage(null);
-            }}
-            className="neo-btn bg-white px-3 py-2"
+            onClick={() => { setIsRegistering(p => !p); setError(null); setMessage(null); }}
+            className="auth-toggle-btn"
           >
-            {isRegistering ? 'Already have an account? Sign in' : 'Need account? Register'}
+            {isRegistering ? 'Už máš účet? Přihlas se' : 'Nemáš účet? Registruj se'}
           </button>
         </div>
-        <p className="font-mono text-xs opacity-60">
-          Tento přístup je omezen; jen ověření uživatelé mohou do Echo Pulse a Live Sales Coaching.
+
+        <p className="auth-footer-text">
+          Přístup je omezen na ověřené uživatele Dial1 Sales Intelligence.
         </p>
       </div>
     </div>

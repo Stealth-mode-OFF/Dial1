@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { echoApi, type AnalyticsSummary, type CallLogPayload, type CallLogResult, type EchoContact } from '../utils/echoApi';
 import { isSupabaseConfigured, supabaseConfigError } from '../utils/supabase/info';
 
@@ -193,6 +193,10 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
+  // Keep a ref to contacts so callbacks don't go stale
+  const contactsRef = useRef(contacts);
+  contactsRef.current = contacts;
+
   useEffect(() => {
     saveToStorage(STORAGE_USER_KEY, user);
   }, [user]);
@@ -271,48 +275,48 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
     setError(errors.length ? errors.join(' • ') : null);
   };
 
-  const markLeadCompleted = (id: string) => {
+  const markLeadCompleted = useCallback((id: string) => {
     if (!id) return;
     setCompletedLeadIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-  };
+  }, []);
 
-  const clearCompletedLeads = () => {
+  const clearCompletedLeads = useCallback(() => {
     setCompletedLeadIds([]);
-  };
+  }, []);
 
-  const logCall = async (payload: CallLogPayload): Promise<CallLogResult> => {
+  const logCall = useCallback(async (payload: CallLogPayload): Promise<CallLogResult> => {
     const res = await echoApi.logCall(payload);
     markLeadCompleted(payload.contactId);
-    await fetchAnalytics(contacts.length).catch(() => null);
+    await fetchAnalytics(contactsRef.current.length).catch(() => null);
     return res;
-  };
+  }, [markLeadCompleted]);
 
-  const setPipedriveKey = async (apiKey: string) => {
+  const setPipedriveKey = useCallback(async (apiKey: string) => {
     await echoApi.savePipedriveKey(apiKey);
     await fetchPipedriveStatus();
-  };
+  }, []);
 
-  const clearPipedriveKey = async () => {
+  const clearPipedriveKey = useCallback(async () => {
     await echoApi.deletePipedriveKey();
     await fetchPipedriveStatus();
-  };
+  }, []);
 
   useEffect(() => {
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const updateUser = (updates: Partial<UserProfile>) => {
+  const updateUser = useCallback((updates: Partial<UserProfile>) => {
     setUser((prev) => {
       const next = { ...prev, ...updates };
       const initials = updates.avatarInitials || initialsFromName(next.name || '');
       return { ...next, avatarInitials: initials || next.avatarInitials || '' };
     });
-  };
+  }, []);
 
-  const updateSettings = (updates: Partial<UserSettings>) => {
+  const updateSettings = useCallback((updates: Partial<UserSettings>) => {
     setSettings((prev) => ({ ...prev, ...updates }));
-  };
+  }, []);
 
   const activeContact = useMemo(() => {
     if (!activeContactId) return contacts[0] || null;
@@ -367,6 +371,14 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
       settings,
       completedLeadIds,
       showCompletedLeads,
+      refresh,
+      logCall,
+      setPipedriveKey,
+      clearPipedriveKey,
+      updateUser,
+      updateSettings,
+      markLeadCompleted,
+      clearCompletedLeads,
     ],
   );
 

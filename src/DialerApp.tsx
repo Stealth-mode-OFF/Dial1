@@ -305,7 +305,7 @@ function SettingsOverlay({ open, onOpenChange }: { open: boolean; onOpenChange: 
 
 // ============ MAIN ============
 export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => void; currentMode?: string }) {
-  const { contacts: salesContacts, isLoading: contactsLoading, pipedriveConfigured, error: salesError } = useSales();
+  const { contacts: salesContacts, isLoading: contactsLoading, pipedriveConfigured, error: salesError, logCall } = useSales();
   const externalNavDisabled = import.meta.env.VITE_E2E_DISABLE_EXTERNAL_NAV === 'true';
   const [showSettings, setShowSettings] = useState(false);
   
@@ -391,17 +391,28 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
   }, [externalNavDisabled]);
 
   const endCall = useCallback((outcome: string) => {
+    const dur = callStart ? Math.floor((Date.now() - callStart) / 1000) : 0;
     if (callStart) {
-      const dur = Math.floor((Date.now() - callStart) / 1000);
       setSession(s => ({
         ...s,
         stats: { ...s.stats, talkTime: s.stats.talkTime + dur, connected: outcome === 'connected' ? s.stats.connected + 1 : s.stats.connected },
       }));
     }
+    // Persist to backend
+    if (contact) {
+      logCall({
+        contactId: contact.id,
+        contactName: contact.name,
+        companyName: contact.company,
+        disposition: outcome,
+        duration: dur,
+        notes: notes || undefined,
+      }).catch(() => { /* best-effort */ });
+    }
     setIsInCall(false);
     setCallStart(null);
     setCallDuration(0);
-  }, [callStart]);
+  }, [callStart, contact, notes, logCall]);
 
   const handleCall = useCallback(() => {
     if (!contact) return;
