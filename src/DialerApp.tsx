@@ -305,7 +305,17 @@ function SettingsOverlay({ open, onOpenChange }: { open: boolean; onOpenChange: 
 
 // ============ MAIN ============
 export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => void; currentMode?: string }) {
-  const { contacts: salesContacts, isLoading: contactsLoading, pipedriveConfigured, error: salesError, logCall } = useSales();
+  const { contacts: salesContacts, isLoading: contactsLoading, pipedriveConfigured, error: salesError, logCall, refresh } = useSales();
+  const [importing, setImporting] = useState(false);
+
+  const handleImportLeads = useCallback(async () => {
+    setImporting(true);
+    try {
+      await refresh();
+    } finally {
+      setImporting(false);
+    }
+  }, [refresh]);
   const externalNavDisabled = import.meta.env.VITE_E2E_DISABLE_EXTERNAL_NAV === 'true';
   const [showSettings, setShowSettings] = useState(false);
   
@@ -532,7 +542,22 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
         <aside className="queue">
           <div className="queue-header">
             <span className="queue-title">Queue</span>
-            <span className="queue-count">{activeContacts.length}</span>
+            <div className="queue-header-right">
+              <button
+                className="queue-import-btn"
+                onClick={handleImportLeads}
+                disabled={importing || !pipedriveConfigured}
+                title={pipedriveConfigured ? 'Import leads from Pipedrive' : 'Configure Pipedrive in Settings first'}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                {importing ? 'Importing…' : 'Import'}
+              </button>
+              <span className="queue-count">{activeContacts.length}</span>
+            </div>
           </div>
           <div className="queue-list">
             {contactsLoading ? (

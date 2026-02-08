@@ -319,6 +319,51 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   letter-spacing: 0.5px;
 }
 
+.queue-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.queue-import-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--neo-yellow);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-neo-sm);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.queue-import-btn:hover:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--border);
+}
+
+.queue-import-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-neo-active);
+}
+
+.queue-import-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.queue-import-btn svg {
+  flex-shrink: 0;
+}
+
 .queue-count {
   display: flex;
   align-items: center;
