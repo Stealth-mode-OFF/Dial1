@@ -7,6 +7,7 @@ import { AuthGate } from "./components/AuthGate";
 import { checkEnvironment } from "./utils/env";
 import "./dialer.css";
 import "./meetcoach.css";
+import "./dial-page.css";
 import "./styles/production.css";
 
 // Validate environment on startup

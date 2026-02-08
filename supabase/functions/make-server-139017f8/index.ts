@@ -3080,6 +3080,177 @@ app.post(`${BASE_PATH}/ai/sector-battle-card`, async (c) => {
   }
 });
 
+// ============ BRIEF / CALL-SCRIPT / LIVE-COACH ============
+
+// POST /ai/brief — Generate company+person brief with caching
+app.post(`${BASE_PATH}/ai/brief`, async (c) => {
+  const userId = getUserId(c);
+  const { domain, personName, role, notes } = await c.req.json();
+  if (!domain || !personName) return c.json({ error: "domain and personName required" }, 400);
+
+  // Cache key
+  const cacheKey = `brief:${await sha256Hex(`${userId}:${domain}:${personName}:${role || ""}`.toLowerCase())}`;
+  const cached = await kv.get(cacheKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      return c.json({ ...parsed, cached: true });
+    } catch { /* stale cache, regenerate */ }
+  }
+
+  const apiKey = (Deno.env.get("OPENAI_API_KEY") || "").trim();
+  if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
+
+  const openai = new OpenAI({ apiKey });
+  const system = `You are an expert B2B sales intelligence analyst. Output ONLY valid JSON.`;
+  const prompt = {
+    task: "Create a structured company+person brief for a sales call.",
+    domain,
+    personName,
+    role: role || "Unknown",
+    notes: notes || "",
+    schema: {
+      company: { name: "string", industry: "string", size: "string?", website: "string?", summary: "string (2-3 sentences)", recentNews: "string? (1 sentence if found)" },
+      person: { name: "string", role: "string", linkedin: "string?", background: "string? (1-2 sentences)", decisionPower: "'decision-maker' | 'influencer' | 'champion' | 'unknown'" },
+      signals: "[{ type: 'opportunity'|'risk'|'neutral', text: 'string' }] (2-4 items)",
+      landmines: "string[] (1-3 things to avoid in the call)",
+      sources: "string[] (where you inferred info from)",
+    },
+  };
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: JSON.stringify(prompt) },
+      ],
+      response_format: { type: "json_object" },
+    });
+    const raw = completion.choices?.[0]?.message?.content || "{}";
+    const parsed = JSON.parse(raw);
+    const result = {
+      company: parsed.company || { name: domain, industry: "Unknown", summary: "" },
+      person: parsed.person || { name: personName, role: role || "Unknown", decisionPower: "unknown" },
+      signals: Array.isArray(parsed.signals) ? parsed.signals.slice(0, 6) : [],
+      landmines: Array.isArray(parsed.landmines) ? parsed.landmines.map(String).slice(0, 4) : [],
+      sources: Array.isArray(parsed.sources) ? parsed.sources.map(String).slice(0, 5) : [],
+      generatedAt: new Date().toISOString(),
+      cached: false,
+    };
+    // Cache for 2 hours
+    await kv.set(cacheKey, JSON.stringify(result), 7200);
+    return c.json(result);
+  } catch (error) {
+    console.error("Brief generation error:", error);
+    return c.json({ error: "Failed to generate brief" }, 500);
+  }
+});
+
+// POST /ai/call-script — Generate personalized call script from brief
+app.post(`${BASE_PATH}/ai/call-script`, async (c) => {
+  const userId = getUserId(c);
+  const { brief, goal } = await c.req.json();
+  if (!brief) return c.json({ error: "brief required" }, 400);
+
+  const cacheKey = `script:${await sha256Hex(`${userId}:${brief?.company?.name || ""}:${brief?.person?.name || ""}:${goal || ""}`.toLowerCase())}`;
+  const cached = await kv.get(cacheKey);
+  if (cached) {
+    try {
+      return c.json({ ...JSON.parse(cached), cached: true });
+    } catch { /* regenerate */ }
+  }
+
+  const apiKey = (Deno.env.get("OPENAI_API_KEY") || "").trim();
+  if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
+
+  const openai = new OpenAI({ apiKey });
+  const system = `You are an expert B2B cold call scriptwriter. Output ONLY valid JSON.`;
+  const prompt = {
+    task: "Create a personalized call script to qualify the lead and book a demo.",
+    brief,
+    goal: goal || "Book a 20-minute Echo Pulse demo",
+    schema: {
+      openingVariants: "[{ id: 'o1', text: 'string' }] (2-3 variants)",
+      valueProps: "[{ persona: 'string', points: ['string'] }] (2-3 personas)",
+      qualification: "[{ question: 'string', why: 'string' }] (3-4 items)",
+      objections: "[{ objection: 'string', response: 'string' }] (4-6 items)",
+      closeVariants: "[{ id: 'c1', text: 'string' }] (2-3 variants)",
+      nextSteps: "string[] (2-3 items)",
+    },
+  };
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: JSON.stringify(prompt) },
+      ],
+      response_format: { type: "json_object" },
+    });
+    const raw = completion.choices?.[0]?.message?.content || "{}";
+    const parsed = JSON.parse(raw);
+    const result = {
+      openingVariants: Array.isArray(parsed.openingVariants) ? parsed.openingVariants.slice(0, 4) : [],
+      valueProps: Array.isArray(parsed.valueProps) ? parsed.valueProps.slice(0, 4) : [],
+      qualification: Array.isArray(parsed.qualification) ? parsed.qualification.slice(0, 6) : [],
+      objections: Array.isArray(parsed.objections) ? parsed.objections.slice(0, 8) : [],
+      closeVariants: Array.isArray(parsed.closeVariants) ? parsed.closeVariants.slice(0, 4) : [],
+      nextSteps: Array.isArray(parsed.nextSteps) ? parsed.nextSteps.map(String).slice(0, 4) : [],
+      generatedAt: new Date().toISOString(),
+      cached: false,
+    };
+    await kv.set(cacheKey, JSON.stringify(result), 7200);
+    return c.json(result);
+  } catch (error) {
+    console.error("Call script generation error:", error);
+    return c.json({ error: "Failed to generate call script" }, 500);
+  }
+});
+
+// POST /ai/live-coach — Real-time coaching tips from captions
+app.post(`${BASE_PATH}/ai/live-coach`, async (c) => {
+  const { captionsChunk, brief, currentSpinStage } = await c.req.json();
+  if (!captionsChunk) return c.json({ error: "captionsChunk required" }, 400);
+
+  const apiKey = (Deno.env.get("OPENAI_API_KEY") || "").trim();
+  if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
+
+  const openai = new OpenAI({ apiKey });
+  const system = `You are a real-time B2B sales coach. Analyze the recent conversation and provide 1-3 short, actionable tips. Output ONLY valid JSON.`;
+  const prompt = {
+    task: "Provide coaching tips based on the conversation so far.",
+    recentConversation: captionsChunk.slice(0, 2000),
+    context: brief ? { company: brief.company?.name, person: brief.person?.name, role: brief.person?.role } : null,
+    currentSpinStage: currentSpinStage || "S",
+    schema: {
+      tips: "[{ id: 't1', text: 'string (max 80 chars)', priority: 'high'|'medium'|'low' }] (1-3 items)",
+      nextSpinQuestion: "{ phase: 'S'|'P'|'I'|'N', question: 'string' } (optional, one question)",
+    },
+  };
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: JSON.stringify(prompt) },
+      ],
+      response_format: { type: "json_object" },
+    });
+    const raw = completion.choices?.[0]?.message?.content || "{}";
+    const parsed = JSON.parse(raw);
+    return c.json({
+      tips: Array.isArray(parsed.tips) ? parsed.tips.slice(0, 3) : [],
+      nextSpinQuestion: parsed.nextSpinQuestion || null,
+    });
+  } catch (error) {
+    console.error("Live coach error:", error);
+    return c.json({ error: "Live coach failed" }, 500);
+  }
+});
+
 // 2. Auto-Enrich Organization Data (Smart)
 app.patch(`${BASE_PATH}/pipedrive/enrich-org/:id`, async (c) => {
   try {

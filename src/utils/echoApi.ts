@@ -378,6 +378,21 @@ export const echoApi = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+    brief: (payload: import('../types/contracts').BriefRequest) =>
+      apiFetch<import('../types/contracts').Brief>('ai/brief', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    callScript: (payload: import('../types/contracts').CallScriptRequest) =>
+      apiFetch<import('../types/contracts').CallScript>('ai/call-script', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    liveCoach: (payload: import('../types/contracts').LiveCoachRequest) =>
+      apiFetch<import('../types/contracts').LiveCoachResponse>('ai/live-coach', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
   },
 };
 
