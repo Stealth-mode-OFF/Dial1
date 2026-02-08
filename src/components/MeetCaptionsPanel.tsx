@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Trash2 } from "lucide-react";
+import { Copy, Maximize2, Minimize2, Trash2, X } from "lucide-react";
 import { BATTLECARDS, HOTKEYS_1_TO_9, type Battlecard } from "../meetcoach/battlecards";
 import { pickTopMatches, type FeedLine, normalizeForMatch } from "../meetcoach/engine";
 
@@ -40,12 +40,21 @@ export function MeetCaptionsPanel() {
   const [bridgeReadyAt, setBridgeReadyAt] = useState<number | null>(null);
   const [cooldownUntilByKey, setCooldownUntilByKey] = useState<Record<string, number | undefined>>({});
 
+  const [focusMode, setFocusMode] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem("echo_meetcoach_focus_mode") === "1";
+    } catch {
+      return false;
+    }
+  });
+
   const [manualLine, setManualLine] = useState("");
   const [search, setSearch] = useState("");
   const [activeCardKey, setActiveCardKey] = useState<string | null>(null);
 
   const recentIdsRef = useRef<string[]>([]);
   const recentIdSetRef = useRef<Set<string>>(new Set());
+  const focusScrollRef = useRef<HTMLDivElement | null>(null);
 
   const now = Date.now();
   const captionsAgeMs = lastCaptionAt ? now - lastCaptionAt : null;
@@ -125,6 +134,12 @@ export function MeetCaptionsPanel() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (inTextInput(document.activeElement)) return;
 
+      if (e.key === "Escape") {
+        setFocusMode(false);
+        e.preventDefault();
+        return;
+      }
+
       if (e.key >= "1" && e.key <= "9") {
         const idx = Number(e.key) - 1;
         const key = HOTKEYS_1_TO_9[idx];
@@ -141,11 +156,34 @@ export function MeetCaptionsPanel() {
         setLastCaptionAt(null);
         e.preventDefault();
       }
+
+      if (e.key.toLowerCase() === "f") {
+        setFocusMode((v) => !v);
+        e.preventDefault();
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("echo_meetcoach_focus_mode", focusMode ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [focusMode]);
+
+  useEffect(() => {
+    if (!focusMode) return;
+    // Keep newest captions in view in focus mode.
+    requestAnimationFrame(() => {
+      const el = focusScrollRef.current;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [focusMode, feed.length]);
 
   const searchResults = useMemo(() => {
     const q = normalizeForMatch(search);
@@ -182,6 +220,13 @@ export function MeetCaptionsPanel() {
           </div>
         </div>
         <div className="captions-actions">
+          <button
+            className="captions-btn"
+            onClick={() => setFocusMode((v) => !v)}
+            title={focusMode ? "Exit focus mode (F)" : "Focus mode (F)"}
+          >
+            {focusMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
           <button className="captions-btn" onClick={copyActive} disabled={!activeCard} title="Copy suggestion">
             <Copy size={14} />
           </button>
@@ -310,10 +355,49 @@ export function MeetCaptionsPanel() {
           ) : null}
         </div>
         <div className="captions-hint">
-          Hotkeys: 1-9 cards · `c` clear feed
+          Hotkeys: 1-9 cards · `c` clear feed · `f` focus mode · `esc` close
         </div>
       </div>
+
+      {focusMode ? (
+        <div
+          className="captions-focus-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setFocusMode(false);
+          }}
+        >
+          <div className="captions-focus" role="dialog" aria-modal="true" aria-label="Meet captions focus mode">
+            <div className="captions-focus-head">
+              <div>
+                <div className="captions-focus-title">Live captions</div>
+                <div className="captions-focus-sub">
+                  {captionsConnected ? "Connected" : captionsWaiting ? "Waiting" : "Stale"} · last {fmtAge(captionsAgeMs)}
+                </div>
+              </div>
+              <button className="captions-btn" onClick={() => setFocusMode(false)} title="Close (Esc)">
+                <X size={14} />
+              </button>
+            </div>
+            <div className="captions-focus-body" ref={focusScrollRef}>
+              {feed.length === 0 ? (
+                <div className="captions-focus-empty">Waiting for captions… Turn on captions (CC) in Google Meet.</div>
+              ) : (
+                [...feed].slice(-8).map((l) => (
+                  <div key={l.id} className="captions-focus-line">
+                    <div className="captions-focus-meta">
+                      <span className="captions-speaker">{l.speakerName || "Speaker"}</span>
+                      <span className="captions-time">
+                        {new Date(l.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </span>
+                    </div>
+                    <div className="captions-focus-text">{l.text}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
-
