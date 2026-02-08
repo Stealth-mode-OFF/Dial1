@@ -29,6 +29,7 @@ interface AIPrep {
   competitorMentions: string[];
   recentNews?: string;
   decisionMakerTips: string;
+  bookingScript: string;
   isFromApi: boolean;
 }
 
@@ -46,25 +47,34 @@ const generateAIPrep = async (contact: Contact): Promise<AIPrep> => {
     throw new Error('AI is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
   }
 
-  const result = await echoApi.ai.sectorBattleCard({
-    companyName: contact.company,
-    industry: contact.industry,
-    personTitle: contact.title,
+  const result = await echoApi.ai.generate({
+    type: 'call-intelligence',
+    contactName: contact.name,
+    company: contact.company,
+    contextData: {
+      title: contact.title,
+      industry: contact.industry,
+      email: contact.email,
+      website: contact.website,
+    },
   });
 
-  if (!result) {
-    throw new Error('AI response was empty.');
+  if (!result || result.error) {
+    throw new Error(result?.error || 'AI response was empty.');
   }
 
   return {
-    companyInsight: result.companyContext || result.insight || `${contact.company}`,
-    painPoints: result.painPoints || result.challenges || [],
-    openingLine: result.openingLine || result.opener || '',
-    qualifyingQuestions: result.qualifyingQuestions || result.questions || [],
-    objectionHandlers: result.objectionHandlers || result.objections || [],
-    competitorMentions: result.competitors || [],
-    recentNews: result.recentNews || result.news,
-    decisionMakerTips: result.decisionMakerTips || result.dmTips || '',
+    companyInsight: result.companyInsight || `${contact.company}`,
+    painPoints: Array.isArray(result.painPoints) ? result.painPoints : [],
+    openingLine: result.openingLine || '',
+    qualifyingQuestions: Array.isArray(result.qualifyingQuestions) ? result.qualifyingQuestions : [],
+    objectionHandlers: Array.isArray(result.objectionHandlers)
+      ? result.objectionHandlers.map((o: any) => ({ objection: o.objection || o.trigger || '', response: o.response || o.rebuttal || '' }))
+      : [],
+    competitorMentions: Array.isArray(result.competitorMentions) ? result.competitorMentions : [],
+    recentNews: result.recentNews || undefined,
+    decisionMakerTips: result.decisionMakerTips || '',
+    bookingScript: result.bookingScript || '',
     isFromApi: true,
   };
 };
@@ -250,7 +260,7 @@ function AIPrepPanel({ prep, isLoading, onRefresh }: { prep: AIPrep | null; isLo
 
                 <div className="ai-card ai-card-next">
                   <span className="ai-card-label">Booking Script</span>
-                  <p className="ai-script">"Super, vidím že to dává smysl. Co takhle si dát 20 minut příští týden? Hodí se úterý nebo čtvrtek?"</p>
+                  <p className="ai-script">{prep.bookingScript || '"Super, vidím že to dává smysl. Co takhle si dát 20 minut příští týden? Hodí se úterý nebo čtvrtek?"'}</p>
                 </div>
               </>
             )}

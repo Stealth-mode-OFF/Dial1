@@ -4185,6 +4185,60 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         
         Respond as the Prospect (keep it short):`;
         break;
+
+      case 'call-intelligence':
+        model = "gpt-4o";
+        systemPrompt = `You are an elite Czech B2B sales intelligence analyst for Echo Pulse by Behavery.
+        ${PRODUCT_KNOWLEDGE}
+        ${INDUSTRY_KNOWLEDGE}
+        ${customKnowledge}
+        ${styleInstruction}
+
+        YOUR MISSION: Prepare a COMPLETE call intelligence brief so the salesperson can:
+        1. APPROACH the prospect with a hyper-personalized opening
+        2. QUALIFY them using BANT + discovery questions
+        3. BOOK a 20-minute demo meeting
+
+        You MUST return a valid JSON object with EXACTLY these fields:
+        {
+          "companyInsight": "2-3 sentence strategic summary of the company — what they do, size estimate, market position, and why Echo Pulse matters to them",
+          "painPoints": ["pain point 1 specific to their industry/role", "pain point 2", "pain point 3"],
+          "openingLine": "A natural, direct Czech opening line (no fake friendliness). Reference their specific situation. Max 2 sentences. Example: 'Dobrý den, [jméno], volám z Behavery. Vidím, že [firma] je ve výrobě – řešíte teď fluktuaci na směnách?'",
+          "qualifyingQuestions": ["SPIN-style discovery question 1 in Czech", "question 2", "question 3", "question 4"],
+          "objectionHandlers": [
+            {"objection": "Pošlete to mailem", "response": "direct Czech rebuttal"},
+            {"objection": "Nemáme rozpočet", "response": "reframe response"},
+            {"objection": "Máme vlastní řešení", "response": "challenger response"},
+            {"objection": "Nemám čas", "response": "permission-based response"},
+            {"objection": "Musím to probrat s vedením", "response": "authority navigation response"}
+          ],
+          "competitorMentions": ["competitor 1 with positioning note", "competitor 2"],
+          "recentNews": "Any relevant industry trend, legislation, or market shift in CZ that creates urgency (e.g., labor law changes, sector growth/decline). If nothing specific, mention a general Czech market trend relevant to the prospect.",
+          "decisionMakerTips": "Intel on the person — likely seniority, decision-making power, communication style recommendation, and what motivates their role (KPIs they care about). If title is given, use it. Otherwise guess from context.",
+          "bookingScript": "Natural Czech closing script to book a 20-min demo. Must include: value prop summary, specific time suggestion, and a soft close. Example: 'Navrhuji, ať si dáme 20 minut příští týden – ukážu vám, jak to funguje v praxi u podobných firem. Hodí se úterý nebo čtvrtek dopoledne?'"
+        }
+
+        CRITICAL RULES:
+        - ALL text values MUST be in Czech (except JSON keys)
+        - Be SPECIFIC to the company/person/industry — no generic filler
+        - Pain points must relate to their actual industry, not generic sales pain
+        - Opening line must be natural spoken Czech, no marketing speak
+        - Objection handlers must address real Czech B2B objections
+        - If you don't have enough info, make educated guesses based on industry + Czech market knowledge
+        - qualifyingQuestions should follow SPIN methodology (Situation → Problem → Implication → Need-payoff)
+        - ALWAYS return all fields, never null or undefined
+        `;
+        userPrompt = `Prepare complete call intelligence for:
+        - Person: ${contactName || 'Unknown'}
+        - Title/Role: ${contextData?.title || 'Unknown'}
+        - Company: ${company || 'Unknown'}
+        - Industry: ${contextData?.industry || 'Unknown'}
+        - Email: ${contextData?.email || 'N/A'}
+        - Website: ${contextData?.website || 'N/A'}
+        - Notes: ${contextData?.notes || 'None'}
+        
+        Generate the full JSON intelligence brief.`;
+        break;
     }
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -4199,8 +4253,8 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: type === 'research' ? 0.3 : (type === 'spin-script' ? 0.5 : 0.7),
-        response_format: (type === 'research' || type === 'spin-script') ? { type: "json_object" } : undefined
+        temperature: (type === 'research' || type === 'call-intelligence') ? 0.3 : (type === 'spin-script' ? 0.5 : 0.7),
+        response_format: (type === 'research' || type === 'spin-script' || type === 'call-intelligence') ? { type: "json_object" } : undefined
       })
     });
 
@@ -4220,6 +4274,28 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         } catch (e) {
             console.error("Failed to parse JSON from AI", content);
             return c.json({ error: "Invalid AI JSON format" }, 500);
+        }
+    }
+
+    // For call-intelligence, parse JSON and return directly
+    if (type === 'call-intelligence') {
+        try {
+            const parsed = JSON.parse(content);
+            // Ensure all required fields exist with fallbacks
+            return c.json({
+                companyInsight: parsed.companyInsight || '',
+                painPoints: Array.isArray(parsed.painPoints) ? parsed.painPoints : [],
+                openingLine: parsed.openingLine || '',
+                qualifyingQuestions: Array.isArray(parsed.qualifyingQuestions) ? parsed.qualifyingQuestions : [],
+                objectionHandlers: Array.isArray(parsed.objectionHandlers) ? parsed.objectionHandlers : [],
+                competitorMentions: Array.isArray(parsed.competitorMentions) ? parsed.competitorMentions : [],
+                recentNews: parsed.recentNews || '',
+                decisionMakerTips: parsed.decisionMakerTips || '',
+                bookingScript: parsed.bookingScript || '',
+            });
+        } catch (e) {
+            console.error("Failed to parse call-intelligence JSON from AI", content);
+            return c.json({ error: "AI returned invalid JSON for call intelligence" }, 500);
         }
     }
 
