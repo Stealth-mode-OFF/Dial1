@@ -1175,47 +1175,105 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   line-height: 1.55;
 }
 
-/* Strategy Tab — Actions / Challenger / Tonality / Three Tens */
-.ai-card-actions {
+/* Strategy Tab — Call Flow / Challenger / Certainty Builders / Looping */
+
+/* Call Timeline */
+.ai-card-timeline {
   background: linear-gradient(135deg, var(--primary-light), #eef2ff);
   border: 2px solid var(--primary);
+  padding: var(--space-3);
 }
-.ai-card-actions .ai-card-label { color: var(--primary); font-weight: 700; }
+.ai-card-timeline .ai-card-label { color: var(--primary); font-weight: 700; }
 
-.ai-action-steps {
+.timeline-steps {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 2px;
+  position: relative;
+}
+.timeline-steps::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--border-light);
+  z-index: 0;
 }
 
-.ai-action-step {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-2);
+.timeline-step {
+  position: relative;
+  padding: 8px 10px 8px 32px;
   background: var(--surface);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   font-size: 12px;
-  line-height: 1.5;
 }
 
-.ai-action-num {
+.timeline-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
-  background: var(--primary);
-  color: white;
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 700;
+  gap: var(--space-2);
+  margin-bottom: 3px;
 }
 
-.ai-action-text { flex: 1; }
+.timeline-badge {
+  position: absolute;
+  left: -2px;
+  top: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: white;
+  z-index: 1;
+}
+.timeline-stage-open .timeline-badge { background: #22c55e; }
+.timeline-stage-teach .timeline-badge { background: #f59e0b; }
+.timeline-stage-discover .timeline-badge { background: #3b82f6; }
+.timeline-stage-confirm .timeline-badge { background: #8b5cf6; }
+.timeline-stage-close .timeline-badge { background: #ef4444; }
 
+.timeline-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.timeline-goal {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.timeline-say {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 4px 8px;
+  background: var(--primary-light);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--primary);
+  margin-bottom: 4px;
+}
+
+.timeline-tone {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Challenger Insight */
 .ai-card-challenger {
   background: linear-gradient(135deg, #fff7ed, #fef3c7);
   border: 2px solid #f59e0b;
@@ -1229,54 +1287,85 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   color: var(--text-primary);
 }
 
-.ai-card-tonality {
-  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
-  border: 2px solid #0ea5e9;
+/* Certainty Builders (Three Tens) */
+.ai-card-certainty {
+  background: var(--surface);
+  border: 2px solid var(--border);
 }
-.ai-card-tonality .ai-card-label { color: #0284c7; font-weight: 700; }
+.ai-card-certainty .ai-card-label { color: var(--text); font-weight: 700; font-size: 12px; }
 
-.ai-tonality-text {
+.certainty-grid {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
-.ai-tonality-text p {
-  font-size: 12px;
-  line-height: 1.5;
-  margin: 0;
-  padding: 6px 8px;
-  background: var(--surface);
-  border-radius: var(--radius-sm);
-  border-left: 3px solid #0ea5e9;
-}
-
-.ai-card-methodology {
-  background: var(--surface);
+.certainty-item {
+  background: var(--bg);
   border: 1px solid var(--border);
-}
-.ai-card-methodology .ai-card-label { color: var(--text-secondary); font-weight: 700; }
-
-.three-tens-grid {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
 }
 
-.three-tens-item {
+.certainty-header {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2);
-  background: var(--bg);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  font-size: 12px;
+  margin-bottom: 6px;
 }
 
-.three-tens-icon { font-size: 18px; }
-.three-tens-item strong { display: block; font-weight: 600; }
-.three-tens-q { font-size: 11px; color: var(--text-muted); }
+.certainty-icon { font-size: 16px; }
+.certainty-meta { display: flex; flex-direction: column; }
+.certainty-meta strong { font-size: 12px; font-weight: 700; }
+.certainty-sub { font-size: 10px; color: var(--text-muted); }
+
+.certainty-tactic {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  padding: 6px 8px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--primary);
+  font-style: italic;
+}
+
+/* Looping Scripts */
+.ai-card-looping {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  border: 2px solid var(--danger);
+}
+.ai-card-looping .ai-card-label { color: var(--danger); font-weight: 700; }
+
+.looping-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.looping-item {
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.looping-trigger {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger);
+  background: #fef2f2;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.looping-response {
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  font-style: italic;
+}
 
 /* ============ FOOTER ============ */
 .footer {

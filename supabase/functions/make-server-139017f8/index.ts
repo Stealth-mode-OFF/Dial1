@@ -4113,11 +4113,35 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
 
       case 'spin-script':
         model = "gpt-4o";
-        systemPrompt = `You are a SPIN Selling expert creating a 20-minute consultative call script in Czech.
+        systemPrompt = `You are an expert sales coach creating a 20-minute DEMO MEETING script in Czech for Echo Pulse by Behavery.
+        You combine SPIN Selling, Straight Line Persuasion, and Challenger Sale methodology.
+
         ${PRODUCT_KNOWLEDGE}
         ${INDUSTRY_KNOWLEDGE}
+        ${SALES_METHODOLOGY}
         ${customKnowledge}
         ${styleInstruction}
+
+        CONTEXT: This is NOT a cold call. The lead has already been qualified and agreed to a 20-minute demo.
+        GOAL: Understand their specific needs deeply, demonstrate Echo Pulse value through their lens, and close a PILOT LAUNCH commitment.
+
+        DEMO MEETING PRINCIPLES:
+        1. SITUATION (3-4min): Confirm what you know from the cold call. Ask about current measurement methods, team size, turnover rate, HR processes. Listen 80%.
+        2. PROBLEM (4-5min): Dig into pain. Use Implication questions to make the cost of inaction concrete. "Co vás to stojí měsíčně?" "Jak to ovlivňuje produkci?"
+        3. IMPLICATION (4-5min): This is your Challenger Teaching moment. Show them data they don't have. Reframe their thinking about employee retention. Present Echo Pulse as THE answer to problems they just articulated. Live demo walk-through tied to THEIR specific pains.
+        4. NEED-PAYOFF (3-4min): Let THEM sell it to themselves: "Pomohlo by vám...?" Then close toward PILOT.
+
+        CLOSING FOR PILOT (not just "next steps"):
+        - Pilot = 3-month trial with one team/department
+        - Use Belfort's "reasonable man" tonality: calm, no pressure, logical
+        - Use Assumptive Close: "Má smysl to zkusit na jednom oddělení? Třeba výroba, kde je ta fluktuace největší?"
+        - If they hesitate: Loop back to their stated pain (from I-questions), raise Product certainty
+        - If "musím probrat s vedením": Offer to present to the team together, or prepare a 1-page summary for their boss
+
+        THREE TENS IN DEMO CONTEXT:
+        - Product certainty: Build via LIVE DEMO, show real dashboard, case studies from similar CZ companies
+        - You certainty: Show expertise about THEIR industry, reference specific metrics and benchmarks
+        - Company certainty: Client logos, CZ market commitment, support model, data security
 
         OUTPUT FORMAT: Valid JSON with this structure:
         {
@@ -4126,22 +4150,33 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
             {
               "phase": "situation",
               "title": "Zjištění současného stavu",
-              "duration": "5 min",
-              "content": "Main talking points...",
-              "questions": ["Question 1", "Question 2"],
-              "tips": ["Tip 1"],
-              "transitions": ["Transition to next phase..."]
+              "duration": "3-4 min",
+              "content": "Hlavní body — co zjistit a jak reagovat na odpovědi. Vždy v kontextu JEJICH firmy/oboru.",
+              "questions": ["SPIN otázka 1 v češtině", "SPIN otázka 2", "SPIN otázka 3"],
+              "tips": ["Praktický tip pro prezentujícího — co sledovat, jak reagovat"],
+              "transitions": ["Přesný přechod do další fáze — co říct"]
             }
           ],
-          "closingTechniques": [{"name": "Assumptive close", "script": "..."}],
-          "objectionHandlers": [{"objection": "Je to drahé", "response": "..."}]
+          "closingTechniques": [
+            {"name": "Assumptive Pilot Close", "script": "Přesný český script pro uzavření pilotu..."},
+            {"name": "Money-Aside Close", "script": "Belfort: Kdybych cenu odložil stranou..."},
+            {"name": "Next-Step Fallback", "script": "Pokud pilot hned ne, konkrétní alternativa..."}
+          ],
+          "objectionHandlers": [
+            {"objection": "Je to drahé", "response": "Looping: acknowledge → cost-of-inaction reframe → re-close na pilot. V češtině."},
+            {"objection": "Máme vlastní řešení", "response": "Challenger tension: response rate data, timing advantages. V češtině."},
+            {"objection": "Musím to probrat s vedením", "response": "Three Tens check + nabídka společné prezentace. V češtině."},
+            {"objection": "Teď to není priorita", "response": "Reframe urgency: cost of waiting + easy pilot setup. V češtině."}
+          ]
         }
 
         4 blocks required: situation, problem, implication, need-payoff.
-        ALL TEXT IN CZECH. Natural spoken language.
+        ALL TEXT IN CZECH. Natural spoken language. The questions must be ready-to-say Czech phrases, not descriptions.
+        Closing techniques must be PILOT-focused, not just generic closes.
+        Objection handlers must use specific methodology (Looping, Reframe, Three Tens) and be full Czech sentences.
         `;
-        userPrompt = prompt || `Create a full 20-minute SPIN call script for ${contactName || 'the lead'} at ${company || 'their company'}.
-        Goal: ${goal || 'Book a demo meeting'}.
+        userPrompt = prompt || `Create a full 20-minute demo meeting script for ${contactName || 'the lead'} at ${company || 'their company'}.
+        Goal: ${goal || 'Vést 20-min demo, pochopit potřeby, prodat pilotní spuštění Echo Pulse'}.
         Context: ${JSON.stringify(contextData || {})}`;
         break;
 
@@ -4330,11 +4365,22 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
           "decisionMakerTips": "Stakeholder-tailored intel: their likely decision-making style, what KPIs they care about, and how to frame Echo Pulse for their specific role (Challenger tailoring). Communication style advice.",
           "bookingScript": "Natural Czech closing script using Advance technique (SPIN) with specific time. Include: value prop tied to THEIR explicit need, 'reasonable man' tonality instruction, and soft close with two day options. Example: 'Vzhledem k tomu, co jste říkal o té fluktuaci — navrhuji 20 minut příští týden, ukážu vám konkrétní čísla z firem jako je ta vaše. Hodí se úterý nebo čtvrtek dopoledne?'",
           "challengerInsight": "A Commercial Teaching moment: one surprising fact or reframe that challenges the prospect's current assumptions about employee retention/engagement. Must be specific, data-backed, and make them reconsider their approach. In Czech.",
-          "tonalityGuide": "Specific tonality advice for THIS call: which Belfort tonality to use at each stage (certain/enthusiastic/reasonable man/scarcity), how to sound, what to avoid. 3-4 bullet points in Czech.",
-          "threeActions": [
-            "Immediate action 1: the ONE thing to do in first 15 seconds",
-            "Key moment: the critical SPIN I-question or Challenger reframe to deliver mid-call",
-            "Close action: the specific Advance to push for at the end"
+          "certaintyBuilders": {
+            "product": "1-2 sentence specific phrase to build PRODUCT certainty for THIS prospect. What to say/show to make them believe Echo Pulse works. Reference a relevant case study, metric, or proof point tailored to their industry. In Czech.",
+            "you": "1-2 sentence specific phrase to build YOUR (salesperson) certainty. How to demonstrate expertise to THIS person — reference their industry knowledge, show you understand their world. In Czech.",
+            "company": "1-2 sentence specific phrase to build COMPANY (Behavery) certainty. Why this prospect should trust Behavery — reference relevant clients, Czech market focus, support quality. In Czech."
+          },
+          "callTimeline": [
+            {"stage": "OPEN", "time": "0-15s", "goal": "Hook them in 4 seconds", "say": "The exact opening sentence to use — Belfort 4-second rule. In Czech.", "tonality": "Certain, sharp, bottled enthusiasm"},
+            {"stage": "TEACH", "time": "15-60s", "goal": "Challenger reframe", "say": "Commercial Teaching insight — the surprising fact that makes them rethink. In Czech.", "tonality": "Expert, authoritative, matter-of-fact"},
+            {"stage": "DISCOVER", "time": "1-3min", "goal": "SPIN I-question", "say": "The KEY Implication question that makes the problem feel urgent and costly. In Czech.", "tonality": "Curious, empathetic, concerned"},
+            {"stage": "CONFIRM", "time": "30s", "goal": "Need-payoff", "say": "The N-question that lets THEM sell the solution to themselves. In Czech.", "tonality": "Supportive, reasonable man"},
+            {"stage": "CLOSE", "time": "30s", "goal": "Book the Advance", "say": "Specific booking phrase with two day options. In Czech.", "tonality": "Calm certainty, no pressure"}
+          ],
+          "loopingScripts": [
+            {"trigger": "Common deflection 1 in Czech (e.g. 'Pošlete to mailem')", "loop": "Belfort Looping response: Acknowledge → Identify which Ten is low → Raise it → Re-close. The EXACT words to say. In Czech."},
+            {"trigger": "Common deflection 2 in Czech", "loop": "Second loop response targeting a DIFFERENT Ten. In Czech."},
+            {"trigger": "Final resistance in Czech", "loop": "Third and final loop — 'money aside' or 'reasonable man' close. Exit gracefully if still no. In Czech."}
           ]
         }
 
@@ -4346,8 +4392,10 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         - Qualifying questions MUST follow SPIN sequence: (S) → (P) → (I) → (N), labeled explicitly
         - Each objection handler must specify WHICH methodology technique it uses (Looping, Reframe, Money-aside, etc.)
         - challengerInsight must be a real reframe — not just a product benefit
-        - tonalityGuide must be actionable behavior advice, not abstract theory
-        - threeActions must be concrete, tactical, and sequenced for call flow
+        - certaintyBuilders must contain SPECIFIC phrases to say, not generic advice. Tailored to this prospect's industry/role.
+        - callTimeline 'say' fields must contain EXACT Czech phrases/sentences the salesperson can read verbatim
+        - loopingScripts must be ready-to-use Czech sentences, not theory. Each loop targets a different one of the Three Tens.
+        - callTimeline must flow logically: open → teach → discover → confirm → close
         - If you don't have enough info, make educated guesses based on industry + Czech market knowledge
         - ALWAYS return all fields, never null or undefined
         `;
@@ -4416,8 +4464,9 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
                 decisionMakerTips: parsed.decisionMakerTips || '',
                 bookingScript: parsed.bookingScript || '',
                 challengerInsight: parsed.challengerInsight || '',
-                tonalityGuide: parsed.tonalityGuide || '',
-                threeActions: Array.isArray(parsed.threeActions) ? parsed.threeActions : [],
+                certaintyBuilders: parsed.certaintyBuilders && typeof parsed.certaintyBuilders === 'object' ? parsed.certaintyBuilders : { product: '', you: '', company: '' },
+                callTimeline: Array.isArray(parsed.callTimeline) ? parsed.callTimeline : [],
+                loopingScripts: Array.isArray(parsed.loopingScripts) ? parsed.loopingScripts : [],
             });
         } catch (e) {
             console.error("Failed to parse call-intelligence JSON from AI", content);

@@ -59,10 +59,10 @@ interface DemoScript {
 
 // ============ CONSTANTS ============
 const SPIN_PHASES: SPINPhase[] = [
-  { id: 'situation', name: 'Situation', shortName: 'S', description: 'Zjisti současný stav', color: '#3b82f6', icon: '🔍' },
-  { id: 'problem', name: 'Problem', shortName: 'P', description: 'Odhal problémy', color: '#f59e0b', icon: '⚠️' },
-  { id: 'implication', name: 'Implication', shortName: 'I', description: 'Ukaž důsledky', color: '#ef4444', icon: '💥' },
-  { id: 'need-payoff', name: 'Need-Payoff', shortName: 'N', description: 'Nabídni řešení', color: '#10b981', icon: '✨' },
+  { id: 'situation', name: 'Situation', shortName: 'S', description: 'Potvrď kontext, zjisti stav', color: '#3b82f6', icon: '🔍' },
+  { id: 'problem', name: 'Problem', shortName: 'P', description: 'Odhal bolesti, kvantifikuj', color: '#f59e0b', icon: '⚠️' },
+  { id: 'implication', name: 'Implication', shortName: 'I', description: 'Ukaž dopad + demo', color: '#ef4444', icon: '💥' },
+  { id: 'need-payoff', name: 'Need-Payoff', shortName: 'N', description: 'Uzavři pilot', color: '#10b981', icon: '🎯' },
 ];
 
 // ============ AI SCRIPT GENERATOR ============
@@ -74,7 +74,7 @@ const generateDemoScript = async (lead: Lead): Promise<{ script: DemoScript | nu
     const result = await echoApi.ai.generate({
       contactName: lead.name,
       company: lead.company,
-      goal: 'Book a demo meeting for Echo Pulse',
+      goal: 'Vést 20-min demo Echo Pulse. Pochopit potřeby, ukázat hodnotu, prodat pilotní spuštění.',
       type: 'spin-script',
       contextData: {
         title: lead.title || '',
@@ -122,41 +122,126 @@ const generateWhispers = (phase: SPINPhase['id'], timeInPhase: number): WhisperS
   const now = Date.now();
 
   // Phase-specific whispers
+  // Situation phase
+  if (phase === 'situation' && timeInPhase > 30 && timeInPhase < 60) {
+    whispers.push({
+      id: 'confirm-context',
+      type: 'tip',
+      content: '🎯 Potvrď, co víš z cold callu. Neptej se na věci, které už znáš.',
+      priority: 'medium',
+      timestamp: now,
+    });
+  }
   if (phase === 'situation' && timeInPhase > 180) {
     whispers.push({
       id: 'time-warning-s',
       type: 'tip',
-      content: '⏱️ Situační fáze trvá dlouho. Přejdi k problémům.',
+      content: '⏱️ 3 minuty! Máš dost kontextu. Přejdi k problémům — zeptej se na konkrétní bolest.',
+      priority: 'high',
+      timestamp: now,
+    });
+  }
+  if (phase === 'situation' && timeInPhase > 240) {
+    whispers.push({
+      id: 'time-critical-s',
+      type: 'tip',
+      content: '🚨 Příliš dlouho v situaci! Řekni: "Jasně, a jak to konkrétně ovlivňuje...?"',
       priority: 'high',
       timestamp: now,
     });
   }
 
-  if (phase === 'problem') {
+  // Problem phase
+  if (phase === 'problem' && timeInPhase < 30) {
     whispers.push({
-      id: 'problem-tip',
+      id: 'problem-start',
       type: 'question',
-      content: '💡 Zeptej se: "Jak to ovlivňuje vaše měsíční targety?"',
+      content: '💡 Zeptej se: "Co vás na tom trápí nejvíc?" nebo "Kde to bolí?"',
       priority: 'medium',
       timestamp: now,
     });
   }
-
-  if (phase === 'implication') {
+  if (phase === 'problem' && timeInPhase > 60) {
     whispers.push({
-      id: 'implication-tip',
+      id: 'problem-implication',
+      type: 'question',
+      content: '💰 Implikuj: "Kolik vás to stojí měsíčně?" "Jak to ovlivňuje tým?"',
+      priority: 'medium',
+      timestamp: now,
+    });
+  }
+  if (phase === 'problem' && timeInPhase > 240) {
+    whispers.push({
+      id: 'problem-move',
       type: 'tip',
-      content: '💰 Kvantifikuj dopad: "Kolik to stojí měsíčně?"',
+      content: '⏱️ Máš dost painů. Přejdi na Implication — ukaž dopad + spusť demo.',
+      priority: 'high',
+      timestamp: now,
+    });
+  }
+
+  // Implication phase (DEMO TIME)
+  if (phase === 'implication' && timeInPhase < 30) {
+    whispers.push({
+      id: 'demo-start',
+      type: 'tip',
+      content: '🖥️ Teď je čas na demo! Ukaž konkrétně, jak Echo Pulse řeší JEJICH problém.',
+      priority: 'high',
+      timestamp: now,
+    });
+  }
+  if (phase === 'implication' && timeInPhase > 60) {
+    whispers.push({
+      id: 'challenger-insight',
+      type: 'tip',
+      content: '🧠 Challenger moment: Řekni jim něco, co nevědí. Překvapivý fakt o jejich branži.',
+      priority: 'medium',
+      timestamp: now,
+    });
+  }
+  if (phase === 'implication' && timeInPhase > 180) {
+    whispers.push({
+      id: 'implication-three-tens',
+      type: 'tip',
+      content: '📊 Zkontroluj Three Tens: Věří produktu? Věří tobě? Věří firmě? Co je nejslabší?',
       priority: 'medium',
       timestamp: now,
     });
   }
 
+  // Need-Payoff phase (CLOSE FOR PILOT)
+  if (phase === 'need-payoff' && timeInPhase < 30) {
+    whispers.push({
+      id: 'payoff-open',
+      type: 'question',
+      content: '✨ Zeptej se: "Pomohlo by vám mít tento přehled v reálném čase?" Nech JE prodat řešení.',
+      priority: 'high',
+      timestamp: now,
+    });
+  }
+  if (phase === 'need-payoff' && timeInPhase > 90) {
+    whispers.push({
+      id: 'pilot-close',
+      type: 'close',
+      content: '🎯 PILOT CLOSE: "Má smysl to zkusit na jednom oddělení? Třeba tam, kde je ta fluktuace největší?"',
+      priority: 'high',
+      timestamp: now,
+    });
+  }
+  if (phase === 'need-payoff' && timeInPhase > 180) {
+    whispers.push({
+      id: 'loop-or-exit',
+      type: 'close',
+      content: '🔄 Pokud váhají: Loop zpět k jejich bolesti. "Říkal jste, že vás ta fluktuace stojí X měsíčně..."',
+      priority: 'high',
+      timestamp: now,
+    });
+  }
   if (phase === 'need-payoff' && timeInPhase > 240) {
     whispers.push({
-      id: 'close-reminder',
+      id: 'fallback-close',
       type: 'close',
-      content: '🎯 Je čas na closing. Použij Assumptive Close.',
+      content: '📅 Fallback: Pokud ne pilot, domluv follow-up s šéfem: "Můžu to odprezentovat vašemu vedení?"',
       priority: 'high',
       timestamp: now,
     });

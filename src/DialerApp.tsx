@@ -31,8 +31,9 @@ interface AIPrep {
   decisionMakerTips: string;
   bookingScript: string;
   challengerInsight?: string;
-  tonalityGuide?: string;
-  threeActions?: string[];
+  certaintyBuilders?: { product: string; you: string; company: string };
+  callTimeline?: { stage: string; time: string; goal: string; say: string; tonality: string }[];
+  loopingScripts?: { trigger: string; loop: string }[];
   isFromApi: boolean;
 }
 
@@ -282,14 +283,19 @@ function AIPrepPanel({ prep, isLoading, onRefresh, error }: { prep: AIPrep | nul
 
             {tab === 'strategy' && (
               <>
-                {prep.threeActions && prep.threeActions.length > 0 && (
-                  <div className="ai-card ai-card-actions">
-                    <span className="ai-card-label">3 Key Actions</span>
-                    <div className="ai-action-steps">
-                      {prep.threeActions.map((action, i) => (
-                        <div key={i} className="ai-action-step">
-                          <span className="ai-action-num">{i + 1}</span>
-                          <span className="ai-action-text">{action}</span>
+                {prep.callTimeline && prep.callTimeline.length > 0 && (
+                  <div className="ai-card ai-card-timeline">
+                    <span className="ai-card-label">Call Flow</span>
+                    <div className="timeline-steps">
+                      {prep.callTimeline.map((step, i) => (
+                        <div key={i} className={`timeline-step timeline-stage-${step.stage?.toLowerCase()}`}>
+                          <div className="timeline-header">
+                            <span className="timeline-badge">{step.stage}</span>
+                            <span className="timeline-time">{step.time}</span>
+                          </div>
+                          <div className="timeline-goal">{step.goal}</div>
+                          <div className="timeline-say">"{step.say}"</div>
+                          <div className="timeline-tone">🎙 {step.tonality}</div>
                         </div>
                       ))}
                     </div>
@@ -303,35 +309,43 @@ function AIPrepPanel({ prep, isLoading, onRefresh, error }: { prep: AIPrep | nul
                   </div>
                 )}
 
-                {prep.tonalityGuide && (
-                  <div className="ai-card ai-card-tonality">
-                    <span className="ai-card-label">Tonality Guide</span>
-                    <div className="ai-tonality-text">
-                      {prep.tonalityGuide.split('\n').filter(Boolean).map((line, i) => (
-                        <p key={i}>{line.replace(/^[-•]\s*/, '')}</p>
+                {prep.certaintyBuilders && (
+                  <div className="ai-card ai-card-certainty">
+                    <span className="ai-card-label">Three Tens — Jak budovat jistotu</span>
+                    <div className="certainty-grid">
+                      {[
+                        { key: 'product' as const, icon: '📦', label: 'Product', sub: 'Věří, že to funguje?' },
+                        { key: 'you' as const, icon: '🤝', label: 'You', sub: 'Věří mně jako expertovi?' },
+                        { key: 'company' as const, icon: '🏢', label: 'Company', sub: 'Věří Behavery jako firmě?' },
+                      ].map(t => (
+                        <div key={t.key} className="certainty-item">
+                          <div className="certainty-header">
+                            <span className="certainty-icon">{t.icon}</span>
+                            <div className="certainty-meta">
+                              <strong>{t.label}</strong>
+                              <span className="certainty-sub">{t.sub}</span>
+                            </div>
+                          </div>
+                          <div className="certainty-tactic">{prep.certaintyBuilders?.[t.key] || '—'}</div>
+                        </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="ai-card ai-card-methodology">
-                  <span className="ai-card-label">Three Tens Check</span>
-                  <div className="three-tens-grid">
-                    {[
-                      { icon: '📦', label: 'Product', q: 'Věří, že to funguje?' },
-                      { icon: '🤝', label: 'You', q: 'Věří mně jako expertovi?' },
-                      { icon: '🏢', label: 'Company', q: 'Věří Behavery jako firmě?' },
-                    ].map(t => (
-                      <div key={t.label} className="three-tens-item">
-                        <span className="three-tens-icon">{t.icon}</span>
-                        <div>
-                          <strong>{t.label}</strong>
-                          <span className="three-tens-q">{t.q}</span>
+                {prep.loopingScripts && prep.loopingScripts.length > 0 && (
+                  <div className="ai-card ai-card-looping">
+                    <span className="ai-card-label">Looping — Když odmítnou</span>
+                    <div className="looping-list">
+                      {prep.loopingScripts.map((ls, i) => (
+                        <div key={i} className="looping-item">
+                          <div className="looping-trigger">🔴 {ls.trigger}</div>
+                          <div className="looping-response">↩ {ls.loop}</div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             )}
           </>
