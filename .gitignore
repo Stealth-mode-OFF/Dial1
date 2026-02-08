@@ -11,6 +11,13 @@ supabase/.temp/
 # Local debug artifacts
 dial1_repo_digest.txt
 
+# Build outputs and test artifacts
+build/
+dist/
+test-results/
+playwright-report/
+tmp/
+
 # Local transcript exports
 tmp/tldv-*
 
