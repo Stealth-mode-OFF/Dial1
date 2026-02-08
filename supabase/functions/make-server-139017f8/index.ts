@@ -7,6 +7,9 @@ import * as kv from "./kv_store.ts";
 
 const app = new Hono();
 
+// Bump when deploying edge function changes; exposed via GET /health.
+const FUNCTION_VERSION = "2026-02-08-settings-v1";
+
 // Enable logger
 app.use('*', logger(console.log));
 
@@ -187,8 +190,9 @@ const generateCallNoteForPipedrive = async (params: {
   durationSec?: unknown;
   notes?: unknown;
   contact?: { name?: string | null; title?: string | null; company?: string | null };
+  openaiApiKey?: string | null;
 }) => {
-  const apiKey = (Deno.env.get("OPENAI_API_KEY") || "").toString().trim();
+  const apiKey = (params.openaiApiKey || Deno.env.get("OPENAI_API_KEY") || "").toString().trim();
   if (!apiKey) return null;
 
   const openai = new OpenAI({ apiKey });
@@ -370,6 +374,40 @@ const getPipedriveKey = async (userId: string) => {
     console.error("Failed to load Pipedrive key", e);
     return null;
   }
+};
+
+const getOpenAiKey = async (userId: string) => {
+  try {
+    const data = await kv.get(userKey(userId, "integration:openai"));
+    const apiKey = data?.apiKey?.toString().trim();
+    return apiKey || null;
+  } catch (e) {
+    console.error("Failed to load OpenAI key", e);
+    return null;
+  }
+};
+
+const getOpenAiApiKeyForUser = async (userId: string) => {
+  const key = (await getOpenAiKey(userId)) || Deno.env.get("OPENAI_API_KEY") || "";
+  const trimmed = key.toString().trim();
+  return trimmed ? trimmed : null;
+};
+
+const testOpenAiApiKey = async (apiKey: string) => {
+  const res = await fetch("https://api.openai.com/v1/models", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: "application/json",
+    },
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = json?.error?.message || json?.error || json?.message || `OpenAI request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  const data = Array.isArray(json?.data) ? json.data : [];
+  return { model_count: data.length };
 };
 
 // --- PRODUCT KNOWLEDGE BASE (CZECH MARKET OPTIMIZED) ---
@@ -691,8 +729,9 @@ const generatePrecallBrief = async (params: {
   timeline: { activities: any[]; notes: any[]; deals: any[] } | null;
   approvedFacts: any[];
   language: string;
+  openaiApiKey?: string | null;
 }) => {
-  const apiKey = (Deno.env.get("OPENAI_API_KEY") || "").toString().trim();
+  const apiKey = (params.openaiApiKey || Deno.env.get("OPENAI_API_KEY") || "").toString().trim();
   if (!apiKey) return null;
 
   const openai = new OpenAI({ apiKey });
@@ -973,8 +1012,8 @@ const extractEvidenceClaimsInternal = async (params: {
     throw new Error(message);
   }
 
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
+  const apiKey = await getOpenAiApiKeyForUser(userId);
+  if (!apiKey) throw new Error("OpenAI not configured");
 
   const extractionRunId = crypto.randomUUID();
   await admin.from("evidence_extraction_runs").insert({
@@ -1120,7 +1159,7 @@ const extractEvidenceClaimsInternal = async (params: {
 
 app.use("*", async (c, next) => {
   if (c.req.method === "OPTIONS") return next();
-  if (c.req.path.endsWith("/health")) return next();
+  if (c.req.path.startsWith("/health")) return next();
 
   const userId = await resolveUserId(c);
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
@@ -1434,8 +1473,8 @@ app.post(`${BASE_PATH}/evidence/extract`, async (c) => {
 
   if (docError || !doc) return c.json({ error: "Document not found" }, 404);
 
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) return c.json({ error: "OPENAI_API_KEY not configured" }, 500);
+  const apiKey = await getOpenAiApiKeyForUser(userId);
+  if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
 
   const extractionRunId = crypto.randomUUID();
   await admin.from("evidence_extraction_runs").insert({
@@ -1991,7 +2030,7 @@ const generateAndSavePackInternal = async (params: {
   let modelUsed = "deterministic_v0";
   let promptVersion = "deterministic";
 
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const apiKey = await getOpenAiApiKeyForUser(userId);
   if (apiKey) {
     try {
       const openai = new OpenAI({ apiKey });
@@ -2385,6 +2424,7 @@ app.post(`${BASE_PATH}/precall/context`, async (c) => {
         timeline: pdTimeline,
         approvedFacts: (pack?.approved_facts || []) as any[],
         language,
+        openaiApiKey: await getOpenAiApiKeyForUser(userId),
       });
       if (brief) {
         const nextLeadDossier = { ...(leadDossier as any), precall_brief: brief };
@@ -2695,44 +2735,6 @@ app.post(`${BASE_PATH}/whisper/objection`, async (c) => {
   return c.json(envelope);
 });
 
-// --- INTEGRATIONS: PIPEDRIVE ---
-app.get(`${BASE_PATH}/integrations/pipedrive`, async (c) => {
-  try {
-    const userId = getUserId(c);
-    const apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
-    return c.json({ configured: Boolean(apiKey) });
-  } catch (e) {
-    console.error("GET /integrations/pipedrive error:", e);
-    return c.json({ configured: false, error: String(e) }, 200);
-  }
-});
-
-app.post(`${BASE_PATH}/integrations/pipedrive`, async (c) => {
-  try {
-    const userId = getUserId(c);
-    const body = await c.req.json();
-    const apiKey = body?.apiKey?.toString().trim();
-    if (!apiKey) return c.json({ error: "Missing apiKey" }, 400);
-
-    // Test Pipedrive API key validity
-    console.log("🔐 Testing Pipedrive API key...");
-    const testRes = await fetch(`https://api.pipedrive.com/v1/users/me?api_token=${apiKey}`);
-    const testData = await testRes.json();
-    
-    if (!testData.success) {
-      console.error("❌ Pipedrive API test failed:", testData);
-      return c.json({ error: "Invalid Pipedrive API key", details: testData }, 401);
-    }
-
-    console.log("✅ Pipedrive API key is valid, storing...");
-    await kv.set(userKey(userId, "integration:pipedrive"), { apiKey });
-    return c.json({ ok: true, user: testData.data });
-  } catch (e) {
-    console.error("POST /integrations/pipedrive error:", e);
-    return c.json({ error: String(e), type: e instanceof Error ? e.constructor.name : typeof e }, 500);
-  }
-});
-
 // --- TYPES ---
 type Contact = {
   id: string;
@@ -2937,11 +2939,13 @@ app.post(`${BASE_PATH}/pipedrive/activity`, async (c) => {
 
 // --- SECTOR-BASED BATTLE CARDS ENGINE ---
 app.post(`${BASE_PATH}/ai/sector-battle-card`, async (c) => {
+  const userId = getUserId(c);
   const { companyName, industry, personTitle } = await c.req.json();
-  
-  const openai = new OpenAI({
-    apiKey: Deno.env.get("OPENAI_API_KEY"),
-  });
+
+  const apiKey = await getOpenAiApiKeyForUser(userId);
+  if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
+
+  const openai = new OpenAI({ apiKey });
 
   const systemPrompt = `
     Jsi elitní Sales Strategist pro český B2B trh. Tvým úkolem je analyzovat prospekta a připravit "Battle Card" na míru.
@@ -3128,23 +3132,59 @@ app.patch(`${BASE_PATH}/contacts/:id`, async (c) => {
   return c.json({ success: true, contact: data });
 });
 
-// Per-user Pipedrive integration settings (stored server-side)
+// --- INTEGRATIONS (stored server-side) ---
 app.get(`${BASE_PATH}/integrations/pipedrive`, async (c) => {
   const userId = getUserId(c);
   const apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
-  return c.json({ configured: Boolean(apiKey) });
+  return c.json({ configured: Boolean(apiKey && apiKey.toString().trim()) });
+});
+
+app.get(`${BASE_PATH}/integrations/pipedrive/test`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    const apiKey = ((await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY") || "").toString().trim();
+    if (!apiKey) return c.json({ ok: false, error: "not_configured" });
+
+    const res = await fetch(`https://api.pipedrive.com/v1/users/me?api_token=${encodeURIComponent(apiKey)}`, {
+      headers: { Accept: "application/json" },
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      const msg = json?.error || json?.message || "Pipedrive test failed";
+      return c.json({ ok: false, error: msg });
+    }
+    const user = json?.data
+      ? { id: json.data.id, name: json.data.name || null, email: json.data.email || null }
+      : undefined;
+    return c.json({ ok: true, user });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg });
+  }
 });
 
 app.post(`${BASE_PATH}/integrations/pipedrive`, async (c) => {
   try {
     const userId = getUserId(c);
     const { apiKey } = await c.req.json();
-    if (!apiKey || typeof apiKey !== "string") {
-      return c.json({ error: "API key required" }, 400);
+    const trimmed = typeof apiKey === "string" ? apiKey.trim() : "";
+    if (!trimmed) return c.json({ error: "API key required" }, 400);
+
+    // Verify before storing.
+    const testRes = await fetch(`https://api.pipedrive.com/v1/users/me?api_token=${encodeURIComponent(trimmed)}`, {
+      headers: { Accept: "application/json" },
+    });
+    const testJson = await testRes.json().catch(() => null);
+    if (!testRes.ok || !testJson?.success) {
+      const msg = testJson?.error || testJson?.message || "Invalid Pipedrive API key";
+      return c.json({ error: msg }, 401);
     }
+
     await kv.set(userKey(userId, "integration:pipedrive"), {
-      apiKey: apiKey.trim(),
+      apiKey: trimmed,
       updatedAt: Date.now(),
+      verifiedAt: Date.now(),
+      verifiedUser: testJson?.data ? { id: testJson.data.id, name: testJson.data.name || null } : null,
     });
     return c.json({ success: true });
   } catch (e) {
@@ -3160,6 +3200,52 @@ app.delete(`${BASE_PATH}/integrations/pipedrive`, async (c) => {
     return c.json({ success: true });
   } catch (e) {
     console.error("Failed to delete Pipedrive key", e);
+    return c.json({ error: "Failed to delete integration" }, 500);
+  }
+});
+
+app.get(`${BASE_PATH}/integrations/openai`, async (c) => {
+  const userId = getUserId(c);
+  const apiKey = await getOpenAiApiKeyForUser(userId);
+  return c.json({ configured: Boolean(apiKey) });
+});
+
+app.get(`${BASE_PATH}/integrations/openai/test`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    const apiKey = await getOpenAiApiKeyForUser(userId);
+    if (!apiKey) return c.json({ ok: false, error: "not_configured" });
+    const meta = await testOpenAiApiKey(apiKey);
+    return c.json({ ok: true, ...meta });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg });
+  }
+});
+
+app.post(`${BASE_PATH}/integrations/openai`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    const { apiKey } = await c.req.json();
+    const trimmed = typeof apiKey === "string" ? apiKey.trim() : "";
+    if (!trimmed) return c.json({ error: "API key required" }, 400);
+
+    const meta = await testOpenAiApiKey(trimmed);
+    await kv.set(userKey(userId, "integration:openai"), { apiKey: trimmed, updatedAt: Date.now(), verifiedAt: Date.now() });
+    return c.json({ success: true, ...meta });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 401);
+  }
+});
+
+app.delete(`${BASE_PATH}/integrations/openai`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    await kv.del(userKey(userId, "integration:openai"));
+    return c.json({ success: true });
+  } catch (e) {
+    console.error("Failed to delete OpenAI key", e);
     return c.json({ error: "Failed to delete integration" }, 500);
   }
 });
@@ -3386,8 +3472,9 @@ Objection: ${JSON.stringify(agents.objection || null)}
 
 app.post(`${BASE_PATH}/ai/spin/next`, async (c) => {
   try {
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) return c.json({ error: "OPENAI_API_KEY not configured" }, 500);
+    const userId = getUserId(c);
+    const apiKey = await getOpenAiApiKeyForUser(userId);
+    if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
 
     const body = await c.req.json();
     const liveModel = Deno.env.get("SPIN_LIVE_MODEL") || "gpt-4o-mini";
@@ -3469,8 +3556,9 @@ app.post(`${BASE_PATH}/ai/spin/next`, async (c) => {
 // 1. Upload Audio for Transcription (Whisper)
 app.post(`${BASE_PATH}/ai/transcribe`, async (c) => {
     try {
-        const apiKey = Deno.env.get("OPENAI_API_KEY");
-        if (!apiKey) return c.json({ error: "No API Key" }, 500);
+        const userId = getUserId(c);
+        const apiKey = await getOpenAiApiKeyForUser(userId);
+        if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
 
         const body = await c.req.parseBody();
         const file = body['file'];
@@ -3568,9 +3656,9 @@ app.delete(`${BASE_PATH}/contact-intel/:id`, async (c) => {
 app.post(`${BASE_PATH}/ai/generate`, async (c) => {
   try {
     const userId = getUserId(c);
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    const apiKey = await getOpenAiApiKeyForUser(userId);
     if (!apiKey) {
-      return c.json({ error: "OPENAI_API_KEY not configured" }, 500);
+      return c.json({ error: "OpenAI not configured" }, 500);
     }
 
     const body = await c.req.json();
@@ -3833,8 +3921,9 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
 // Text-to-Speech Endpoint
 app.post(`${BASE_PATH}/ai/speak`, async (c) => {
   try {
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) return c.json({ error: "No API Key" }, 500);
+    const userId = getUserId(c);
+    const apiKey = await getOpenAiApiKeyForUser(userId);
+    if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
 
     const { text, voice } = await c.req.json();
 
@@ -3873,11 +3962,15 @@ app.post(`${BASE_PATH}/ai/speak`, async (c) => {
 // Analyze Call (Post-Mortem)
 app.post(`${BASE_PATH}/ai/analyze-call`, async (c) => {
   try {
+    const userId = getUserId(c);
     const { transcript, salesStyle, contact } = await c.req.json();
     
     if (!transcript || transcript.length < 2) {
         return c.json({ score: 0, feedback: "Call too short to analyze." });
     }
+
+    const apiKey = await getOpenAiApiKeyForUser(userId);
+    if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
 
     const systemPrompt = `You are a brutal but fair Sales Sales Manager. 
     Your rep just finished a call. Analyze the transcript based on the '${salesStyle}' methodology.
@@ -3908,7 +4001,7 @@ app.post(`${BASE_PATH}/ai/analyze-call`, async (c) => {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
+        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -3936,9 +4029,9 @@ app.post(`${BASE_PATH}/ai/analyze-call`, async (c) => {
 app.post(`${BASE_PATH}/mentor-chat`, async (c) => {
   try {
     const { message, history } = await c.req.json();
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-
-    if (!apiKey) return c.json({ error: "No API Key" }, 500);
+    const userId = getUserId(c);
+    const apiKey = await getOpenAiApiKeyForUser(userId);
+    if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
 
     const systemPrompt = `You are the "Navigator" of the Echo Telesales OS.
     Your user is a sales representative with ADHD.
@@ -4037,7 +4130,20 @@ app.delete(`${BASE_PATH}/knowledge/:id`, async (c) => {
 });
 
 // Health check
-app.get(`${BASE_PATH}/health`, (c) => c.json({ status: "ok" }));
+app.get(`${BASE_PATH}/health`, (c) =>
+  c.json({ status: "ok", version: FUNCTION_VERSION, time: new Date().toISOString() }),
+);
+
+app.get(`${BASE_PATH}/health/db`, async (c) => {
+  try {
+    // A lightweight DB round-trip via KV table.
+    await kv.get("healthcheck");
+    return c.json({ ok: true });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: message });
+  }
+});
 
 // Get all campaigns
 app.get(`${BASE_PATH}/campaigns`, async (c) => {
@@ -4227,6 +4333,7 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
                 disposition: typeof disposition === "string" ? disposition : "call",
                 durationSec: duration,
                 notes: safeNotes,
+                openaiApiKey: await getOpenAiApiKeyForUser(userId),
                 contact: {
                   name: resolved?.contact?.name || contactName || null,
                   title: resolved?.contact?.title || null,
