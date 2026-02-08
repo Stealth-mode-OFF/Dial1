@@ -29,7 +29,7 @@ function AppLoader() {
 }
 
 export default function App() {
-  const [mode, setMode] = useState<AppMode>('dialer');
+  const [mode, setMode] = useState<AppMode>('dial');
 
   // Function to switch modes and update URL
   const switchMode = (newMode: AppMode) => {
@@ -63,8 +63,10 @@ export default function App() {
         setMode('dial');
       } else if (hash === '#meet-page') {
         setMode('meet');
-      } else if (hash === '#dialer' || hash === '') {
+      } else if (hash === '#dialer') {
         setMode('dialer');
+      } else {
+        setMode('dial');
       }
     };
     
