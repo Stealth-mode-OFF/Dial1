@@ -443,6 +443,110 @@ const testOpenAiApiKey = async (apiKey: string) => {
   return { model_count: data.length };
 };
 
+// --- SALES METHODOLOGY FRAMEWORK (SPIN + STRAIGHT LINE + CHALLENGER) ---
+const SALES_METHODOLOGY = `
+=== CORE SALES FRAMEWORKS ===
+
+## 1. SPIN SELLING (Neil Rackham)
+PURPOSE: Prevent objections, don't just handle them. Develop the prospect's own need rather than pushing features.
+
+QUESTION FLOW (use this EXACT sequence):
+S (Situační otázky) — Understand their current state. Max 2, or you bore them.
+  → "Kolik lidí máte v teamu?" / "Jak aktuálně měříte spokojenost?"
+  → Do NOT ask what you can Google. Show you did homework.
+
+P (Problémové otázky) — Surface an IMPLICIT need. The prospect admits a difficulty.
+  → "Stává se vám, že se o odchodu dozvíte až když je pozdě?"
+  → "Máte přehled, proč vám lidi odchází ve zkušební době?"
+
+I (Implikační otázky) — Make the problem BIGGER. Connect it to their KPIs/costs.
+  → "Co to pro vás znamená z hlediska nákladů, když nahrazujete jednoho člověka?"
+  → "Jak to ovlivňuje výkon celého týmu?"
+  → THIS is where deals are won. Most reps skip this. Don't.
+
+N (Need-payoff otázky) — Let THEM describe the value of a solution.
+  → "Pomohlo by vám, kdybyste měli včasný signál, že někdo zvažuje odchod?"
+  → "Co by to pro vás znamenalo mít real-time data o náladě v týmu?"
+  → NEVER pitch here. Let them sell the solution to themselves.
+
+KEY PRINCIPLES:
+- In complex B2B: Hard closes REDUCE success rate. Use Advances instead.
+- An ADVANCE = concrete next step (meeting, trial, intro to decision maker).
+- A CONTINUATION = "Pošlete to mailem" = you FAILED to create value.
+- Objections come from pitching too early. If you hear many objections, you skipped I-questions.
+- Benefits (linking feature to explicit need) work. Advantages (features without need) create objections.
+
+## 2. STRAIGHT LINE PERSUASION (Jordan Belfort)
+PURPOSE: Build certainty systematically. Every word moves the prospect down a straight line from open to close.
+
+THE THREE TENS (Tři Desítky) — Prospect must reach 8+ on all three to buy:
+1. PRODUCT CERTAINTY (1-10): "Věřím, že Echo Pulse mi skutečně pomůže"
+   → Build via: case studies, specific ROI numbers, demo proof
+2. YOU CERTAINTY (1-10): "Věřím tomuto obchodníkovi jako expertovi"
+   → Build via: tonality, body language, expertise signals, active listening
+3. COMPANY CERTAINTY (1-10): "Věřím firmě Behavery"  
+   → Build via: client logos, market position, Czech market focus, support quality
+
+TONALITY PRINCIPLES:
+- First 4 seconds determine everything ("4-Second Rule"):
+  → Sharp, enthusiastic, professional. Sound like someone worth talking to.
+  → "Dobrý den, [jméno], tady [vaše jméno] z Behavery." — said with CERTAINTY, not apology.
+- Use "reasonable man" tone when presenting price/commitment: calm, no pressure, matter-of-fact.
+- "Bottled enthusiasm" — controlled passion, never desperate. Demonstrate belief.
+- "Money aside" technique: "Kdybych cenu odložil stranou — dává vám to logiku?"
+
+LOOPING (for objections): When prospect deflects, DON'T answer directly. Loop back:
+  Pattern: Acknowledge → Reframe → Increase one of the Three Tens → Re-close
+  → Prospect: "Pošlete to mailem"
+  → Loop: "Jasně, rád pošlu. Ale řekněte mi — to, co jsme si říkali o té fluktuaci, dává vám to smysl jako řešení?" (raising Product certainty)
+  → If still stuck: Switch to raising a DIFFERENT Ten.
+  → Max 3 loops. After that, qualify out or book a follow-up.
+
+QUALIFYING FRAMEWORK:
+- Buyers IN: Pain exists? Budget accessible? Decision-maker or influencer? Timeline under 3 months?
+- Buyers OUT (quickly): No pain? No budget? Won't engage? → Politely exit, save time.
+
+## 3. CHALLENGER SALE (Matthew Dixon)
+PURPOSE: Don't just respond to needs — TEACH the prospect something new about their own business. Create "constructive tension."
+
+COMMERCIAL TEACHING (Lead with Insight, NOT Questions):
+The best reps don't ask "What keeps you up at night?" — they TELL the prospect something that SHOULD keep them up at night.
+  → "Firmy ve výrobě, které neměří sentiment v reálném čase, přicházejí v průměru o 2.3x víc lidí ve zkušební době. To je 50-80K na osobu."
+  → Start with a SURPRISING FACT, not a pitch. Make them think differently.
+
+THE REFRAME SEQUENCE (Commercial Teaching choreography):
+1. WARMER — Connect to their world: "Vidím, že [firma] je ve výrobě/IT/..."
+2. REFRAME — Challenge their assumption: "Většina firem si myslí, že exit pohovor stačí. Ale data ukazují, že 80% rozhodnutí odejít se udělá 3 měsíce předem."
+3. RATIONAL DROWNING — Data/numbers: "Průměrná firma v ČR s 200+ lidmi ztrácí ročně 1.2M Kč jen na přímých nákladech fluktuace."
+4. EMOTIONAL IMPACT — Make it personal: "Představte si, že váš nejlepší team leader odejde příští měsíc a vy o tom nevíte."
+5. NEW WAY — A different approach: "Co kdybyste měli měsíční pulz — ne dotazník, ale 3minutový check, který vám řekne, kdo je v riziku?"
+6. YOUR SOLUTION — Only NOW pitch Echo Pulse: "Přesně tohle dělá Echo Pulse."
+
+TAILORING BY STAKEHOLDER:
+- HR Director: Frame as → strategic tool for talent retention, not "another survey"
+- CFO/CEO: Frame as → cost avoidance, ROI, risk mitigation
+- Plant Manager: Frame as → practical tool to keep shifts running, reduce chaos
+- CTO/IT: Frame as → data-driven people analytics, integration-ready
+
+CONSTRUCTIVE TENSION: 
+It's OK to push back politely. Challengers don't agree with everything.
+→ "Chápu, že máte interní řešení. Ale zkušenost ukazuje, že interní ankety mají response rate pod 30% — u nás je to průměrně 78% díky SMS formátu."
+
+=== CALL STRUCTURE (Combining All Three) ===
+1. OPENING (0-15sec): 4-second rule + personalized opener. Sound certain, reference their context.
+2. BRIDGE (15-60sec): Commercial Teaching insight. Surprise them with a fact about their industry.
+3. DISCOVERY (1-3min): SPIN questions S→P→I. Build problem awareness. Listen 70%, talk 30%.
+4. NEED-PAYOFF (30sec): N-questions. Let them articulate the value.
+5. PRESENT (1min): Connect Echo Pulse to THEIR explicit need. Not a feature dump.
+6. HANDLE RESISTANCE (if needed): Looping technique. Check which of the Three Tens is lowest.
+7. ADVANCE (30sec): Book the demo. Specific day + time. Not "sometime next week."
+
+=== OBJECTION PHILOSOPHY ===
+- SPIN: Objections = you pitched too early. Prevent by better discovery.
+- BELFORT: Objections = one of the Three Tens is below 5. Identify which and loop.
+- CHALLENGER: Objections = you didn't reframe their thinking enough. Teach harder.
+`;
+
 // --- PRODUCT KNOWLEDGE BASE (CZECH MARKET OPTIMIZED) ---
 const PRODUCT_KNOWLEDGE = `
 PRODUCT: Echo Pulse by Behavery
@@ -4189,43 +4293,62 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
       case 'call-intelligence':
         model = "gpt-4o";
         systemPrompt = `You are an elite Czech B2B sales intelligence analyst for Echo Pulse by Behavery.
+        You have deep expertise in three proven sales methodologies: SPIN Selling, Straight Line Persuasion, and Challenger Sale.
+        
         ${PRODUCT_KNOWLEDGE}
         ${INDUSTRY_KNOWLEDGE}
+        ${SALES_METHODOLOGY}
         ${customKnowledge}
         ${styleInstruction}
 
-        YOUR MISSION: Prepare a COMPLETE call intelligence brief so the salesperson can:
-        1. APPROACH the prospect with a hyper-personalized opening
-        2. QUALIFY them using BANT + discovery questions
-        3. BOOK a 20-minute demo meeting
+        YOUR MISSION: Prepare a COMPLETE call intelligence brief combining insights from all three methodologies so the salesperson can:
+        1. OPEN with certainty and a Challenger-style insight (not a generic intro)
+        2. QUALIFY using SPIN discovery questions (S→P→I→N sequence)
+        3. HANDLE RESISTANCE using Belfort's Looping technique
+        4. BOOK a 20-minute demo meeting using an Advance (not a Continuation)
 
         You MUST return a valid JSON object with EXACTLY these fields:
         {
-          "companyInsight": "2-3 sentence strategic summary of the company — what they do, size estimate, market position, and why Echo Pulse matters to them",
+          "companyInsight": "2-3 sentence strategic summary of the company — what they do, size estimate, market position, and why Echo Pulse matters to them. Include a Challenger-style reframe angle.",
           "painPoints": ["pain point 1 specific to their industry/role", "pain point 2", "pain point 3"],
-          "openingLine": "A natural, direct Czech opening line (no fake friendliness). Reference their specific situation. Max 2 sentences. Example: 'Dobrý den, [jméno], volám z Behavery. Vidím, že [firma] je ve výrobě – řešíte teď fluktuaci na směnách?'",
-          "qualifyingQuestions": ["SPIN-style discovery question 1 in Czech", "question 2", "question 3", "question 4"],
-          "objectionHandlers": [
-            {"objection": "Pošlete to mailem", "response": "direct Czech rebuttal"},
-            {"objection": "Nemáme rozpočet", "response": "reframe response"},
-            {"objection": "Máme vlastní řešení", "response": "challenger response"},
-            {"objection": "Nemám čas", "response": "permission-based response"},
-            {"objection": "Musím to probrat s vedením", "response": "authority navigation response"}
+          "openingLine": "A Straight Line opening: certain, sharp, under 4 seconds to hook. Reference their specific context. Then bridge to a Challenger teaching insight. Max 3 sentences in natural Czech. Example: 'Dobrý den, [jméno], tady [vaše jméno] z Behavery. Vidím, že [firma] je ve výrobě — víte, že firmy s 200+ lidmi ve výrobě přicházejí průměrně o 1.2M ročně kvůli fluktuaci, aniž by to tušily?'",
+          "qualifyingQuestions": [
+            "(S) Situační otázka in Czech — understand their current state",
+            "(P) Problémová otázka in Czech — surface an implicit need",
+            "(I) Implikační otázka in Czech — make the problem bigger, connect to costs/KPIs",
+            "(N) Need-payoff otázka in Czech — let them describe the value of a solution"
           ],
-          "competitorMentions": ["competitor 1 with positioning note", "competitor 2"],
-          "recentNews": "Any relevant industry trend, legislation, or market shift in CZ that creates urgency (e.g., labor law changes, sector growth/decline). If nothing specific, mention a general Czech market trend relevant to the prospect.",
-          "decisionMakerTips": "Intel on the person — likely seniority, decision-making power, communication style recommendation, and what motivates their role (KPIs they care about). If title is given, use it. Otherwise guess from context.",
-          "bookingScript": "Natural Czech closing script to book a 20-min demo. Must include: value prop summary, specific time suggestion, and a soft close. Example: 'Navrhuji, ať si dáme 20 minut příští týden – ukážu vám, jak to funguje v praxi u podobných firem. Hodí se úterý nebo čtvrtek dopoledne?'"
+          "objectionHandlers": [
+            {"objection": "Pošlete to mailem", "response": "Straight Line loop: acknowledge, reframe, raise Product certainty, re-close. In Czech."},
+            {"objection": "Nemáme rozpočet", "response": "Belfort 'money aside' + Challenger cost-of-inaction reframe. In Czech."},
+            {"objection": "Máme vlastní řešení", "response": "Challenger constructive tension — show why internal solution likely underperforms (response rates, timing). In Czech."},
+            {"objection": "Nemám čas", "response": "4-second value hook + permission-based micro-commitment. In Czech."},
+            {"objection": "Musím to probrat s vedením", "response": "Three Tens check: identify which certainty is low. Offer to join the internal meeting or provide ammo. In Czech."}
+          ],
+          "competitorMentions": ["competitor 1 with positioning note vs Echo Pulse", "competitor 2"],
+          "recentNews": "A Challenger-style Commercial Teaching insight: a surprising industry fact, Czech market trend, or data point that reframes the prospect's thinking. Must be specific enough to make them say 'to jsem nevěděl'. Not generic.",
+          "decisionMakerTips": "Stakeholder-tailored intel: their likely decision-making style, what KPIs they care about, and how to frame Echo Pulse for their specific role (Challenger tailoring). Communication style advice.",
+          "bookingScript": "Natural Czech closing script using Advance technique (SPIN) with specific time. Include: value prop tied to THEIR explicit need, 'reasonable man' tonality instruction, and soft close with two day options. Example: 'Vzhledem k tomu, co jste říkal o té fluktuaci — navrhuji 20 minut příští týden, ukážu vám konkrétní čísla z firem jako je ta vaše. Hodí se úterý nebo čtvrtek dopoledne?'",
+          "challengerInsight": "A Commercial Teaching moment: one surprising fact or reframe that challenges the prospect's current assumptions about employee retention/engagement. Must be specific, data-backed, and make them reconsider their approach. In Czech.",
+          "tonalityGuide": "Specific tonality advice for THIS call: which Belfort tonality to use at each stage (certain/enthusiastic/reasonable man/scarcity), how to sound, what to avoid. 3-4 bullet points in Czech.",
+          "threeActions": [
+            "Immediate action 1: the ONE thing to do in first 15 seconds",
+            "Key moment: the critical SPIN I-question or Challenger reframe to deliver mid-call",
+            "Close action: the specific Advance to push for at the end"
+          ]
         }
 
         CRITICAL RULES:
-        - ALL text values MUST be in Czech (except JSON keys)
+        - ALL text values MUST be in Czech (except JSON keys and SPIN labels like (S), (P), (I), (N))
         - Be SPECIFIC to the company/person/industry — no generic filler
         - Pain points must relate to their actual industry, not generic sales pain
-        - Opening line must be natural spoken Czech, no marketing speak
-        - Objection handlers must address real Czech B2B objections
+        - Opening line must combine Belfort's 4-second certainty with Challenger's teaching insight
+        - Qualifying questions MUST follow SPIN sequence: (S) → (P) → (I) → (N), labeled explicitly
+        - Each objection handler must specify WHICH methodology technique it uses (Looping, Reframe, Money-aside, etc.)
+        - challengerInsight must be a real reframe — not just a product benefit
+        - tonalityGuide must be actionable behavior advice, not abstract theory
+        - threeActions must be concrete, tactical, and sequenced for call flow
         - If you don't have enough info, make educated guesses based on industry + Czech market knowledge
-        - qualifyingQuestions should follow SPIN methodology (Situation → Problem → Implication → Need-payoff)
         - ALWAYS return all fields, never null or undefined
         `;
         userPrompt = `Prepare complete call intelligence for:
@@ -4292,6 +4415,9 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
                 recentNews: parsed.recentNews || '',
                 decisionMakerTips: parsed.decisionMakerTips || '',
                 bookingScript: parsed.bookingScript || '',
+                challengerInsight: parsed.challengerInsight || '',
+                tonalityGuide: parsed.tonalityGuide || '',
+                threeActions: Array.isArray(parsed.threeActions) ? parsed.threeActions : [],
             });
         } catch (e) {
             console.error("Failed to parse call-intelligence JSON from AI", content);

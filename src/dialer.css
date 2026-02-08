@@ -1175,6 +1175,109 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   line-height: 1.55;
 }
 
+/* Strategy Tab — Actions / Challenger / Tonality / Three Tens */
+.ai-card-actions {
+  background: linear-gradient(135deg, var(--primary-light), #eef2ff);
+  border: 2px solid var(--primary);
+}
+.ai-card-actions .ai-card-label { color: var(--primary); font-weight: 700; }
+
+.ai-action-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ai-action-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-action-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ai-action-text { flex: 1; }
+
+.ai-card-challenger {
+  background: linear-gradient(135deg, #fff7ed, #fef3c7);
+  border: 2px solid #f59e0b;
+}
+.ai-card-challenger .ai-card-label { color: #d97706; font-weight: 700; }
+
+.ai-challenger-text {
+  font-size: 13px !important;
+  font-weight: 500;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.ai-card-tonality {
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  border: 2px solid #0ea5e9;
+}
+.ai-card-tonality .ai-card-label { color: #0284c7; font-weight: 700; }
+
+.ai-tonality-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ai-tonality-text p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid #0ea5e9;
+}
+
+.ai-card-methodology {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.ai-card-methodology .ai-card-label { color: var(--text-secondary); font-weight: 700; }
+
+.three-tens-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.three-tens-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.three-tens-icon { font-size: 18px; }
+.three-tens-item strong { display: block; font-weight: 600; }
+.three-tens-q { font-size: 11px; color: var(--text-muted); }
+
 /* ============ FOOTER ============ */
 .footer {
   display: flex;

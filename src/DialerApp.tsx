@@ -30,6 +30,9 @@ interface AIPrep {
   recentNews?: string;
   decisionMakerTips: string;
   bookingScript: string;
+  challengerInsight?: string;
+  tonalityGuide?: string;
+  threeActions?: string[];
   isFromApi: boolean;
 }
 
@@ -136,7 +139,7 @@ function ContactRow({ contact, isActive, onClick }: { contact: Contact; isActive
 }
 
 function AIPrepPanel({ prep, isLoading, onRefresh, error }: { prep: AIPrep | null; isLoading: boolean; onRefresh: () => void; error?: string | null }) {
-  const [tab, setTab] = useState<'prep' | 'objections' | 'qualify'>('prep');
+  const [tab, setTab] = useState<'prep' | 'objections' | 'qualify' | 'strategy'>('prep');
   const [copied, setCopied] = useState(false);
   const [copiedBooking, setCopiedBooking] = useState(false);
 
@@ -169,9 +172,9 @@ function AIPrepPanel({ prep, isLoading, onRefresh, error }: { prep: AIPrep | nul
       </div>
 
       <div className="ai-tabs">
-        {(['prep', 'objections', 'qualify'] as const).map(t => (
+        {(['prep', 'objections', 'qualify', 'strategy'] as const).map(t => (
           <button key={t} className={`ai-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'prep' ? 'Brief' : t === 'objections' ? 'Objections' : 'Qualify'}
+            {t === 'prep' ? 'Brief' : t === 'objections' ? 'Objections' : t === 'qualify' ? 'Qualify' : 'Strategy'}
           </button>
         ))}
       </div>
@@ -244,7 +247,7 @@ function AIPrepPanel({ prep, isLoading, onRefresh, error }: { prep: AIPrep | nul
             {tab === 'qualify' && (
               <>
                 <div className="ai-card">
-                  <span className="ai-card-label">Discovery Questions</span>
+                  <span className="ai-card-label">SPIN Discovery Questions</span>
                   <ol className="ai-questions">
                     {prep.qualifyingQuestions.map((q, i) => <li key={i}>{q}</li>)}
                   </ol>
@@ -273,6 +276,61 @@ function AIPrepPanel({ prep, isLoading, onRefresh, error }: { prep: AIPrep | nul
                     <button className="ai-copy" onClick={copyBooking}>{copiedBooking ? '✓' : 'Copy'}</button>
                   </div>
                   <p className="ai-script">{prep.bookingScript || '"Super, vidím že to dává smysl. Co takhle si dát 20 minut příští týden? Hodí se úterý nebo čtvrtek?"'}</p>
+                </div>
+              </>
+            )}
+
+            {tab === 'strategy' && (
+              <>
+                {prep.threeActions && prep.threeActions.length > 0 && (
+                  <div className="ai-card ai-card-actions">
+                    <span className="ai-card-label">3 Key Actions</span>
+                    <div className="ai-action-steps">
+                      {prep.threeActions.map((action, i) => (
+                        <div key={i} className="ai-action-step">
+                          <span className="ai-action-num">{i + 1}</span>
+                          <span className="ai-action-text">{action}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {prep.challengerInsight && (
+                  <div className="ai-card ai-card-challenger">
+                    <span className="ai-card-label">Challenger Insight</span>
+                    <p className="ai-challenger-text">{prep.challengerInsight}</p>
+                  </div>
+                )}
+
+                {prep.tonalityGuide && (
+                  <div className="ai-card ai-card-tonality">
+                    <span className="ai-card-label">Tonality Guide</span>
+                    <div className="ai-tonality-text">
+                      {prep.tonalityGuide.split('\n').filter(Boolean).map((line, i) => (
+                        <p key={i}>{line.replace(/^[-•]\s*/, '')}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="ai-card ai-card-methodology">
+                  <span className="ai-card-label">Three Tens Check</span>
+                  <div className="three-tens-grid">
+                    {[
+                      { icon: '📦', label: 'Product', q: 'Věří, že to funguje?' },
+                      { icon: '🤝', label: 'You', q: 'Věří mně jako expertovi?' },
+                      { icon: '🏢', label: 'Company', q: 'Věří Behavery jako firmě?' },
+                    ].map(t => (
+                      <div key={t.label} className="three-tens-item">
+                        <span className="three-tens-icon">{t.icon}</span>
+                        <div>
+                          <strong>{t.label}</strong>
+                          <span className="three-tens-q">{t.q}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </>
             )}
