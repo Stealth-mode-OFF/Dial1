@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { SalesProvider } from "./contexts/SalesContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { AuthGate } from "./components/AuthGate";
 import { checkEnvironment } from "./utils/env";
 import "./dialer.css";
 import "./meetcoach.css";
@@ -13,8 +14,10 @@ checkEnvironment();
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
-    <SalesProvider>
-      <App />
-    </SalesProvider>
+    <AuthGate>
+      <SalesProvider>
+        <App />
+      </SalesProvider>
+    </AuthGate>
   </ErrorBoundary>
 );

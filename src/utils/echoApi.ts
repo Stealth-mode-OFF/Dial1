@@ -1,12 +1,30 @@
 import { buildFunctionUrl, isSupabaseConfigured, publicAnonKey } from './supabase/info';
+import { supabaseClient } from './supabase/client';
 
 type FetchOptions = Omit<RequestInit, 'headers'> & { headers?: Record<string, string> };
 
-const authHeaders = () => {
+const accessToken = async (): Promise<string | null> => {
+  try {
+    if (!supabaseClient) return null;
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) return null;
+    const token = data?.session?.access_token;
+    return token ? String(token) : null;
+  } catch {
+    return null;
+  }
+};
+
+const authHeaders = async () => {
   const headers: Record<string, string> = {};
   if (publicAnonKey) {
-    headers.Authorization = `Bearer ${publicAnonKey}`;
+    // Required by Supabase Edge Functions gateway.
+    headers.apikey = publicAnonKey;
   }
+  // Use user JWT when present (required for protected endpoints).
+  const token = await accessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  else if (publicAnonKey) headers.Authorization = `Bearer ${publicAnonKey}`; // allow /health unauthenticated
   return headers;
 };
 
@@ -20,7 +38,7 @@ async function apiFetch<T = any>(path: string, options: FetchOptions = {}): Prom
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(),
+      ...(await authHeaders()),
       ...options.headers,
     },
   });

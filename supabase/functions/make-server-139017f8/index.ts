@@ -22,7 +22,8 @@ const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$
 
 const isOriginAllowed = (origin: string | undefined | null) => {
   if (!origin) return false;
-  if (allowedOriginPatterns.length === 0) return true; // default: allow all
+  // SECURITY: default deny. Configure ECHO_ALLOWED_ORIGINS for browser access.
+  if (allowedOriginPatterns.length === 0) return false;
   const normalized = origin.toString().trim();
   if (!normalized) return false;
 
@@ -45,7 +46,7 @@ app.use(
   "/*",
   cors({
     origin: (origin) => {
-      if (allowedOriginPatterns.length === 0) return "*";
+      // SECURITY: never return "*" here; allow only explicit origins.
       return isOriginAllowed(origin) ? origin : "";
     },
     allowHeaders: ["Content-Type", "Authorization", "apikey", "X-Echo-User", "X-Correlation-Id"],
@@ -59,8 +60,6 @@ app.use(
 // Routes must be root-relative (no extra /<functionName> prefix) otherwise callers hit 404.
 const BASE_PATH = "";
 
-const DEFAULT_USER_ID = Deno.env.get("ECHO_DEFAULT_USER_ID") || "owner";
-const REQUIRE_AUTH = Deno.env.get("ECHO_REQUIRE_AUTH") === "true";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -86,24 +85,19 @@ const getAuthUserId = async (authHeader: string | null) => {
 };
 
 const resolveUserId = async (c: any) => {
-  const headerUser = c.req.header("x-echo-user");
-  if (headerUser) return headerUser.trim();
-
   const authHeader = c.req.header("Authorization") || null;
   const authUserId = await getAuthUserId(authHeader);
   if (authUserId) return authUserId;
-
-  if (!REQUIRE_AUTH) return DEFAULT_USER_ID;
   return null;
 };
 
 const getUserId = (c: any) => c.get("userId") as string;
 
 const getAdminClient = () => {
-  if (!SUPABASE_URL) return null;
-  const key = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
-  if (!key) return null;
-  return createClient(SUPABASE_URL, key);
+  // SECURITY: server-only DB access should use service role to avoid relying on
+  // client-facing keys + RLS for backend functionality.
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 };
 
 const getCorrelationId = (c: any) => {
