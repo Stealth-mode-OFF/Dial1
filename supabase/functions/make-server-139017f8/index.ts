@@ -2849,52 +2849,6 @@ type CallLog = {
 
 // --- ENDPOINTS ---
 
-// --- ENDPOINTS ---
-
-// --- KNOWLEDGE BASE ---
-app.get(`${BASE_PATH}/knowledge`, async (c) => {
-  const userId = getUserId(c);
-  try {
-    const modules = await kv.getByPrefix(userPrefix(userId, "knowledge:"));
-    return c.json(modules);
-  } catch (e) {
-    console.error("Knowledge fetch failed:", e);
-    return c.json({ error: "Failed to fetch knowledge" }, 500);
-  }
-});
-
-app.post(`${BASE_PATH}/knowledge`, async (c) => {
-  const userId = getUserId(c);
-  const { title, content } = await c.req.json();
-  if (!title || !content) return c.json({ error: "Missing title/content" }, 400);
-  
-  const id = crypto.randomUUID();
-  await kv.set(userKey(userId, `knowledge:${id}`), { id, title, content });
-  return c.json({ id, title, content });
-});
-
-app.delete(`${BASE_PATH}/knowledge/:id`, async (c) => {
-  const userId = getUserId(c);
-  const id = c.req.param("id");
-  await kv.del(userKey(userId, `knowledge:${id}`));
-  return c.json({ ok: true });
-});
-
-// --- ANALYTICS ---
-app.get(`${BASE_PATH}/analytics`, async (c) => {
-  const userId = getUserId(c);
-  try {
-    const calls = await kv.getByPrefix(userPrefix(userId, "call:"));
-    return c.json({
-      totalCalls: calls.length,
-      calls
-    });
-  } catch (e) {
-    console.error("Analytics fetch failed:", e);
-    return c.json({ totalCalls: 0, calls: [] });
-  }
-});
-
 app.post(`${BASE_PATH}/pipedrive/import`, async (c) => {
   const userId = getUserId(c);
   const apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");

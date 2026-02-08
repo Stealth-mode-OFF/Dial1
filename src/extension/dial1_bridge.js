@@ -7,7 +7,22 @@
 
   function postToPage(type, payload) {
     try {
+      // Send in both formats for backward compatibility
+      // Legacy format (used by MeetCaptionsPanel and MeetCoach)
       window.postMessage({ source: SOURCE, type, payload }, window.location.origin);
+
+      // Standardized format (used by extensionBridge.ts)
+      if (type === 'MEET_CAPTION') {
+        window.postMessage({
+          type: 'ECHO_MEET_CAPTION_CHUNK',
+          payload: {
+            text: payload.text,
+            speaker: payload.speakerName,
+            captured_at: payload.ts,
+            meeting_url: window.location.href
+          }
+        }, window.location.origin);
+      }
     } catch (e) {
       // ignore
     }
