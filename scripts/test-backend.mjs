@@ -8,8 +8,9 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Load environment variables
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://mqoaclcqsvfaqxtwnqol.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xb2FjbGNxc3ZmYXF4dHducW9sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0MTIzMTksImV4cCI6MjA4Mzk4ODMxOX0.A4QpxGT9PaHA1CAsgyAc4M4YH9VCnjM59g3BGb1tu_w';
+// SECURITY: never hardcode Supabase keys in git. Use env vars only.
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 console.log('🧪 Testing Backend Connectivity...\n');
 
@@ -18,6 +19,12 @@ async function testSupabase() {
   console.log('📊 Testing Supabase connection...');
   
   try {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.log('   ❌ Supabase not configured in env.');
+      console.log('   ℹ️  Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY (or SUPABASE_URL + SUPABASE_ANON_KEY) and retry.');
+      return false;
+    }
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
     // Test basic query
