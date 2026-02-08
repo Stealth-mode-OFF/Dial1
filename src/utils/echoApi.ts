@@ -206,6 +206,9 @@ export type PrecallContextResult = {
 };
 
 export const echoApi = {
+  health: () => apiFetch<{ status: string; version?: string; time?: string }>('health'),
+  healthDb: () => apiFetch<{ ok: boolean; error?: string }>('health/db'),
+
   getPipedriveStatus: () => apiFetch<{ configured: boolean }>('integrations/pipedrive'),
   savePipedriveKey: (apiKey: string) =>
     apiFetch<{ success?: boolean; ok?: boolean }>('integrations/pipedrive', {
@@ -213,8 +216,18 @@ export const echoApi = {
       body: JSON.stringify({ apiKey }),
     }),
   deletePipedriveKey: () => apiFetch<{ success: boolean }>('integrations/pipedrive', { method: 'DELETE' }),
+  testPipedrive: () => apiFetch<{ ok: boolean; user?: { id?: number; name?: string; email?: string | null } }>('integrations/pipedrive/test'),
   fetchContacts: () => apiFetch<EchoContact[]>('pipedrive/contacts'),
   importPipedrive: () => apiFetch<{ ok?: boolean; count?: number }>('pipedrive/import', { method: 'POST' }),
+
+  getOpenAiStatus: () => apiFetch<{ configured: boolean }>('integrations/openai'),
+  saveOpenAiKey: (apiKey: string) =>
+    apiFetch<{ success: boolean }>('integrations/openai', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey }),
+    }),
+  deleteOpenAiKey: () => apiFetch<{ success: boolean }>('integrations/openai', { method: 'DELETE' }),
+  testOpenAi: () => apiFetch<{ ok: boolean; model_count?: number }>('integrations/openai/test'),
 
   logCall: (payload: CallLogPayload) =>
     apiFetch<CallLogResult>('call-logs', {

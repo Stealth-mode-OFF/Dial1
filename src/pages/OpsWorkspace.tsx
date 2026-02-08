@@ -26,7 +26,7 @@ export function OpsWorkspace() {
               <Settings size={14} /> Nastavení
             </button>
           </div>
-          <span className="muted text-sm">Skryté – použij jen když potřebuješ</span>
+          <span className="muted">Skryté – použij jen když potřebuješ</span>
         </div>
       </div>
 

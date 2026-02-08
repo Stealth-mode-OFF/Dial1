@@ -291,7 +291,7 @@ function SettingsOverlay({ open, onOpenChange }: { open: boolean; onOpenChange: 
           <div>
             <p className="eyebrow">Settings</p>
             <h2>Configuration</h2>
-            <p className="muted text-sm">Supabase + Pipedrive integration.</p>
+            <p className="muted">Supabase + Pipedrive + OpenAI integrations.</p>
           </div>
           <button className="btn ghost sm" onClick={() => onOpenChange(false)} type="button">
             Esc

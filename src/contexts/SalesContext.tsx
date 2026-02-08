@@ -170,7 +170,6 @@ const deriveStats = (analytics: AnalyticsSummary | null, contactsCount: number):
 };
 
 export function SalesProvider({ children }: { children: React.ReactNode }) {
-  const e2eMode = import.meta.env.VITE_E2E_BYPASS_AUTH === 'true';
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
   const [stats, setStats] = useState<Stats>(defaultStats);
@@ -248,35 +247,6 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
   const refresh = async () => {
     if (!isSupabaseConfigured) {
       setError(supabaseConfigError || 'Add Supabase URL and anon key to enable data.');
-      if (e2eMode) {
-        const demo: Contact[] = [
-          {
-            id: 'demo-1',
-            name: 'Jan Novák',
-            title: 'HR Manager',
-            company: 'ACME s.r.o.',
-            phone: '+420777123456',
-            email: 'jan.novak@acme.cz',
-            status: 'active',
-            score: 72,
-          },
-          {
-            id: 'demo-2',
-            name: 'Petra Svobodová',
-            title: 'Operations Director',
-            company: 'Beta Logistics',
-            phone: '+420777987654',
-            email: 'petra@betalogistics.cz',
-            status: 'active',
-            score: 61,
-          },
-        ];
-        setContacts(demo);
-        setAnalytics(null);
-        setStats(deriveStats(null, demo.length));
-        setPipedriveConfigured(true);
-        setLastUpdated(new Date().toISOString());
-      }
       return;
     }
 
