@@ -158,6 +158,45 @@ const parseJsonStrict = async (res: Response) => {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// --- BASIC ABUSE CONTROLS ---
+// Note: Edge functions are horizontally scaled; this is a best-effort in-memory limiter per instance.
+type RateLimitState = { count: number; resetAt: number };
+const RATE_LIMIT = new Map<string, RateLimitState>();
+
+const getClientIp = (c: any) => {
+  const direct =
+    c.req.header("cf-connecting-ip") ||
+    c.req.header("x-real-ip") ||
+    c.req.header("x-client-ip") ||
+    null;
+  if (direct) return direct.toString().split(",")[0].trim();
+
+  const fwd = c.req.header("x-forwarded-for");
+  if (!fwd) return null;
+  return fwd.toString().split(",")[0].trim();
+};
+
+const rateLimit = (key: string, max: number, windowMs: number) => {
+  const now = Date.now();
+  const existing = RATE_LIMIT.get(key);
+  if (!existing || existing.resetAt <= now) {
+    RATE_LIMIT.set(key, { count: 1, resetAt: now + windowMs });
+    return { ok: true as const, remaining: Math.max(0, max - 1) };
+  }
+
+  if (existing.count >= max) return { ok: false as const, retryAfterMs: existing.resetAt - now };
+  existing.count += 1;
+  return { ok: true as const, remaining: Math.max(0, max - existing.count) };
+};
+
+const maybePruneRateLimit = () => {
+  if (RATE_LIMIT.size < 2_000) return;
+  const now = Date.now();
+  for (const [k, v] of RATE_LIMIT.entries()) {
+    if (v.resetAt <= now) RATE_LIMIT.delete(k);
+  }
+};
+
 const toPdDurationHHMM = (seconds: unknown) => {
   const secNum = typeof seconds === "number" ? seconds : Number(seconds);
   if (!Number.isFinite(secNum) || secNum <= 0) return "00:00";
@@ -1159,6 +1198,56 @@ app.use("*", async (c, next) => {
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
 
   c.set("userId", userId);
+  await next();
+});
+
+app.use("*", async (c, next) => {
+  if (c.req.method === "OPTIONS") return next();
+  if (c.req.path.startsWith("/health")) return next();
+
+  // Best-effort per-user+IP limiter. Use smaller budgets for expensive routes.
+  const userId = getUserId(c);
+  const ip = getClientIp(c) || "unknown";
+  const path = (c.req.path || "").toString();
+  const method = (c.req.method || "GET").toUpperCase();
+
+  let max = 120;
+  const windowMs = 60_000;
+  if (
+    path.startsWith("/ai/") ||
+    path.startsWith("/packs/") ||
+    path.startsWith("/lead/") ||
+    path.startsWith("/mentor-chat") ||
+    path.startsWith("/whisper/") ||
+    path.startsWith("/evidence/")
+  ) {
+    max = 20;
+  } else if (path.startsWith("/pipedrive/") || path.startsWith("/integrations/")) {
+    max = 40;
+  } else if (method !== "GET") {
+    max = 60;
+  }
+
+  const bucket = `${method}:${path.split("/").slice(1, 3).join("/") || path}`;
+  const key = `${userId}:${ip}:${bucket}`;
+  const r = rateLimit(key, max, windowMs);
+  if (!r.ok) {
+    const retryAfterSec = Math.max(1, Math.ceil(r.retryAfterMs / 1000));
+    c.header("Retry-After", String(retryAfterSec));
+    return c.json({ error: "Rate limit exceeded" }, 429);
+  }
+  maybePruneRateLimit();
+
+  // Hard cap for JSON payload sizes (best-effort via Content-Length).
+  const contentType = (c.req.header("content-type") || "").toLowerCase();
+  if (method !== "GET" && contentType.includes("application/json")) {
+    const lenHeader = c.req.header("content-length");
+    const len = lenHeader ? Number(lenHeader) : 0;
+    if (Number.isFinite(len) && len > 64_000) {
+      return c.json({ error: "Payload too large" }, 413);
+    }
+  }
+
   await next();
 });
 
@@ -3559,6 +3648,12 @@ app.post(`${BASE_PATH}/ai/transcribe`, async (c) => {
 
         if (!file || !(file instanceof File)) {
             return c.json({ error: "No file uploaded" }, 400);
+        }
+
+        // Hard cap to limit abuse and unexpected cost.
+        const MAX_AUDIO_BYTES = 15 * 1024 * 1024; // 15MB
+        if (file.size > MAX_AUDIO_BYTES) {
+            return c.json({ error: "File too large" }, 413);
         }
 
         console.log(`🎤 Received audio file: ${file.name} (${file.size} bytes)`);
