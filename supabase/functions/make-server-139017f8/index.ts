@@ -3922,7 +3922,7 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
     }
 
     const body = await c.req.json();
-    const { contactName, company, goal, type, contextData, salesStyle } = body; 
+    const { contactName, company, goal, type, contextData, salesStyle, prompt } = body; 
     
     // 1. Fetch Custom Knowledge (Sales Codex)
     let customKnowledge = "";
@@ -3986,6 +3986,40 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         If IT, focus on burnout/engagement.
         If unknown, focus on "Blind spots in management".
         `;
+        break;
+
+      case 'spin-script':
+        model = "gpt-4o";
+        systemPrompt = `You are a SPIN Selling expert creating a 20-minute consultative call script in Czech.
+        ${PRODUCT_KNOWLEDGE}
+        ${INDUSTRY_KNOWLEDGE}
+        ${customKnowledge}
+        ${styleInstruction}
+
+        OUTPUT FORMAT: Valid JSON with this structure:
+        {
+          "totalDuration": "20 min",
+          "blocks": [
+            {
+              "phase": "situation",
+              "title": "Zjištění současného stavu",
+              "duration": "5 min",
+              "content": "Main talking points...",
+              "questions": ["Question 1", "Question 2"],
+              "tips": ["Tip 1"],
+              "transitions": ["Transition to next phase..."]
+            }
+          ],
+          "closingTechniques": [{"name": "Assumptive close", "script": "..."}],
+          "objectionHandlers": [{"objection": "Je to drahé", "response": "..."}]
+        }
+
+        4 blocks required: situation, problem, implication, need-payoff.
+        ALL TEXT IN CZECH. Natural spoken language.
+        `;
+        userPrompt = prompt || `Create a full 20-minute SPIN call script for ${contactName || 'the lead'} at ${company || 'their company'}.
+        Goal: ${goal || 'Book a demo meeting'}.
+        Context: ${JSON.stringify(contextData || {})}`;
         break;
 
       case 'script':
@@ -4146,8 +4180,8 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: type === 'research' ? 0.3 : 0.7, // Lower temp for data/research
-        response_format: type === 'research' ? { type: "json_object" } : undefined
+        temperature: type === 'research' ? 0.3 : (type === 'spin-script' ? 0.5 : 0.7),
+        response_format: (type === 'research' || type === 'spin-script') ? { type: "json_object" } : undefined
       })
     });
 
@@ -4167,6 +4201,17 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         } catch (e) {
             console.error("Failed to parse JSON from AI", content);
             return c.json({ error: "Invalid AI JSON format" }, 500);
+        }
+    }
+
+    // For spin-script, return as { script: ... }
+    if (type === 'spin-script') {
+        try {
+            const parsed = JSON.parse(content);
+            return c.json({ script: parsed });
+        } catch (e) {
+            console.error("Failed to parse SPIN script JSON from AI", content);
+            return c.json({ script: null, error: "AI returned invalid JSON for SPIN script" }, 500);
         }
     }
 

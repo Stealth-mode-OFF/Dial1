@@ -72,13 +72,42 @@ const generateDemoScript = async (lead: Lead): Promise<{ script: DemoScript | nu
   }
   try {
     const result = await echoApi.ai.generate({
-      prompt: `Generate a 20-minute SPIN selling call script for:
-        Lead: ${lead.name}, ${lead.title || ''} at ${lead.company}
-        Industry: ${lead.industry || ''}
-        Format: JSON with blocks for each SPIN phase`,
+      contactName: lead.name,
+      company: lead.company,
+      goal: 'Book a demo meeting for Echo Pulse',
       type: 'spin-script',
+      contextData: {
+        title: lead.title || '',
+        industry: lead.industry || '',
+        painPoints: lead.painPoints || [],
+        currentSolution: lead.currentSolution || '',
+      },
     });
-    if (result?.script) return { script: { ...result.script, isFromApi: true }, error: null };
+    if (result?.error) {
+      return { script: null, error: result.error };
+    }
+    if (result?.script) {
+      const s = result.script;
+      return {
+        script: {
+          lead,
+          totalDuration: s.totalDuration || '20 min',
+          blocks: (s.blocks || []).map((b: any) => ({
+            phase: b.phase || 'situation',
+            title: b.title || '',
+            duration: b.duration || '',
+            content: b.content || '',
+            questions: b.questions || [],
+            tips: b.tips || [],
+            transitions: b.transitions || [],
+          })),
+          closingTechniques: s.closingTechniques || [],
+          objectionHandlers: s.objectionHandlers || [],
+          isFromApi: true,
+        },
+        error: null,
+      };
+    }
     return { script: null, error: 'AI nevrátilo script. Zkontroluj OPENAI_API_KEY v Supabase secrets.' };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'AI script generation failed';
