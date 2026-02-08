@@ -82,8 +82,14 @@ export const listenToExtension = (handlers: {
   if (typeof window === 'undefined') return () => {};
 
   const onMessage = (event: MessageEvent) => {
+    // Safety: only accept messages from same window (not iframes)
+    if (event.source !== window) return;
+    
     const data = event.data as ExtensionMessage | null;
     if (!data || typeof data !== 'object') return;
+    
+    // Only process known ECHO_* message types from our extension
+    if (typeof data.type !== 'string' || !data.type.startsWith('ECHO_')) return;
 
     if (data.type === 'ECHO_EXTENSION_HELLO') {
       const status: ExtensionStatus = {
