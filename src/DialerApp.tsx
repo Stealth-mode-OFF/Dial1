@@ -135,15 +135,24 @@ function ContactRow({ contact, isActive, onClick }: { contact: Contact; isActive
   );
 }
 
-function AIPrepPanel({ prep, isLoading, onRefresh }: { prep: AIPrep | null; isLoading: boolean; onRefresh: () => void }) {
+function AIPrepPanel({ prep, isLoading, onRefresh, error }: { prep: AIPrep | null; isLoading: boolean; onRefresh: () => void; error?: string | null }) {
   const [tab, setTab] = useState<'prep' | 'objections' | 'qualify'>('prep');
   const [copied, setCopied] = useState(false);
+  const [copiedBooking, setCopiedBooking] = useState(false);
 
   const copyOpener = () => {
     if (prep?.openingLine) {
       navigator.clipboard.writeText(prep.openingLine);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+    }
+  };
+
+  const copyBooking = () => {
+    if (prep?.bookingScript) {
+      navigator.clipboard.writeText(prep.bookingScript);
+      setCopiedBooking(true);
+      setTimeout(() => setCopiedBooking(false), 1500);
     }
   };
 
@@ -259,14 +268,25 @@ function AIPrepPanel({ prep, isLoading, onRefresh }: { prep: AIPrep | null; isLo
                 </div>
 
                 <div className="ai-card ai-card-next">
-                  <span className="ai-card-label">Booking Script</span>
+                  <div className="ai-card-header">
+                    <span className="ai-card-label">Booking Script</span>
+                    <button className="ai-copy" onClick={copyBooking}>{copiedBooking ? '✓' : 'Copy'}</button>
+                  </div>
                   <p className="ai-script">{prep.bookingScript || '"Super, vidím že to dává smysl. Co takhle si dát 20 minut příští týden? Hodí se úterý nebo čtvrtek?"'}</p>
                 </div>
               </>
             )}
           </>
         ) : (
-          <div className="ai-empty">Select a contact to load intelligence</div>
+          <div className="ai-empty">
+            {error ? (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--danger)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>AI Error</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{error}</div>
+                <button className="ai-refresh" onClick={onRefresh} style={{ margin: '12px auto 0', width: 'auto', padding: '4px 12px', fontSize: 11 }}>Retry</button>
+              </div>
+            ) : 'Select a contact to load intelligence'}
+          </div>
         )}
       </div>
     </aside>
@@ -522,7 +542,6 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
             onClick={() => setShowSettings(true)}
             className="mode-switch-btn"
             title="Settings"
-            style={{ marginLeft: 8 }}
             type="button"
           >
             <span>⚙ Settings</span>
@@ -613,7 +632,10 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
                   ? <a href={`tel:${contact.phone}`} className="phone">{contact.phone}</a>
                   : <span className="phone" style={{ opacity: 0.4 }}>No phone</span>
                 }
-                {contact.email && <a href={`mailto:${contact.email}`} className="email">{contact.email}</a>}
+                {contact.email && <>
+                  <span className="focus-separator" />
+                  <a href={`mailto:${contact.email}`} className="email">{contact.email}</a>
+                </>}
               </div>
 
               {isInCall && (
@@ -673,29 +695,7 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
         </section>
 
         {/* AI Panel */}
-        <div style={{ position: 'relative' }}>
-          <AIPrepPanel prep={aiPrep} isLoading={aiLoading} onRefresh={loadAiPrep} />
-          {aiError && (
-            <div
-              style={{
-                position: 'absolute',
-                right: 16,
-                bottom: 16,
-                maxWidth: 360,
-                padding: 12,
-                background: '#fff',
-                border: '2px solid #111',
-                borderRadius: 12,
-                boxShadow: '6px 6px 0 #111',
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace',
-                fontSize: 12,
-              }}
-            >
-              <div style={{ fontWeight: 800, marginBottom: 6 }}>AI unavailable</div>
-              <div style={{ opacity: 0.8 }}>{aiError}</div>
-            </div>
-          )}
-        </div>
+        <AIPrepPanel prep={aiPrep} isLoading={aiLoading} onRefresh={loadAiPrep} error={aiError} />
       </main>
 
       {/* Footer */}
