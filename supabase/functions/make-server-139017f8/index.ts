@@ -3314,24 +3314,43 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
     if (!apiToken) return c.json({ error: "No API Key" }, 500);
     apiToken = apiToken.trim();
 
-    const response = await fetch(`https://api.pipedrive.com/v1/persons?limit=50&api_token=${apiToken}`, {
-        headers: { 'Accept': 'application/json' }
-    });
-    
-    if (!response.ok) return c.json({ error: "Pipedrive Error" }, 500);
-    const data = await response.json();
-    if (!data.data) return c.json([]);
+    // Paginate through ALL Pipedrive persons
+    const allPersons: any[] = [];
+    let start = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const response = await fetch(
+        `https://api.pipedrive.com/v1/persons?limit=500&start=${start}&api_token=${apiToken}`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      if (!response.ok) return c.json({ error: "Pipedrive Error" }, 500);
+      const data = await response.json();
+      if (!data.data || data.data.length === 0) break;
+      allPersons.push(...data.data);
+      const pagination = data.additional_data?.pagination;
+      hasMore = pagination?.more_items_in_collection === true;
+      start = pagination?.next_start ?? (start + 500);
+      // Safety cap: max 5000 contacts
+      if (allPersons.length >= 5000) break;
+    }
 
-    const contacts = data.data.map((p: any) => {
+    if (allPersons.length === 0) return c.json([]);
+
+    const contacts = allPersons.map((p: any) => {
+        // Try all phone entries, pick first non-empty value
+        const phones = Array.isArray(p.phone) ? p.phone : [];
+        const phone = phones.map((ph: any) => ph?.value?.trim()).filter(Boolean)[0] || null;
+        const emails = Array.isArray(p.email) ? p.email : [];
+        const email = emails.map((em: any) => em?.value?.trim()).filter(Boolean)[0] || null;
         return {
             id: String(p.id),
             name: p.name,
-            company: p.org_name || null, // TODO: connect to live org enrichment
+            company: p.org_name || null,
             org_id: p.org_id?.value,
-            phone: p.phone?.[0]?.value || null,
-            email: p.email?.[0]?.value || null,
+            phone,
+            email,
             role: p.job_title || null,
-            aiScore: null, // TODO: connect to AI scoring service
+            aiScore: null,
             status: 'active'
         };
     }).filter((c: any) => c.name);

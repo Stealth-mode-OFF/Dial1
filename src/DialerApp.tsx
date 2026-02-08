@@ -323,7 +323,6 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
   const contacts: Contact[] = useMemo(() => {
     if (salesContacts && salesContacts.length > 0) {
       return salesContacts
-        .filter(c => c.phone)
         .map(c => ({
           id: c.id,
           name: c.name || 'Unknown',
@@ -600,7 +599,10 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
               </div>
 
               <div className="focus-contact">
-                <a href={`tel:${contact.phone}`} className="phone">{contact.phone}</a>
+                {contact.phone
+                  ? <a href={`tel:${contact.phone}`} className="phone">{contact.phone}</a>
+                  : <span className="phone" style={{ opacity: 0.4 }}>No phone</span>
+                }
                 {contact.email && <a href={`mailto:${contact.email}`} className="email">{contact.email}</a>}
               </div>
 
