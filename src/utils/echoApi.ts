@@ -235,7 +235,7 @@ export const echoApi = {
     }),
   deletePipedriveKey: () => apiFetch<{ success: boolean }>('integrations/pipedrive', { method: 'DELETE' }),
   testPipedrive: () => apiFetch<{ ok: boolean; user?: { id?: number; name?: string; email?: string | null } }>('integrations/pipedrive/test'),
-  fetchContacts: () => apiFetch<EchoContact[]>('pipedrive/contacts'),
+  fetchContacts: () => apiFetch<EchoContact[]>('pipedrive/contacts?limit=30'),
   importPipedrive: () => apiFetch<{ ok?: boolean; count?: number }>('pipedrive/import', { method: 'POST' }),
 
   getOpenAiStatus: () => apiFetch<{ configured: boolean }>('integrations/openai'),

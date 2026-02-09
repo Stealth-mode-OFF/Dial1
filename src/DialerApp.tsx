@@ -647,14 +647,14 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
                 className="queue-import-btn"
                 onClick={handleImportLeads}
                 disabled={importing || !pipedriveConfigured}
-                title={pipedriveConfigured ? 'Import leads from Pipedrive' : 'Configure Pipedrive in Settings first'}
+                title={pipedriveConfigured ? 'Import 30 leads from Pipedrive Leads Inbox' : 'Configure Pipedrive in Settings first'}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                {importing ? 'Importing…' : 'Import'}
+                {importing ? 'Importing…' : 'Import 30'}
               </button>
               <span className="queue-count">{activeContacts.length}</span>
             </div>
@@ -669,7 +669,7 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
             ) : (
               <div className="queue-loading" style={{ lineHeight: 1.4 }}>
                 {pipedriveConfigured
-                  ? 'No contacts loaded. Check Pipedrive has people with phone numbers, then hit Refresh in Settings.'
+                  ? 'Hit "Import 30" to load leads from your Pipedrive Leads Inbox.'
                   : 'Pipedrive is not configured. Open Settings and paste your API key.'}
                 {salesError ? <div style={{ marginTop: 8, opacity: 0.7 }}>{salesError}</div> : null}
               </div>

@@ -3410,7 +3410,9 @@ app.patch(`${BASE_PATH}/pipedrive/enrich-org/:id`, async (c) => {
   }
 });
 
-// Pipedrive Integration (GET) - Modified to include Org ID
+// Pipedrive Leads Inbox (GET) – fetches LEADS (not Persons)
+// Returns exactly ?limit=N leads (default 30) owned by the current Pipedrive user (Josef Hofman).
+// For each lead that links to a person_id we batch-fetch the Person to get phone/email.
 app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
   try {
     const userId = getUserId(c);
@@ -3418,45 +3420,96 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
     if (!apiToken) return c.json({ error: "No API Key" }, 500);
     apiToken = apiToken.trim();
 
-    // Paginate through ALL Pipedrive persons
-    const allPersons: any[] = [];
-    let start = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const response = await fetch(
-        `https://api.pipedrive.com/v1/persons?limit=500&start=${start}&api_token=${apiToken}`,
+    const maxLeads = Math.min(Number(c.req.query("limit")) || 30, 100);
+
+    // 1. Resolve the current Pipedrive user (owner) ID
+    let pipedriveUserId: number | null = null;
+    try {
+      const meRes = await fetch(
+        `https://api.pipedrive.com/v1/users/me?api_token=${apiToken}`,
         { headers: { 'Accept': 'application/json' } }
       );
-      if (!response.ok) return c.json({ error: "Pipedrive Error" }, 500);
-      const data = await response.json();
-      if (!data.data || data.data.length === 0) break;
-      allPersons.push(...data.data);
-      const pagination = data.additional_data?.pagination;
-      hasMore = pagination?.more_items_in_collection === true;
-      start = pagination?.next_start ?? (start + 500);
-      // Safety cap: max 5000 contacts
-      if (allPersons.length >= 5000) break;
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        pipedriveUserId = meData?.data?.id ?? null;
+      }
+    } catch { /* ignore */ }
+
+    // 2. Fetch leads from inbox (non-archived), filtered by owner
+    let leadsUrl = `https://api.pipedrive.com/v1/leads?limit=${maxLeads}&api_token=${apiToken}`;
+    if (pipedriveUserId) leadsUrl += `&owner_id=${pipedriveUserId}`;
+
+    const leadsRes = await fetch(leadsUrl, { headers: { 'Accept': 'application/json' } });
+    if (!leadsRes.ok) return c.json({ error: "Pipedrive Leads Error" }, 500);
+    const leadsData = await leadsRes.json();
+    const leads: any[] = leadsData?.data || [];
+
+    if (leads.length === 0) return c.json([]);
+
+    // 3. Collect unique person IDs and org IDs from the leads
+    const personIds = [...new Set(leads.map((l: any) => l.person_id).filter(Boolean))] as number[];
+    const orgIds = [...new Set(leads.map((l: any) => l.organization_id).filter(Boolean))] as number[];
+
+    // 4. Batch-fetch persons (up to 100 in parallel chunks of 25)
+    const personMap: Record<number, any> = {};
+    const chunks = [];
+    for (let i = 0; i < personIds.length; i += 25) chunks.push(personIds.slice(i, i + 25));
+    for (const chunk of chunks) {
+      const results = await Promise.all(
+        chunk.map((pid: number) =>
+          fetch(`https://api.pipedrive.com/v1/persons/${pid}?api_token=${apiToken}`, {
+            headers: { 'Accept': 'application/json' },
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null)
+        )
+      );
+      for (const r of results) {
+        if (r?.data?.id) personMap[r.data.id] = r.data;
+      }
     }
 
-    if (allPersons.length === 0) return c.json([]);
+    // 5. Batch-fetch organisations
+    const orgMap: Record<number, any> = {};
+    const orgChunks = [];
+    for (let i = 0; i < orgIds.length; i += 25) orgChunks.push(orgIds.slice(i, i + 25));
+    for (const chunk of orgChunks) {
+      const results = await Promise.all(
+        chunk.map((oid: number) =>
+          fetch(`https://api.pipedrive.com/v1/organizations/${oid}?api_token=${apiToken}`, {
+            headers: { 'Accept': 'application/json' },
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null)
+        )
+      );
+      for (const r of results) {
+        if (r?.data?.id) orgMap[r.data.id] = r.data;
+      }
+    }
 
-    const contacts = allPersons.map((p: any) => {
-        // Try all phone entries, pick first non-empty value
-        const phones = Array.isArray(p.phone) ? p.phone : [];
-        const phone = phones.map((ph: any) => ph?.value?.trim()).filter(Boolean)[0] || null;
-        const emails = Array.isArray(p.email) ? p.email : [];
-        const email = emails.map((em: any) => em?.value?.trim()).filter(Boolean)[0] || null;
-        return {
-            id: String(p.id),
-            name: p.name,
-            company: p.org_name || null,
-            org_id: p.org_id?.value,
-            phone,
-            email,
-            role: p.job_title || null,
-            aiScore: null,
-            status: 'active'
-        };
+    // 6. Map leads → contacts shape the frontend expects
+    const contacts = leads.map((lead: any) => {
+      const person = lead.person_id ? personMap[lead.person_id] : null;
+      const org = lead.organization_id ? orgMap[lead.organization_id] : null;
+
+      // Phone / email from person
+      const phones = person && Array.isArray(person.phone) ? person.phone : [];
+      const phone = phones.map((ph: any) => ph?.value?.trim()).filter(Boolean)[0] || null;
+      const emails = person && Array.isArray(person.email) ? person.email : [];
+      const email = emails.map((em: any) => em?.value?.trim()).filter(Boolean)[0] || null;
+
+      return {
+        id: String(lead.id), // lead UUID
+        name: person?.name || lead.title || 'Unnamed lead',
+        company: org?.name || person?.org_name || null,
+        org_id: lead.organization_id || person?.org_id?.value || null,
+        phone,
+        email,
+        role: person?.job_title || null,
+        aiScore: null,
+        status: 'active',
+      };
     }).filter((c: any) => c.name);
 
     return c.json(contacts);
