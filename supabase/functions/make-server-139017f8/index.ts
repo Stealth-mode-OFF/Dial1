@@ -4822,6 +4822,42 @@ app.delete(`${BASE_PATH}/campaigns/:id`, async (c) => {
   }
 });
 
+// Add Note to Pipedrive (person or org)
+app.post(`${BASE_PATH}/pipedrive/notes`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    let apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+    if (!apiKey) return c.json({ error: "No Pipedrive API Key" }, 500);
+
+    const { personId, orgId, content } = await c.req.json();
+    if (!content || typeof content !== 'string' || content.trim().length < 3) {
+      return c.json({ error: "Content is required (min 3 chars)" }, 400);
+    }
+
+    const noteBody: Record<string, unknown> = { content: content.trim() };
+    if (personId) noteBody.person_id = Number(personId);
+    if (orgId) noteBody.org_id = Number(orgId);
+
+    const resp = await fetch(`https://api.pipedrive.com/v1/notes?api_token=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(noteBody),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error('Pipedrive note error:', resp.status, text);
+      return c.json({ error: `Pipedrive returned ${resp.status}` }, 502);
+    }
+
+    const result = await resp.json();
+    return c.json({ success: true, noteId: result?.data?.id || null });
+  } catch (e) {
+    console.error('Pipedrive note error:', e);
+    return c.json({ error: 'Failed to create note' }, 500);
+  }
+});
+
 // Log a call result
 app.post(`${BASE_PATH}/call-logs`, async (c) => {
   try {

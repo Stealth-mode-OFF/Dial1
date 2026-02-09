@@ -4,6 +4,7 @@ import { useSales } from './contexts/SalesContext';
 import { echoApi } from './utils/echoApi';
 import { isSupabaseConfigured } from './utils/supabase/info';
 import { SettingsWorkspace } from './pages/SettingsWorkspace';
+import { CallQualificationPanel } from './components/CallQualificationPanel';
 
 // ============ TYPES ============
 interface Contact {
@@ -816,6 +817,16 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
                 <button onClick={handleNotInterested}>Not Interested</button>
               </div>
 
+              {/* Call Qualification Panel */}
+              <CallQualificationPanel
+                contactName={contact.name}
+                companyName={contact.company}
+                contactId={contact.id}
+                personId={undefined}
+                orgId={contact.orgId}
+                visible={true}
+              />
+
               <div className="notes-box">
                 <div className="notes-header">
                   <span>Notes</span>
@@ -826,7 +837,7 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   onBlur={saveNotes}
-                  placeholder="Add notes..."
+                  placeholder="Volné poznámky…"
                 />
                 {noteSummary && (
                   <div className="note-summary">

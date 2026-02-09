@@ -237,6 +237,11 @@ export const echoApi = {
   testPipedrive: () => apiFetch<{ ok: boolean; user?: { id?: number; name?: string; email?: string | null } }>('integrations/pipedrive/test'),
   fetchContacts: () => apiFetch<EchoContact[]>('pipedrive/contacts?limit=30'),
   importPipedrive: () => apiFetch<{ ok?: boolean; count?: number }>('pipedrive/import', { method: 'POST' }),
+  addPipedriveNote: (payload: { personId?: number; orgId?: number; content: string }) =>
+    apiFetch<{ success: boolean; noteId?: number }>('pipedrive/notes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   getOpenAiStatus: () => apiFetch<{ configured: boolean }>('integrations/openai'),
   saveOpenAiKey: (apiKey: string) =>
