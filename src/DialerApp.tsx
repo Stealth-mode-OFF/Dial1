@@ -45,11 +45,15 @@ interface DailyStats {
   goal: number;
 }
 
-// ============ AI PREP - Real API + Fallback ============
-const generateAIPrep = async (contact: Contact): Promise<AIPrep> => {
+// ============ AI PREP - Real API (all fields) ============
+const aiPrepCache = new Map<string, AIPrep>();
+
+const generateAIPrep = async (contact: Contact, skipCache = false): Promise<AIPrep> => {
   if (!isSupabaseConfigured) {
     throw new Error('AI is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
   }
+  const cacheKey = `${contact.id}_${contact.name}`;
+  if (!skipCache && aiPrepCache.has(cacheKey)) return aiPrepCache.get(cacheKey)!;
 
   const result = await echoApi.ai.generate({
     type: 'call-intelligence',
@@ -67,7 +71,7 @@ const generateAIPrep = async (contact: Contact): Promise<AIPrep> => {
     throw new Error(result?.error || 'AI response was empty.');
   }
 
-  return {
+  const prep: AIPrep = {
     companyInsight: result.companyInsight || `${contact.company}`,
     painPoints: Array.isArray(result.painPoints) ? result.painPoints : [],
     openingLine: result.openingLine || '',
@@ -79,8 +83,48 @@ const generateAIPrep = async (contact: Contact): Promise<AIPrep> => {
     recentNews: result.recentNews || undefined,
     decisionMakerTips: result.decisionMakerTips || '',
     bookingScript: result.bookingScript || '',
+    challengerInsight: result.challengerInsight || undefined,
+    certaintyBuilders: result.certaintyBuilders && typeof result.certaintyBuilders === 'object'
+      ? result.certaintyBuilders : undefined,
+    callTimeline: Array.isArray(result.callTimeline) ? result.callTimeline : undefined,
+    loopingScripts: Array.isArray(result.loopingScripts) ? result.loopingScripts : undefined,
     isFromApi: true,
   };
+  aiPrepCache.set(cacheKey, prep);
+  return prep;
+};
+
+// ============ LIVE WHISPER — instant objection help ============
+const getObjectionWhisper = async (objectionText: string): Promise<{ validate: string; reframe: string; question: string; next: string } | null> => {
+  if (!isSupabaseConfigured || !objectionText.trim()) return null;
+  try {
+    const result = await echoApi.ai.generate({
+      type: 'battle_card',
+      contactName: '',
+      company: '',
+      contextData: { objection: objectionText },
+    });
+    return {
+      validate: result?.validate || result?.empathize || '',
+      reframe: result?.reframe || result?.response || '',
+      question: result?.implication_question || result?.follow_up || '',
+      next: result?.next_step || result?.close || '',
+    };
+  } catch { return null; }
+};
+
+// ============ AI NOTE SUMMARY ============
+const summarizeNotes = async (notes: string, contactName: string, outcome: string): Promise<string | null> => {
+  if (!isSupabaseConfigured || !notes.trim() || notes.trim().length < 15) return null;
+  try {
+    const result = await echoApi.ai.generate({
+      type: 'analysis',
+      contactName,
+      company: '',
+      contextData: { notes, outcome, instruction: 'Shrň poznámky z hovoru do 2-3 bodů česky. Formát: • bod. Na konci navrhni next step.' },
+    });
+    return typeof result === 'string' ? result : result?.summary || result?.analysis || JSON.stringify(result);
+  } catch { return null; }
 };
 
 // ============ UTILITIES ============
@@ -451,6 +495,10 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
   const [aiPrep, setAiPrep] = useState<AIPrep | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [whisperInput, setWhisperInput] = useState('');
+  const [whisperResult, setWhisperResult] = useState<{ validate: string; reframe: string; question: string; next: string } | null>(null);
+  const [whisperLoading, setWhisperLoading] = useState(false);
+  const [noteSummary, setNoteSummary] = useState<string | null>(null);
 
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const contact = contacts[activeIndex] || null;
@@ -487,7 +535,14 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
 
   useEffect(() => { loadAiPrep(); }, [contact?.id]);
   useEffect(() => { saveSession({ ...session, currentIndex: activeIndex }); }, [session, activeIndex]);
-  useEffect(() => { if (contact) setNotes(session.notesByContact[contact.id] || ''); }, [contact?.id]);
+  useEffect(() => {
+    if (contact) {
+      setNotes(session.notesByContact[contact.id] || '');
+      setNoteSummary(null);
+      setWhisperResult(null);
+      setWhisperInput('');
+    }
+  }, [contact?.id]);
   
   useEffect(() => {
     if (!callStart) return;
@@ -508,6 +563,12 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
         ...s,
         stats: { ...s.stats, talkTime: s.stats.talkTime + dur, connected: outcome === 'connected' ? s.stats.connected + 1 : s.stats.connected },
       }));
+    }
+    // Auto-summarize notes after call
+    if (contact && notes.trim().length >= 15) {
+      summarizeNotes(notes, contact.name, outcome).then(summary => {
+        if (summary) setNoteSummary(summary);
+      });
     }
     // Persist to backend
     if (contact) {
@@ -568,6 +629,18 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
   const saveNotes = useCallback(() => {
     if (contact) setSession(s => ({ ...s, notesByContact: { ...s.notesByContact, [contact.id]: notes } }));
   }, [contact, notes]);
+
+  const handleWhisper = useCallback(async () => {
+    if (!whisperInput.trim() || whisperLoading) return;
+    setWhisperLoading(true);
+    setWhisperResult(null);
+    try {
+      const r = await getObjectionWhisper(whisperInput.trim());
+      if (r) setWhisperResult(r);
+    } finally {
+      setWhisperLoading(false);
+    }
+  }, [whisperInput, whisperLoading]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -755,7 +828,47 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
                   onBlur={saveNotes}
                   placeholder="Add notes..."
                 />
+                {noteSummary && (
+                  <div className="note-summary">
+                    <div className="note-summary-header">
+                      <span className="note-summary-badge">AI Summary</span>
+                      <button className="note-summary-dismiss" onClick={() => setNoteSummary(null)}>×</button>
+                    </div>
+                    <div className="note-summary-text">{noteSummary}</div>
+                  </div>
+                )}
               </div>
+
+              {/* Live Whisper — instant objection help during call */}
+              {isInCall && (
+                <div className="whisper-box">
+                  <div className="whisper-header">
+                    <span className="whisper-badge">⚡ Live Whisper</span>
+                    <span className="whisper-hint">Type the objection you're hearing</span>
+                  </div>
+                  <div className="whisper-input-row">
+                    <input
+                      type="text"
+                      className="whisper-input"
+                      value={whisperInput}
+                      onChange={e => setWhisperInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleWhisper(); }}
+                      placeholder="e.g. nemáme rozpočet, nemám čas..."
+                    />
+                    <button className="whisper-btn" onClick={handleWhisper} disabled={whisperLoading || !whisperInput.trim()}>
+                      {whisperLoading ? '...' : '→'}
+                    </button>
+                  </div>
+                  {whisperResult && (
+                    <motion.div className="whisper-result" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                      <div className="whisper-step"><span className="whisper-label">✓ Validuj</span><span>{whisperResult.validate}</span></div>
+                      <div className="whisper-step"><span className="whisper-label">↻ Reframe</span><span>{whisperResult.reframe}</span></div>
+                      <div className="whisper-step"><span className="whisper-label">? Otázka</span><span>{whisperResult.question}</span></div>
+                      <div className="whisper-step"><span className="whisper-label">→ Dál</span><span>{whisperResult.next}</span></div>
+                    </motion.div>
+                  )}
+                </div>
+              )}
             </motion.div>
           ) : (
             <div className="empty">

@@ -814,6 +814,154 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 
 .notes-box textarea::placeholder { color: var(--text-muted); }
 
+/* Note Summary */
+.note-summary {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(59, 130, 246, 0.06));
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-neo-sm);
+}
+
+.note-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.note-summary-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.note-summary-dismiss {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0 4px;
+  line-height: 1;
+}
+.note-summary-dismiss:hover { color: var(--text); }
+
+.note-summary-text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-line;
+}
+
+/* Live Whisper */
+.whisper-box {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.06), rgba(239, 68, 68, 0.04));
+  border: 2px solid rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-neo-sm);
+}
+
+.whisper-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.whisper-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.whisper-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.whisper-input-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.whisper-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text);
+  transition: all var(--transition);
+}
+.whisper-input:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+.whisper-btn {
+  padding: 6px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-elevated);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text);
+  transition: all var(--transition);
+  box-shadow: var(--shadow-neo-sm);
+}
+.whisper-btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-neo);
+  background: #f59e0b;
+  color: #000;
+  border-color: #000;
+}
+.whisper-btn:disabled { opacity: 0.4; cursor: default; }
+
+.whisper-result {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.whisper-step {
+  display: flex;
+  gap: var(--space-2);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: var(--space-2);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.whisper-label {
+  font-weight: 700;
+  white-space: nowrap;
+  color: #f59e0b;
+  min-width: 74px;
+  flex-shrink: 0;
+}
+
 /* Empty State */
 .empty {
   display: flex;
