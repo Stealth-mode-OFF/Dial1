@@ -5,6 +5,7 @@ import { echoApi } from './utils/echoApi';
 import { isSupabaseConfigured } from './utils/supabase/info';
 import { SettingsWorkspace } from './pages/SettingsWorkspace';
 import { CallQualificationPanel } from './components/CallQualificationPanel';
+import { CallIntelPanel } from './components/CallIntelPanel';
 
 // ============ TYPES ============
 interface Contact {
@@ -890,8 +891,12 @@ export function DialerApp({ onSwitchMode, currentMode }: { onSwitchMode?: () => 
           )}
         </section>
 
-        {/* AI Panel */}
-        <AIPrepPanel prep={aiPrep} isLoading={aiLoading} onRefresh={loadAiPrep} error={aiError} />
+        {/* Call Intelligence Panel */}
+        <CallIntelPanel
+          leadId={contact?.id ?? null}
+          companyName={contact?.company}
+          domain={contact?.website}
+        />
       </main>
 
       {/* Footer */}
