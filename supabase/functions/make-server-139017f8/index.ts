@@ -8,7 +8,7 @@ import * as kv from "./kv_store.ts";
 const app = new Hono();
 
 // Bump when deploying edge function changes; exposed via GET /health.
-const FUNCTION_VERSION = "2026-02-08-settings-v1";
+const FUNCTION_VERSION = "2026-02-10-email-phase2-gmail-v1";
 
 // Enable logger
 app.use('*', logger(console.log));
@@ -441,6 +441,142 @@ const testOpenAiApiKey = async (apiKey: string) => {
   }
   const data = Array.isArray(json?.data) ? json.data : [];
   return { model_count: data.length };
+};
+
+// --- GMAIL (OAuth + Drafts) ---
+type GmailIntegrationKv = {
+  gmail_access_token?: string;
+  gmail_refresh_token?: string;
+  gmail_token_expiry?: number; // epoch ms
+  gmail_email?: string;
+  updatedAt?: number;
+};
+
+type GmailOauthStateKv = {
+  userId: string;
+  redirectTo: string | null;
+  createdAt: number;
+};
+
+const googleClientId = () => (Deno.env.get("GOOGLE_CLIENT_ID") || "").toString().trim();
+const googleClientSecret = () => (Deno.env.get("GOOGLE_CLIENT_SECRET") || "").toString().trim();
+const googleRedirectUri = () => {
+  if (!SUPABASE_URL) return "";
+  return `${SUPABASE_URL.replace(/\/+$/, "")}/functions/v1/make-server-139017f8/gmail/callback`;
+};
+
+const isRedirectAllowed = (value: string) => {
+  try {
+    const u = new URL(value);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    return isOriginAllowed(u.origin);
+  } catch {
+    return false;
+  }
+};
+
+const getGmailIntegration = async (userId: string): Promise<GmailIntegrationKv | null> => {
+  try {
+    const data = await kv.get(userKey(userId, "integration:gmail"));
+    if (!data || typeof data !== "object") return null;
+    return data as GmailIntegrationKv;
+  } catch (e) {
+    console.error("Failed to load Gmail integration", e);
+    return null;
+  }
+};
+
+const setGmailIntegration = async (userId: string, value: GmailIntegrationKv) => {
+  await kv.set(userKey(userId, "integration:gmail"), { ...value, updatedAt: Date.now() });
+};
+
+const clearGmailIntegration = async (userId: string) => {
+  await kv.del(userKey(userId, "integration:gmail"));
+};
+
+const base64UrlEncodeBytes = (bytes: Uint8Array) => {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  const base64 = btoa(binary);
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+};
+
+const encodeHeaderUtf8Base64 = (value: string) => {
+  const bytes = new TextEncoder().encode(value);
+  // RFC 2047 uses standard base64 (not base64url).
+  const b64url = base64UrlEncodeBytes(bytes);
+  const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+  return `=?UTF-8?B?${b64}=?=`;
+};
+
+const buildRfc2822Message = (input: { to: string; subject: string; body: string; bcc?: string }) => {
+  const lines: string[] = [];
+  lines.push(`To: ${input.to}`);
+  if (input.bcc && input.bcc.trim()) lines.push(`Bcc: ${input.bcc.trim()}`);
+  const subject = input.subject || "";
+  const subjectHeader = /[^\x00-\x7F]/.test(subject) ? encodeHeaderUtf8Base64(subject) : subject;
+  lines.push(`Subject: ${subjectHeader}`);
+  lines.push(`Date: ${new Date().toUTCString()}`);
+  lines.push("MIME-Version: 1.0");
+  lines.push('Content-Type: text/plain; charset="UTF-8"');
+  lines.push("Content-Transfer-Encoding: 8bit");
+  lines.push("");
+  lines.push((input.body || "").replace(/\r?\n/g, "\r\n"));
+  return lines.join("\r\n");
+};
+
+const refreshGmailAccessToken = async (refreshToken: string) => {
+  const clientId = googleClientId();
+  const clientSecret = googleClientSecret();
+  if (!clientId || !clientSecret) throw new Error("Google OAuth není nakonfigurovaný");
+
+  const body = new URLSearchParams();
+  body.set("client_id", clientId);
+  body.set("client_secret", clientSecret);
+  body.set("refresh_token", refreshToken);
+  body.set("grant_type", "refresh_token");
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = json?.error_description || json?.error || json?.message || `Refresh token selhal (${res.status})`;
+    throw new Error(msg);
+  }
+  const accessToken = json?.access_token ? String(json.access_token) : "";
+  const expiresIn = Number(json?.expires_in || 0);
+  if (!accessToken || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+    throw new Error("Neplatná odpověď z Google token refresh");
+  }
+  return { accessToken, expiryMs: Date.now() + expiresIn * 1000 };
+};
+
+const getValidGmailAccessToken = async (userId: string): Promise<{ accessToken: string; integration: GmailIntegrationKv } | null> => {
+  const integration = await getGmailIntegration(userId);
+  const accessToken = integration?.gmail_access_token?.toString().trim() || "";
+  const refreshToken = integration?.gmail_refresh_token?.toString().trim() || "";
+  const expiryMs = Number(integration?.gmail_token_expiry || 0);
+
+  const now = Date.now();
+  const isValid = accessToken && Number.isFinite(expiryMs) && expiryMs > now + 30_000;
+  if (isValid) return { accessToken, integration: integration as GmailIntegrationKv };
+
+  if (!refreshToken) return null;
+  const refreshed = await refreshGmailAccessToken(refreshToken);
+  const next: GmailIntegrationKv = {
+    ...(integration || {}),
+    gmail_access_token: refreshed.accessToken,
+    gmail_token_expiry: refreshed.expiryMs,
+    gmail_refresh_token: refreshToken,
+  };
+  await setGmailIntegration(userId, next);
+  return { accessToken: refreshed.accessToken, integration: next };
 };
 
 // --- SALES METHODOLOGY FRAMEWORK (SPIN + STRAIGHT LINE + CHALLENGER) ---
@@ -1350,6 +1486,7 @@ const extractEvidenceClaimsInternal = async (params: {
 app.use("*", async (c, next) => {
   if (c.req.method === "OPTIONS") return next();
   if (c.req.path.startsWith("/health")) return next();
+  if (c.req.path.startsWith("/gmail/callback")) return next();
 
   const userId = await resolveUserId(c);
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
@@ -1361,6 +1498,7 @@ app.use("*", async (c, next) => {
 app.use("*", async (c, next) => {
   if (c.req.method === "OPTIONS") return next();
   if (c.req.path.startsWith("/health")) return next();
+  if (c.req.path.startsWith("/gmail/callback")) return next();
 
   // Best-effort per-user+IP limiter. Use smaller budgets for expensive routes.
   const userId = getUserId(c);
@@ -3738,6 +3876,231 @@ app.delete(`${BASE_PATH}/integrations/openai`, async (c) => {
     console.error("Failed to delete OpenAI key", e);
     return c.json({ error: "Failed to delete integration" }, 500);
   }
+});
+
+// --- GOOGLE / GMAIL ---
+app.get(`${BASE_PATH}/gmail/status`, async (c) => {
+  const userId = getUserId(c);
+  const integration = await getGmailIntegration(userId);
+  const configured = Boolean(
+    (integration?.gmail_refresh_token && integration.gmail_refresh_token.toString().trim()) ||
+      (integration?.gmail_access_token && integration.gmail_access_token.toString().trim()),
+  );
+  return c.json({ configured, email: integration?.gmail_email || undefined });
+});
+
+app.get(`${BASE_PATH}/gmail/auth`, async (c) => {
+  const userId = getUserId(c);
+  const clientId = googleClientId();
+  const clientSecret = googleClientSecret();
+  const redirectUri = googleRedirectUri();
+  if (!clientId || !clientSecret || !redirectUri) return c.json({ error: "Google OAuth není nakonfigurovaný" }, 500);
+
+  const redirectToRaw = (c.req.query("redirectTo") || "").toString().trim();
+  const redirectTo = redirectToRaw && isRedirectAllowed(redirectToRaw) ? redirectToRaw : null;
+
+  const state = crypto.randomUUID();
+  const stateKey = `gmail:oauth_state:${state}`;
+  const stateValue: GmailOauthStateKv = { userId, redirectTo, createdAt: Date.now() };
+  await kv.set(stateKey, stateValue);
+
+  const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  authUrl.searchParams.set("client_id", clientId);
+  authUrl.searchParams.set("redirect_uri", redirectUri);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("access_type", "offline");
+  authUrl.searchParams.set("prompt", "consent");
+  authUrl.searchParams.set("include_granted_scopes", "true");
+  authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/gmail.compose");
+  authUrl.searchParams.set("state", state);
+
+  return c.redirect(authUrl.toString());
+});
+
+// NOTE: This route is intentionally unauthenticated (Google redirect). It resolves the user via `state` stored in KV.
+app.get(`${BASE_PATH}/gmail/callback`, async (c) => {
+  try {
+    const error = (c.req.query("error") || "").toString().trim();
+    if (error) return c.json({ error }, 400);
+
+    const code = (c.req.query("code") || "").toString().trim();
+    const state = (c.req.query("state") || "").toString().trim();
+    if (!code || !state) return c.json({ error: "Missing code/state" }, 400);
+
+    const stateKey = `gmail:oauth_state:${state}`;
+    const stateValue = (await kv.get(stateKey)) as GmailOauthStateKv | null;
+    await kv.del(stateKey);
+    if (!stateValue?.userId) return c.json({ error: "Invalid state" }, 400);
+    if (Date.now() - Number(stateValue.createdAt || 0) > 15 * 60_000) return c.json({ error: "State expired" }, 400);
+
+    const clientId = googleClientId();
+    const clientSecret = googleClientSecret();
+    const redirectUri = googleRedirectUri();
+    if (!clientId || !clientSecret || !redirectUri) return c.json({ error: "Google OAuth není nakonfigurovaný" }, 500);
+
+    const body = new URLSearchParams();
+    body.set("code", code);
+    body.set("client_id", clientId);
+    body.set("client_secret", clientSecret);
+    body.set("redirect_uri", redirectUri);
+    body.set("grant_type", "authorization_code");
+
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    const tokenJson = await tokenRes.json().catch(() => null);
+    if (!tokenRes.ok) {
+      const msg = tokenJson?.error_description || tokenJson?.error || tokenJson?.message || `Token exchange failed (${tokenRes.status})`;
+      return c.json({ error: msg }, 400);
+    }
+
+    const accessToken = tokenJson?.access_token ? String(tokenJson.access_token) : "";
+    const refreshTokenFromExchange = tokenJson?.refresh_token ? String(tokenJson.refresh_token) : "";
+    const expiresIn = Number(tokenJson?.expires_in || 0);
+    if (!accessToken || !Number.isFinite(expiresIn) || expiresIn <= 0) return c.json({ error: "Invalid token response" }, 400);
+
+    const existing = await getGmailIntegration(stateValue.userId);
+    const refreshToken = refreshTokenFromExchange || existing?.gmail_refresh_token || "";
+
+    const next: GmailIntegrationKv = {
+      ...(existing || {}),
+      gmail_access_token: accessToken,
+      gmail_refresh_token: refreshToken,
+      gmail_token_expiry: Date.now() + expiresIn * 1000,
+    };
+
+    // Best-effort: fetch connected email for display.
+    try {
+      const profileRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      });
+      const profileJson = await profileRes.json().catch(() => null);
+      const email = profileJson?.emailAddress ? String(profileJson.emailAddress) : "";
+      if (email) next.gmail_email = email;
+    } catch {
+      // non-blocking
+    }
+
+    await setGmailIntegration(stateValue.userId, next);
+
+    const redirectTo = stateValue.redirectTo && isRedirectAllowed(stateValue.redirectTo) ? stateValue.redirectTo : null;
+    if (redirectTo) {
+      const u = new URL(redirectTo);
+      u.searchParams.set("gmail", "connected");
+      return c.redirect(u.toString());
+    }
+    return c.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
+  }
+});
+
+app.get(`${BASE_PATH}/gmail/test`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    const tokenInfo = await getValidGmailAccessToken(userId);
+    if (!tokenInfo) return c.json({ ok: false, error: "not_configured" }, 200);
+
+    const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts?maxResults=1", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${tokenInfo.accessToken}`, Accept: "application/json" },
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = json?.error?.message || json?.error || json?.message || `Gmail test failed (${res.status})`;
+      return c.json({ ok: false, error: msg }, 200);
+    }
+
+    // Best-effort store email if missing.
+    try {
+      const profileRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${tokenInfo.accessToken}`, Accept: "application/json" },
+      });
+      const profileJson = await profileRes.json().catch(() => null);
+      const email = profileJson?.emailAddress ? String(profileJson.emailAddress) : "";
+      if (email && !tokenInfo.integration.gmail_email) {
+        await setGmailIntegration(userId, { ...tokenInfo.integration, gmail_email: email });
+      }
+    } catch {
+      // ignore
+    }
+
+    return c.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 200);
+  }
+});
+
+app.post(`${BASE_PATH}/gmail/disconnect`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    await clearGmailIntegration(userId);
+    return c.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.post(`${BASE_PATH}/gmail/create-draft`, async (c) => {
+  const userId = getUserId(c);
+  const payload = await c.req.json().catch(() => null);
+  const to = payload?.to ? String(payload.to).trim() : "";
+  const subject = payload?.subject ? String(payload.subject).trim() : "";
+  const bodyText = payload?.body ? String(payload.body) : "";
+  const bcc = payload?.bcc ? String(payload.bcc).trim() : "";
+  if (!to || !subject) return c.json({ ok: false, error: "Missing to/subject" }, 400);
+
+  const tokenInfo = await getValidGmailAccessToken(userId);
+  if (!tokenInfo) return c.json({ ok: false, error: "not_configured" }, 400);
+
+  const rfc2822 = buildRfc2822Message({ to, subject, body: bodyText, bcc: bcc || undefined });
+  const raw = base64UrlEncodeBytes(new TextEncoder().encode(rfc2822));
+  const draftReqBody = JSON.stringify({ message: { raw } });
+
+  const doCreate = async (accessToken: string) => {
+    return await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", Accept: "application/json" },
+      body: draftReqBody,
+    });
+  };
+
+  let res = await doCreate(tokenInfo.accessToken);
+  if (res.status === 401 && tokenInfo.integration.gmail_refresh_token) {
+    // One retry after refresh (best-effort).
+    try {
+      const refreshed = await refreshGmailAccessToken(String(tokenInfo.integration.gmail_refresh_token));
+      await setGmailIntegration(userId, {
+        ...tokenInfo.integration,
+        gmail_access_token: refreshed.accessToken,
+        gmail_token_expiry: refreshed.expiryMs,
+      });
+      res = await doCreate(refreshed.accessToken);
+    } catch {
+      // keep original error below
+    }
+  }
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = json?.error?.message || json?.error || json?.message || `Gmail draft create failed (${res.status})`;
+    return c.json({ ok: false, error: msg }, 200);
+  }
+
+  const draftId = json?.id ? String(json.id) : "";
+  const messageId = json?.message?.id ? String(json.message.id) : "";
+  const gmailUrl = messageId
+    ? `https://mail.google.com/mail/u/0/#drafts?compose=${encodeURIComponent(messageId)}`
+    : `https://mail.google.com/mail/u/0/#drafts/${encodeURIComponent(draftId)}`;
+
+  return c.json({ ok: true, draftId, gmailUrl });
 });
 
 // --- MEET LIVE TRANSCRIPT BRIDGE ---

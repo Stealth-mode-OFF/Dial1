@@ -88,6 +88,10 @@ export type CallLogResult = {
   pipedrive?: { synced: boolean; activity_id: number | null; error: string | null };
 };
 
+export type GmailStatus = { configured: boolean; email?: string };
+export type GmailCreateDraftPayload = { to: string; subject: string; body: string; bcc?: string };
+export type GmailCreateDraftResult = { ok: boolean; draftId: string; gmailUrl: string; error?: string };
+
 export type AnalyticsSummary = {
   totalCalls: number;
   callsToday?: number;
@@ -166,6 +170,136 @@ export type WhisperObjectionResult = {
   };
 };
 
+type SalesStyle = 'hunter' | 'consultative';
+
+type AIGenerateBase = {
+  contactName: string;
+  company: string;
+  goal?: string;
+  salesStyle?: SalesStyle;
+  contextData?: Record<string, unknown>;
+};
+
+export type EmailColdPayload = AIGenerateBase & {
+  type: 'email' | 'email-cold';
+  goal: string;
+  contextData?: {
+    outcome?: string;
+    duration_sec?: number;
+    notes?: string;
+    aiAnalysis?: unknown;
+  } & Record<string, unknown>;
+};
+
+export type EmailDemoPayload = AIGenerateBase & {
+  type: 'email-demo';
+  goal: string;
+  contextData?: {
+    totalTimeSec?: number;
+    phaseTimes?: Record<string, number>;
+    aiAnalysis?: unknown;
+    keyCaptions?: string;
+    notes?: string;
+    outcome?: string;
+    duration_sec?: number;
+  } & Record<string, unknown>;
+};
+
+export type SpinScriptPayload = AIGenerateBase & {
+  type: 'spin-script';
+  goal: string;
+  contextData?: {
+    contact_id?: string;
+    role?: string;
+    industry?: string;
+    notes?: string;
+  } & Record<string, unknown>;
+};
+
+export type CallIntelligencePayload = AIGenerateBase & {
+  type: 'call-intelligence';
+  contextData?: Record<string, unknown>;
+};
+
+export type BattleCardPayload = AIGenerateBase & {
+  type: 'battle_card';
+  contextData: { objection: string } & Record<string, unknown>;
+};
+
+export type AnalysisPayload = AIGenerateBase & {
+  type: 'analysis';
+  contextData: { notes: string; outcome?: string; instruction?: string } & Record<string, unknown>;
+};
+
+export type CoachWorkspaceScriptPayload = AIGenerateBase & { type: 'script' };
+export type CoachWorkspaceResearchPayload = AIGenerateBase & { type: 'research' };
+
+export type AIGeneratePayload =
+  | EmailColdPayload
+  | EmailDemoPayload
+  | SpinScriptPayload
+  | CallIntelligencePayload
+  | BattleCardPayload
+  | AnalysisPayload
+  | CoachWorkspaceScriptPayload
+  | CoachWorkspaceResearchPayload;
+
+export type AIGenerateResultByType = {
+  email: { content: string };
+  'email-cold': { content: string };
+  'email-demo': { content: string };
+  script: { content: string } | string;
+  research: unknown;
+  'spin-script': {
+    script?: {
+      totalDuration?: string;
+      blocks?: Array<{
+        phase?: string;
+        title?: string;
+        duration?: string;
+        content?: string;
+        questions?: string[];
+        tips?: string[];
+        transitions?: string[];
+      }>;
+      closingTechniques?: Array<{ name?: string; script?: string }>;
+      objectionHandlers?: Array<{ objection?: string; response?: string }>;
+    } | unknown;
+  } & Record<string, unknown>;
+  'call-intelligence': {
+    companyInsight?: string;
+    painPoints?: string[];
+    openingLine?: string;
+    qualifyingQuestions?: string[];
+    objectionHandlers?: Array<{ objection?: string; response?: string; trigger?: string; rebuttal?: string }>;
+    competitorMentions?: string[];
+    recentNews?: string;
+    decisionMakerTips?: string;
+    bookingScript?: string;
+    challengerInsight?: string;
+    certaintyBuilders?: { product?: string; you?: string; company?: string };
+    callTimeline?: Array<{ stage?: string; time?: string; goal?: string; say?: string; tonality?: string }>;
+    loopingScripts?: Array<{ trigger?: string; loop?: string }>;
+  } & Record<string, unknown>;
+  battle_card: {
+    validate?: string;
+    empathize?: string;
+    reframe?: string;
+    response?: string;
+    implication_question?: string;
+    follow_up?: string;
+    next_step?: string;
+    close?: string;
+  } & Record<string, unknown>;
+  analysis: {
+    summary?: string;
+    analysis?: string;
+    content?: string;
+  } & Record<string, unknown>;
+};
+
+export type AIGenerateResult<T extends AIGeneratePayload> = AIGenerateResultByType[T['type']];
+
 export type LeadPrepareResult = {
   correlation_id: string;
   generation_run_id: string;
@@ -226,6 +360,19 @@ export type PrecallContextResult = {
 export const echoApi = {
   health: () => apiFetch<{ status: string; version?: string; time?: string }>('health'),
   healthDb: () => apiFetch<{ ok: boolean; error?: string }>('health/db'),
+
+  gmail: {
+    getStatus: () => apiFetch<GmailStatus>('gmail/status'),
+    createDraft: (payload: GmailCreateDraftPayload) =>
+      apiFetch<GmailCreateDraftResult>('gmail/create-draft', { method: 'POST', body: JSON.stringify(payload) }),
+    disconnect: () => apiFetch<{ ok: boolean; error?: string }>('gmail/disconnect', { method: 'POST' }),
+    test: () => apiFetch<{ ok: boolean; error?: string }>('gmail/test'),
+    buildAuthUrl: (redirectTo: string) => {
+      const url = buildFunctionUrl(`gmail/auth?redirectTo=${encodeURIComponent(redirectTo)}`);
+      if (!url) throw new Error('Supabase functions are not configured.');
+      return url;
+    },
+  },
 
   getPipedriveStatus: () => apiFetch<{ configured: boolean }>('integrations/pipedrive'),
   savePipedriveKey: (apiKey: string) =>
@@ -373,8 +520,8 @@ export const echoApi = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
-    generate: (payload: any) =>
-      apiFetch<any>('ai/generate', {
+    generate: <T extends AIGeneratePayload>(payload: T) =>
+      apiFetch<AIGenerateResult<T>>('ai/generate', {
         method: 'POST',
         body: JSON.stringify(payload),
       }),

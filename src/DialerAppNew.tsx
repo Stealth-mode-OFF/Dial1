@@ -981,22 +981,43 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
                       {emailCopied ? 'Zkopírováno ✓' : '📋 Kopírovat'}
                     </button>
                     {contact?.email && (
-                      <a
+                      <button
                         className="wrapup-email-mailto"
-                        href={(() => {
+                        type="button"
+                        onClick={async () => {
                           const lines = emailDraft.split('\n');
                           const subjectLine = lines.find(l => l.startsWith('Předmět:'));
                           const subject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${contact.company} – follow-up`;
                           const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
                           const body = bodyLines.join('\n').trim();
                           const bcc = settings.smartBccAddress || '';
-                          return `mailto:${encodeURIComponent(contact.email!)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${bcc ? `&bcc=${encodeURIComponent(bcc)}` : ''}`;
-                        })()}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                          const mailtoUrl = `mailto:${encodeURIComponent(contact.email!)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${bcc ? `&bcc=${encodeURIComponent(bcc)}` : ''}`;
+
+                          if (isSupabaseConfigured) {
+                            try {
+                              const status = await echoApi.gmail.getStatus();
+                              if (status?.configured) {
+                                const res = await echoApi.gmail.createDraft({
+                                  to: contact.email!,
+                                  subject,
+                                  body,
+                                  bcc: bcc || undefined,
+                                });
+                                if (res?.ok && res.gmailUrl) {
+                                  window.open(res.gmailUrl, '_blank', 'noopener,noreferrer');
+                                  return;
+                                }
+                              }
+                            } catch {
+                              // Silent fallback to mailto:
+                            }
+                          }
+
+                          window.open(mailtoUrl, '_blank', 'noopener,noreferrer');
+                        }}
                       >
                         📧 Otevřít v e‑mailu
-                      </a>
+                      </button>
                     )}
                   </div>
                   <textarea

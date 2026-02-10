@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bot, Database, KeyRound, RefreshCw, Server, ShieldCheck } from 'lucide-react';
+import { Bot, Database, KeyRound, Mail, RefreshCw, Server, ShieldCheck } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
 import { echoApi } from '../utils/echoApi';
 import { getExtensionStatus, listenToExtension, type ExtensionStatus } from '../utils/extensionBridge';
@@ -65,6 +65,8 @@ export function SettingsWorkspace() {
   const [openAiKeyInput, setOpenAiKeyInput] = useState('');
 
   const [openAiConfigured, setOpenAiConfigured] = useState(false);
+  const [gmailConfigured, setGmailConfigured] = useState(false);
+  const [gmailEmail, setGmailEmail] = useState<string | null>(null);
 
   const [functionsCheck, setFunctionsCheck] = useState<FunctionsCheckState>(() => ({
     state: 'idle',
@@ -79,6 +81,11 @@ export function SettingsWorkspace() {
     message: null,
   }));
   const [openAiCheck, setOpenAiCheck] = useState<CheckState>(() => ({
+    state: 'idle',
+    checkedAt: null,
+    message: null,
+  }));
+  const [gmailCheck, setGmailCheck] = useState<CheckState>(() => ({
     state: 'idle',
     checkedAt: null,
     message: null,
@@ -206,9 +213,75 @@ export function SettingsWorkspace() {
     }
   };
 
+  const loadGmailStatus = async () => {
+    if (!supabaseConfigured) {
+      setGmailConfigured(false);
+      setGmailEmail(null);
+      setGmailCheck({ state: 'error', checkedAt: Date.now(), message: 'Supabase není nakonfigurovaný.' });
+      return;
+    }
+    try {
+      const res = await echoApi.gmail.getStatus();
+      const configured = Boolean(res?.configured);
+      setGmailConfigured(configured);
+      setGmailEmail(res?.email || null);
+      if (!configured) {
+        setGmailCheck({ state: 'error', checkedAt: Date.now(), message: 'Nepřipojeno.' });
+      }
+    } catch (e) {
+      setGmailConfigured(false);
+      setGmailEmail(null);
+      setGmailCheck({ state: 'error', checkedAt: Date.now(), message: errorMessage(e, 'Nepodařilo se načíst stav Gmailu') });
+    }
+  };
+
+  const runGmailTest = async () => {
+    if (!gmailConfigured) {
+      setGmailCheck({ state: 'error', checkedAt: Date.now(), message: 'Nepřipojeno.' });
+      return;
+    }
+    setGmailCheck({ state: 'checking', checkedAt: Date.now(), message: null });
+    try {
+      const res = await echoApi.gmail.test();
+      if (res?.ok) {
+        setGmailCheck({ state: 'ok', checkedAt: Date.now(), message: gmailEmail ? `OK (${gmailEmail})` : 'OK' });
+      } else {
+        setGmailCheck({ state: 'error', checkedAt: Date.now(), message: res?.error || 'Test selhal.' });
+      }
+    } catch (e) {
+      setGmailCheck({ state: 'error', checkedAt: Date.now(), message: errorMessage(e, 'Gmail test selhal') });
+    }
+  };
+
+  const connectGmail = () => {
+    try {
+      const url = echoApi.gmail.buildAuthUrl(window.location.href);
+      window.location.href = url;
+    } catch (e) {
+      setStatus(errorMessage(e, 'Nepodařilo se spustit připojení Gmailu'));
+    }
+  };
+
+  const disconnectGmail = async () => {
+    setBusy(true);
+    setStatus(null);
+    try {
+      await echoApi.gmail.disconnect();
+      setGmailConfigured(false);
+      setGmailEmail(null);
+      setGmailCheck({ state: 'error', checkedAt: Date.now(), message: 'Odpojeno.' });
+      setStatus('Gmail odpojen.');
+    } catch (e) {
+      setStatus(errorMessage(e, 'Nepodařilo se odpojit Gmail'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   useEffect(() => {
     void runFunctionsCheck();
     void loadOpenAiStatus();
+    void loadGmailStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -223,6 +296,22 @@ export function SettingsWorkspace() {
     void runOpenAiTest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openAiConfigured]);
+
+  useEffect(() => {
+    try {
+      const u = new URL(window.location.href);
+      const flag = u.searchParams.get('gmail');
+      if (flag === 'connected') {
+        setStatus('Gmail připojen ✓');
+        u.searchParams.delete('gmail');
+        window.history.replaceState({}, '', u.toString());
+        void loadGmailStatus();
+      }
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const saveProfile = () => {
     updateUser({ name: profile.name.trim(), role: profile.role.trim() });
@@ -324,6 +413,7 @@ export function SettingsWorkspace() {
   const pipedrivePill =
     pipedriveCheck.state === 'ok' ? 'success' : pipedriveCheck.state === 'checking' ? 'warning' : 'warning';
   const openAiPill = openAiCheck.state === 'ok' ? 'success' : openAiCheck.state === 'checking' ? 'warning' : 'warning';
+  const gmailPill = gmailCheck.state === 'ok' ? 'success' : gmailCheck.state === 'checking' ? 'warning' : 'warning';
 
   return (
     <div className="workspace column settings-workspace">
@@ -517,6 +607,46 @@ export function SettingsWorkspace() {
 
           <div className="connection-card">
             <div className="icon-title">
+              <Mail size={16} />
+              <span>Google / Gmail</span>
+            </div>
+
+            <div className="pill-row">
+              <span className={`pill ${gmailPill}`}>{gmailCheck.state === 'ok' ? 'Připojeno' : gmailConfigured ? 'Zkontrolovat' : 'Nepřipojeno'}</span>
+              <span className="muted">Last check: {fmtSince(gmailCheck.checkedAt)}</span>
+            </div>
+
+            {gmailEmail ? (
+              <div className="kv">
+                <span className="kv-label">Účet</span>
+                <span className="kv-value mono">{gmailEmail}</span>
+              </div>
+            ) : null}
+
+            {gmailCheck.message ? <div className="status-line">{gmailCheck.message}</div> : null}
+
+            <div className="muted" style={{ fontSize: '12px' }}>
+              V aplikaci nikdy nic automaticky neodesíláme. Vždy jen vytvoříme koncept (draft) v Gmailu.
+            </div>
+
+            <div className="button-row wrap">
+              <button className="btn primary" onClick={connectGmail} disabled={busy || !supabaseConfigured}>
+                Připojit Gmail
+              </button>
+              <button className="btn ghost" onClick={() => void disconnectGmail()} disabled={busy || !gmailConfigured}>
+                Odpojit
+              </button>
+              <button className="btn outline" onClick={() => void runGmailTest()} disabled={busy || !gmailConfigured}>
+                Test
+              </button>
+              <button className="btn ghost" onClick={() => void loadGmailStatus()} disabled={busy || !supabaseConfigured}>
+                <RefreshCw size={14} /> Refresh
+              </button>
+            </div>
+          </div>
+
+          <div className="connection-card">
+            <div className="icon-title">
               <ShieldCheck size={16} />
               <span>Chrome Extension</span>
             </div>
@@ -565,4 +695,3 @@ export function SettingsWorkspace() {
     </div>
   );
 }
-

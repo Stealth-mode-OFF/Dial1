@@ -465,22 +465,43 @@ const SummaryHero: React.FC<{
               <div className="mc-ai-email-actions">
                 <button className="mc-ai-email-copy" onClick={onCopyEmail}>{emailCopied ? 'Zkopírováno ✓' : '📋 Kopírovat'}</button>
                 {lead.email && (
-                  <a
+                  <button
                     className="mc-ai-email-mailto"
-                    href={(() => {
+                    type="button"
+                    onClick={async () => {
                       const lines = emailDraft.split('\n');
                       const subjectLine = lines.find(l => l.startsWith('Předmět:'));
                       const subject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${lead.company} – follow-up po demo`;
                       const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
                       const body = bodyLines.join('\n').trim();
                       const bcc = smartBccAddress || '';
-                      return `mailto:${encodeURIComponent(lead.email!)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${bcc ? `&bcc=${encodeURIComponent(bcc)}` : ''}`;
-                    })()}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                      const mailtoUrl = `mailto:${encodeURIComponent(lead.email!)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${bcc ? `&bcc=${encodeURIComponent(bcc)}` : ''}`;
+
+                      if (isSupabaseConfigured) {
+                        try {
+                          const status = await echoApi.gmail.getStatus();
+                          if (status?.configured) {
+                            const res = await echoApi.gmail.createDraft({
+                              to: lead.email!,
+                              subject,
+                              body,
+                              bcc: bcc || undefined,
+                            });
+                            if (res?.ok && res.gmailUrl) {
+                              window.open(res.gmailUrl, '_blank', 'noopener,noreferrer');
+                              return;
+                            }
+                          }
+                        } catch {
+                          // Silent fallback to mailto:
+                        }
+                      }
+
+                      window.open(mailtoUrl, '_blank', 'noopener,noreferrer');
+                    }}
                   >
                     📧 Otevřít v e‑mailu
-                  </a>
+                  </button>
                 )}
               </div>
               <textarea
@@ -1048,8 +1069,7 @@ export const MeetCoachAppNew: React.FC = () => {
           keyCaptions: keyLines,
         },
       });
-      const content = (r && typeof r === 'object' && 'content' in r) ? (r as any).content : r;
-      setWrapupEmailDraft(typeof content === 'string' ? content : JSON.stringify(content));
+      setWrapupEmailDraft(r?.content || '');
     } catch (e) {
       setWrapupEmailError(e instanceof Error ? e.message : 'E‑mail se nepodařilo vygenerovat');
     } finally {
