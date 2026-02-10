@@ -16,11 +16,11 @@ const BattleCardsPage = lazy(() => import('./pages/BattleCardsPage').then(m => (
 type AppMode = 'dialer' | 'meetcoach' | 'dial' | 'meet' | 'analyze' | 'battlecards';
 
 // Section metadata for nav tabs
-const SECTIONS: { id: AppMode; label: string; emoji: string; hash: string }[] = [
-  { id: 'dialer',      label: 'Dialer',    emoji: '📞', hash: '#dialer' },
-  { id: 'meetcoach',   label: 'Meet',      emoji: '🎤', hash: '#meet' },
-  { id: 'battlecards', label: 'Karty',     emoji: '🃏', hash: '#battlecards' },
-  { id: 'analyze',     label: 'Analýza',   emoji: '📊', hash: '#analyze' },
+const SECTIONS: { id: AppMode; label: string; hash: string }[] = [
+  { id: 'dialer',      label: 'Dialer',    hash: '#dialer' },
+  { id: 'meetcoach',   label: 'Meet',      hash: '#meet' },
+  { id: 'battlecards', label: 'Karty',     hash: '#battlecards' },
+  { id: 'analyze',     label: 'Anályza',   hash: '#analyze' },
 ];
 
 // Loading fallback component
@@ -54,9 +54,9 @@ function AppNav({ mode, onSwitch }: { mode: AppMode; onSwitch: (m: AppMode) => v
               role="tab"
               aria-selected={mode === sec.id}
               className={`app-nav-tab${mode === sec.id ? ' app-nav-tab-active' : ''}`}
+              data-tab={sec.id}
               onClick={() => onSwitch(sec.id)}
             >
-              <span className="app-nav-tab-emoji">{sec.emoji}</span>
               <span className="app-nav-tab-label">{sec.label}</span>
             </button>
           ))}

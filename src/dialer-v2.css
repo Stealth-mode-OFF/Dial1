@@ -124,20 +124,30 @@ body {
   color: var(--text);
 }
 .app-nav-tab-active {
-  background: var(--border);
   color: #fff;
-  border-color: var(--border);
   box-shadow: var(--shadow-neo-sm);
 }
 .app-nav-tab-active:hover {
-  background: var(--border);
-  color: #fff;
   opacity: 0.92;
 }
 
-.app-nav-tab-emoji {
-  font-size: 14px;
-  line-height: 1;
+/* Per-tab active colors */
+.app-nav-tab-active[data-tab="dialer"] {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.app-nav-tab-active[data-tab="meetcoach"] {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--text);
+}
+.app-nav-tab-active[data-tab="battlecards"] {
+  background: var(--purple-500);
+  border-color: var(--purple-500);
+}
+.app-nav-tab-active[data-tab="analyze"] {
+  background: var(--success);
+  border-color: var(--success);
 }
 
 .app-nav-tab-label {
@@ -145,11 +155,9 @@ body {
 }
 
 @media (max-width: 480px) {
-  .app-nav-tab-label {
-    display: none;
-  }
   .app-nav-tab {
     padding: 6px 10px;
+    font-size: 12px;
   }
   .app-nav-tabs {
     gap: 2px;
