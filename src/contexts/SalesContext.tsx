@@ -39,7 +39,7 @@ export type CallRecord = {
 export type Deal = { id: string; value?: number; status?: string; stage?: string };
 
 export type UserProfile = { name: string; role: string; avatarInitials: string };
-export type UserSettings = { dailyCallGoal?: number; smartBccAddress?: string };
+export type UserSettings = { dailyCallGoal?: number; smartBccAddress?: string; sequenceSendTime?: string };
 
 type SalesContextType = {
   isConfigured: boolean;
@@ -85,7 +85,7 @@ const defaultStats: Stats = {
 };
 
 const defaultUser: UserProfile = { name: '', role: '', avatarInitials: '' };
-const defaultSettings: UserSettings = { dailyCallGoal: 0 };
+const defaultSettings: UserSettings = { dailyCallGoal: 0, sequenceSendTime: '09:00' };
 
 const initialsFromName = (name: string) => {
   const parts = name.trim().split(/\s+/).filter(Boolean);

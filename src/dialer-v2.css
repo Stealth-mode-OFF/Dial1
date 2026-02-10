@@ -31,6 +31,9 @@
   /* Radius */
   --radius: 8px;
   --radius-lg: 14px;
+
+  /* App Nav */
+  --nav-h: 44px;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -44,11 +47,120 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ============ APP SHELL ============ */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.app-shell .app-content {
+  flex: 1;
+  overflow: auto;
+}
+
+/* ============ UNIFIED APP NAV ============ */
+.app-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--nav-h);
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 3px solid var(--border);
+  flex-shrink: 0;
+  z-index: 900;
+}
+
+.app-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-nav-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: var(--neo-yellow);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-weight: 900;
+  font-size: 12px;
+  box-shadow: var(--shadow-neo-sm);
+  cursor: pointer;
+  transition: transform 0.1s;
+  user-select: none;
+}
+.app-nav-logo:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-neo);
+}
+
+.app-nav-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.app-nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.app-nav-tab:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+.app-nav-tab-active {
+  background: var(--border);
+  color: #fff;
+  border-color: var(--border);
+  box-shadow: var(--shadow-neo-sm);
+}
+.app-nav-tab-active:hover {
+  background: var(--border);
+  color: #fff;
+  opacity: 0.92;
+}
+
+.app-nav-tab-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.app-nav-tab-label {
+  line-height: 1;
+}
+
+@media (max-width: 480px) {
+  .app-nav-tab-label {
+    display: none;
+  }
+  .app-nav-tab {
+    padding: 6px 10px;
+  }
+  .app-nav-tabs {
+    gap: 2px;
+  }
+}
+
 /* ============ LAYOUT ============ */
 .dialer-v2 {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 

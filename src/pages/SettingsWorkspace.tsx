@@ -56,6 +56,7 @@ export function SettingsWorkspace() {
     role: user.role,
     dailyCallGoal: settings.dailyCallGoal || 0,
     smartBccAddress: settings.smartBccAddress || '',
+    sequenceSendTime: settings.sequenceSendTime || '09:00',
   }));
 
   const [busy, setBusy] = useState(false);
@@ -91,6 +92,9 @@ export function SettingsWorkspace() {
     message: null,
   }));
 
+  const [sequenceRows, setSequenceRows] = useState<any[]>([]);
+  const [sequenceLoading, setSequenceLoading] = useState(false);
+
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(() => getExtensionStatus());
   const [lastCaption, setLastCaption] = useState<string>('');
   const [lastCaptionAt, setLastCaptionAt] = useState<number | null>(null);
@@ -120,8 +124,9 @@ export function SettingsWorkspace() {
       role: user.role,
       dailyCallGoal: settings.dailyCallGoal || 0,
       smartBccAddress: settings.smartBccAddress || '',
+      sequenceSendTime: settings.sequenceSendTime || '09:00',
     });
-  }, [user.name, user.role, settings.dailyCallGoal, settings.smartBccAddress]);
+  }, [user.name, user.role, settings.dailyCallGoal, settings.smartBccAddress, settings.sequenceSendTime]);
 
   const runFunctionsCheck = async () => {
     if (!supabaseConfigured) {
@@ -278,10 +283,24 @@ export function SettingsWorkspace() {
     }
   };
 
+  const loadSequences = async () => {
+    if (!supabaseConfigured) return;
+    setSequenceLoading(true);
+    try {
+      const res = await echoApi.emailSchedule.active();
+      setSequenceRows(Array.isArray(res?.schedules) ? res.schedules : []);
+    } catch {
+      setSequenceRows([]);
+    } finally {
+      setSequenceLoading(false);
+    }
+  };
+
   useEffect(() => {
     void runFunctionsCheck();
     void loadOpenAiStatus();
     void loadGmailStatus();
+    void loadSequences();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -318,6 +337,7 @@ export function SettingsWorkspace() {
     updateSettings({
       dailyCallGoal: Number(profile.dailyCallGoal) || 0,
       smartBccAddress: profile.smartBccAddress.trim(),
+      sequenceSendTime: (profile.sequenceSendTime || '09:00').toString().trim() || '09:00',
     });
     setStatus('Profile saved.');
   };
@@ -454,6 +474,17 @@ export function SettingsWorkspace() {
             />
             <span className="muted" style={{ fontSize: '11px', marginTop: '2px' }}>
               Najdeš v Pipedrive → E-mail sync → Smart BCC. E-maily se automaticky zalogují.
+            </span>
+          </label>
+          <label className="field">
+            <span className="label">Sekvence: čas konceptu (CET)</span>
+            <input
+              type="time"
+              value={profile.sequenceSendTime}
+              onChange={(e) => setProfile({ ...profile, sequenceSendTime: e.target.value })}
+            />
+            <span className="muted" style={{ fontSize: '11px', marginTop: '2px' }}>
+              Default: 09:00. Použije se pro D+1 / D+3 follow‑up koncepty (Europe/Prague).
             </span>
           </label>
         </div>
@@ -691,6 +722,79 @@ export function SettingsWorkspace() {
         </div>
 
         {status ? <div className="status-line">{status}</div> : null}
+      </div>
+
+      <div className="panel settings-panel">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Email</p>
+            <h2>Sekvence</h2>
+            <p className="muted">Aktivní D+1 / D+3 follow‑up koncepty (drafty). Nikdy nic neodesíláme automaticky.</p>
+          </div>
+        </div>
+
+        <div className="button-row wrap">
+          <button className="btn outline" onClick={() => void loadSequences()} disabled={busy || !supabaseConfigured || sequenceLoading}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
+
+        {sequenceLoading ? (
+          <div className="status-line">⏳ Načítám sekvence…</div>
+        ) : sequenceRows.length ? (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {sequenceRows.map((row: any) => {
+              const when = row?.scheduled_for ? new Date(String(row.scheduled_for)).toLocaleString('cs-CZ', { timeZone: 'Europe/Prague' }) : '—';
+              const type = String(row?.email_type || '');
+              const contactId = String(row?.contact_id || '');
+              const contactName = row?.context?.contactName ? String(row.context.contactName) : '';
+              const company = row?.context?.company ? String(row.context.company) : '';
+              const status = String(row?.status || '');
+              const gmailUrl = row?.context?.generated?.gmailUrl || null;
+              return (
+                <div key={String(row?.id)} className="status-line" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                  <div>
+                    <div>
+                      <span className="mono">{contactId}</span>
+                      {contactName ? ` · ${contactName}` : ''}
+                      {company ? ` (${company})` : ''}
+                      {' · '}
+                      <span className="mono">{type}</span> · {when} · <span className="mono">{status}</span>
+                    </div>
+                    {gmailUrl ? (
+                      <div className="muted" style={{ fontSize: 12 }}>Draft: {String(gmailUrl)}</div>
+                    ) : null}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {gmailUrl ? (
+                      <button className="btn ghost sm" type="button" onClick={() => window.open(String(gmailUrl), '_blank', 'noopener,noreferrer')}>
+                        Otevřít draft
+                      </button>
+                    ) : null}
+                    <button
+                      className="btn ghost sm"
+                      type="button"
+                      onClick={async () => {
+                        setBusy(true);
+                        try {
+                          await echoApi.emailSchedule.cancel({ scheduleId: String(row?.id) });
+                          await loadSequences();
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                      disabled={busy}
+                    >
+                      Zrušit
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="status-line">Žádné aktivní sekvence.</div>
+        )}
       </div>
     </div>
   );

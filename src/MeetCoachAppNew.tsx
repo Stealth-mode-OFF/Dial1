@@ -373,11 +373,84 @@ const SummaryHero: React.FC<{
   onCopyEmail: () => void;
   onEmailDraftChange: (value: string) => void;
   smartBccAddress: string;
+  sequenceSendTime: string;
   crmSaving: boolean;
   crmResult: { ok: boolean; message: string } | null;
   onSaveCrm: () => void;
-}> = ({ lead, totalTime, phaseTimes, onNewDemo, analysis, analysisLoading, analysisError, emailDraft, emailLoading, emailError, emailCopied, onGenerateEmail, onCopyEmail, onEmailDraftChange, smartBccAddress, crmSaving, crmResult, onSaveCrm }) => {
+}> = ({ lead, totalTime, phaseTimes, onNewDemo, analysis, analysisLoading, analysisError, emailDraft, emailLoading, emailError, emailCopied, onGenerateEmail, onCopyEmail, onEmailDraftChange, smartBccAddress, sequenceSendTime, crmSaving, crmResult, onSaveCrm }) => {
   const [showScheduler, setShowScheduler] = useState(false);
+  const [emailLogStatus, setEmailLogStatus] = useState<string | null>(null);
+  const [emailHistory, setEmailHistory] = useState<any[]>([]);
+  const [emailHistoryLoading, setEmailHistoryLoading] = useState(false);
+  const [sequenceEnabled, setSequenceEnabled] = useState(false);
+  const [sequenceBusy, setSequenceBusy] = useState(false);
+  const [sequenceMsg, setSequenceMsg] = useState<string | null>(null);
+  const sequenceTime = (sequenceSendTime || '09:00').toString().trim() || '09:00';
+  const sequenceTimeZone = 'Europe/Prague';
+
+  const computeZonedUtc = (y: number, m: number, d: number, hh: number, mm: number, timeZone: string) => {
+    const utcGuess = new Date(Date.UTC(y, m - 1, d, hh, mm, 0, 0));
+    const asLocal = new Date(utcGuess.toLocaleString('en-US', { timeZone }));
+    const offset = utcGuess.getTime() - asLocal.getTime();
+    return new Date(utcGuess.getTime() + offset);
+  };
+
+  const computeSequenceIso = (delayDays: number) => {
+    const [hhRaw, mmRaw] = sequenceTime.split(':');
+    const hh = Math.max(0, Math.min(23, Number(hhRaw) || 9));
+    const mm = Math.max(0, Math.min(59, Number(mmRaw) || 0));
+
+    const now = new Date();
+    const nowZoned = new Date(now.toLocaleString('en-US', { timeZone: sequenceTimeZone }));
+    const targetZoned = new Date(nowZoned);
+    targetZoned.setDate(targetZoned.getDate() + delayDays);
+    const y = targetZoned.getFullYear();
+    const m = targetZoned.getMonth() + 1;
+    const d = targetZoned.getDate();
+    return computeZonedUtc(y, m, d, hh, mm, sequenceTimeZone).toISOString();
+  };
+
+  const formatSequenceWhen = (iso: string) =>
+    new Date(iso).toLocaleString('cs-CZ', { timeZone: sequenceTimeZone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    if (!lead?.id) return;
+    let cancelled = false;
+    setEmailHistoryLoading(true);
+    echoApi.email.history(lead.id)
+      .then((res) => {
+        if (cancelled) return;
+        setEmailHistory(Array.isArray(res?.emails) ? res.emails : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEmailHistory([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setEmailHistoryLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [lead?.id]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    if (!lead?.id) return;
+    let cancelled = false;
+    echoApi.emailSchedule.active({ contactId: lead.id })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = Array.isArray(res?.schedules) ? res.schedules : [];
+        const has = rows.some((r: any) => String(r?.email_type || '').startsWith('sequence-') && (r?.status === 'pending' || r?.status === 'draft-created'));
+        setSequenceEnabled(has);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSequenceEnabled(false);
+      });
+    return () => { cancelled = true; };
+  }, [lead?.id]);
 
   if (showScheduler) {
     return (
@@ -464,6 +537,42 @@ const SummaryHero: React.FC<{
             <div className="mc-ai-email-editor">
               <div className="mc-ai-email-actions">
                 <button className="mc-ai-email-copy" onClick={onCopyEmail}>{emailCopied ? 'Zkopírováno ✓' : '📋 Kopírovat'}</button>
+                <button
+                  className="mc-ai-email-copy"
+                  type="button"
+                  onClick={async () => {
+                    setEmailLogStatus(null);
+                    try {
+                      const lines = emailDraft.split('\n');
+                      const subjectLine = lines.find(l => l.startsWith('Předmět:'));
+                      const subject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${lead.company} – follow-up po demo`;
+                      const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
+                      const body = bodyLines.join('\n').trim();
+                      const res = await echoApi.email.log({
+                        contactId: lead.id,
+                        contactName: lead.name,
+                        company: lead.company,
+                        emailType: 'demo-followup',
+                        subject,
+                        body,
+                        recipientEmail: lead.email || undefined,
+                        source: 'manual',
+                      });
+                      if (!res?.ok) throw new Error(res?.error || 'Log selhal');
+                      setEmailLogStatus('Označeno jako odeslané ✓');
+                      try {
+                        const h = await echoApi.email.history(lead.id);
+                        setEmailHistory(Array.isArray(h?.emails) ? h.emails : []);
+                      } catch {
+                        // ignore
+                      }
+                    } catch {
+                      setEmailLogStatus('Nepodařilo se zalogovat e‑mail');
+                    }
+                  }}
+                >
+                  ✅ Označit jako odeslané
+                </button>
                 {lead.email && (
                   <button
                     className="mc-ai-email-mailto"
@@ -486,9 +595,21 @@ const SummaryHero: React.FC<{
                               subject,
                               body,
                               bcc: bcc || undefined,
+                              log: {
+                                contactId: lead.id,
+                                contactName: lead.name,
+                                company: lead.company,
+                                emailType: 'demo-followup',
+                              },
                             });
                             if (res?.ok && res.gmailUrl) {
                               window.open(res.gmailUrl, '_blank', 'noopener,noreferrer');
+                              try {
+                                const h = await echoApi.email.history(lead.id);
+                                setEmailHistory(Array.isArray(h?.emails) ? h.emails : []);
+                              } catch {
+                                // ignore
+                              }
                               return;
                             }
                           }
@@ -515,8 +636,101 @@ const SummaryHero: React.FC<{
               {smartBccAddress && (
                 <div className="mc-ai-email-hint muted">SmartBCC: {smartBccAddress}</div>
               )}
+              {emailLogStatus ? (
+                <div className="mc-ai-email-hint muted">{emailLogStatus}</div>
+              ) : null}
+              {isSupabaseConfigured && lead?.id ? (
+                emailHistoryLoading ? (
+                  <div className="mc-ai-email-hint muted">Poslední e‑maily: ⏳ Načítám…</div>
+                ) : emailHistory.length ? (
+                  <div className="mc-ai-email-hint muted">
+                    <div>Poslední e‑maily:</div>
+                    <ul style={{ margin: '6px 0 0 16px' }}>
+                      {emailHistory.slice(0, 3).map((e: any) => {
+                        const when = e?.sent_at ? new Date(String(e.sent_at)).toLocaleDateString('cs-CZ') : '—';
+                        const type = String(e?.email_type || '');
+                        const typeLabel =
+                          type === 'cold' ? 'cold' :
+                          type === 'demo-followup' ? 'po demo' :
+                          type === 'sequence-d1' ? 'D+1' :
+                          type === 'sequence-d3' ? 'D+3' : type;
+                        const subj = e?.subject ? String(e.subject) : '—';
+                        return <li key={String(e?.id || `${when}-${type}-${subj}`)}>{when} · {typeLabel} · {subj}</li>;
+                      })}
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="mc-ai-email-hint muted">Poslední e‑maily: —</div>
+                )
+              ) : null}
             </div>
           ) : null}
+        </div>
+
+        <div className="mc-ai-email" style={{ marginTop: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              type="checkbox"
+              checked={sequenceEnabled}
+              disabled={!isSupabaseConfigured || sequenceBusy}
+              onChange={async (e) => {
+                const next = e.target.checked;
+                setSequenceMsg(null);
+                setSequenceBusy(true);
+                try {
+                  if (!next) {
+                    await echoApi.emailSchedule.cancel({ contactId: lead.id });
+                    setSequenceEnabled(false);
+                    setSequenceMsg('Sekvence zrušena.');
+                    return;
+                  }
+
+                  if (!emailDraft.trim()) {
+                    setSequenceEnabled(false);
+                    setSequenceMsg('Nejdřív vygeneruj follow‑up e‑mail (aby měl AI kontext).');
+                    return;
+                  }
+
+                  const lines = emailDraft.split('\n');
+                  const subjectLine = lines.find(l => l.startsWith('Předmět:'));
+                  const originalSubject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${lead.company} – follow-up po demo`;
+                  const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
+                  const originalBody = bodyLines.join('\n').trim();
+
+                  const d1 = computeSequenceIso(1);
+                  const d3 = computeSequenceIso(3);
+                  const baseContext = {
+                    sequenceKind: 'demo',
+                    contactName: lead.name,
+                    company: lead.company,
+                    recipientEmail: lead.email || '',
+                    bcc: smartBccAddress || '',
+                    originalEmail: { subject: originalSubject, body: originalBody },
+                  };
+
+                  const res = await echoApi.emailSchedule.create({
+                    contactId: lead.id,
+                    schedules: [
+                      { emailType: 'sequence-d1', scheduledFor: d1, context: baseContext },
+                      { emailType: 'sequence-d3', scheduledFor: d3, context: baseContext },
+                    ],
+                  });
+                  if (!res?.ok) throw new Error(res?.error || 'Nepodařilo se naplánovat sekvenci');
+                  setSequenceEnabled(true);
+                  setSequenceMsg('Sekvence naplánována ✓');
+                } catch (err) {
+                  setSequenceEnabled(false);
+                  setSequenceMsg(err instanceof Error ? err.message : 'Nepodařilo se naplánovat sekvenci');
+                } finally {
+                  setSequenceBusy(false);
+                }
+              }}
+            />
+            <span style={{ fontWeight: 700 }}>Naplánovat follow‑up sekvenci</span>
+          </label>
+          <div className="mc-ai-email-hint muted">→ D+1: krátký bump ({formatSequenceWhen(computeSequenceIso(1))})</div>
+          <div className="mc-ai-email-hint muted">→ D+3: finální follow‑up ({formatSequenceWhen(computeSequenceIso(3))})</div>
+          {sequenceMsg ? <div className="mc-ai-email-hint muted">{sequenceMsg}</div> : null}
         </div>
 
         <div className="mc-ai-crm">
@@ -1201,6 +1415,7 @@ export const MeetCoachAppNew: React.FC = () => {
             onCopyEmail={copyWrapupEmail}
             onEmailDraftChange={setWrapupEmailDraft}
             smartBccAddress={settings.smartBccAddress || ''}
+            sequenceSendTime={settings.sequenceSendTime || '09:00'}
             crmSaving={wrapupCrmSaving}
             crmResult={wrapupCrmResult}
             onSaveCrm={saveWrapupToCrm}

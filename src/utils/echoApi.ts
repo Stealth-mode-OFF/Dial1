@@ -89,7 +89,44 @@ export type CallLogResult = {
 };
 
 export type GmailStatus = { configured: boolean; email?: string };
-export type GmailCreateDraftPayload = { to: string; subject: string; body: string; bcc?: string };
+export type EmailType = 'cold' | 'demo-followup' | 'sequence-d1' | 'sequence-d3' | (string & {});
+export type EmailLogSource = 'manual' | 'gmail-draft' | 'auto-sequence' | (string & {});
+
+export type EmailLogCreatePayload = {
+  contactId: string;
+  contactName?: string;
+  company?: string;
+  emailType: EmailType;
+  subject?: string;
+  body?: string;
+  recipientEmail?: string;
+  gmailDraftId?: string;
+  source?: EmailLogSource;
+  sentAt?: string;
+};
+
+export type EmailLogItem = {
+  id: string;
+  email_type: string;
+  subject: string | null;
+  sent_at: string | null;
+  source: string | null;
+  gmail_draft_id: string | null;
+  recipient_email: string | null;
+};
+
+export type EmailScheduleStatus = 'pending' | 'draft-created' | 'cancelled' | 'sent' | (string & {});
+export type EmailScheduleRow = {
+  id: string;
+  contact_id: string;
+  email_type: string;
+  scheduled_for: string;
+  status: EmailScheduleStatus;
+  context: any;
+  created_at: string;
+};
+
+export type GmailCreateDraftPayload = { to: string; subject: string; body: string; bcc?: string; log?: Pick<EmailLogCreatePayload, 'contactId' | 'contactName' | 'company' | 'emailType'> };
 export type GmailCreateDraftResult = { ok: boolean; draftId: string; gmailUrl: string; error?: string };
 
 export type AnalyticsSummary = {
@@ -248,9 +285,10 @@ export type AIGenerateResultByType = {
   email: { content: string };
   'email-cold': { content: string };
   'email-demo': { content: string };
-  script: { content: string } | string;
-  research: unknown;
+  script: { content: string } & Record<string, unknown>;
+  research: Record<string, unknown>;
   'spin-script': {
+    error?: string;
     script?: {
       totalDuration?: string;
       blocks?: Array<{
@@ -262,11 +300,12 @@ export type AIGenerateResultByType = {
         tips?: string[];
         transitions?: string[];
       }>;
-      closingTechniques?: Array<{ name?: string; script?: string }>;
-      objectionHandlers?: Array<{ objection?: string; response?: string }>;
-    } | unknown;
+      closingTechniques?: Array<{ name: string; script: string }>;
+      objectionHandlers?: Array<{ objection: string; response: string }>;
+    };
   } & Record<string, unknown>;
   'call-intelligence': {
+    error?: string;
     companyInsight?: string;
     painPoints?: string[];
     openingLine?: string;
@@ -277,11 +316,12 @@ export type AIGenerateResultByType = {
     decisionMakerTips?: string;
     bookingScript?: string;
     challengerInsight?: string;
-    certaintyBuilders?: { product?: string; you?: string; company?: string };
-    callTimeline?: Array<{ stage?: string; time?: string; goal?: string; say?: string; tonality?: string }>;
-    loopingScripts?: Array<{ trigger?: string; loop?: string }>;
+    certaintyBuilders?: { product: string; you: string; company: string };
+    callTimeline?: Array<{ stage: string; time: string; goal: string; say: string; tonality: string }>;
+    loopingScripts?: Array<{ trigger: string; loop: string }>;
   } & Record<string, unknown>;
   battle_card: {
+    error?: string;
     validate?: string;
     empathize?: string;
     reframe?: string;
@@ -292,6 +332,7 @@ export type AIGenerateResultByType = {
     close?: string;
   } & Record<string, unknown>;
   analysis: {
+    error?: string;
     summary?: string;
     analysis?: string;
     content?: string;
@@ -371,6 +412,26 @@ export const echoApi = {
       const url = buildFunctionUrl(`gmail/auth?redirectTo=${encodeURIComponent(redirectTo)}`);
       if (!url) throw new Error('Supabase functions are not configured.');
       return url;
+    },
+  },
+
+  email: {
+    log: (payload: EmailLogCreatePayload) =>
+      apiFetch<{ ok: boolean; id?: string; error?: string }>('email/log', { method: 'POST', body: JSON.stringify(payload) }),
+    history: (contactId: string) =>
+      apiFetch<{ ok: boolean; emails: EmailLogItem[]; error?: string }>(`email/history?contact_id=${encodeURIComponent(contactId)}`),
+  },
+
+  emailSchedule: {
+    create: (payload: { contactId: string; schedules: Array<{ emailType: EmailType; scheduledFor: string; context?: any }> }) =>
+      apiFetch<{ ok: boolean; schedules: EmailScheduleRow[]; error?: string }>('email/schedule', { method: 'POST', body: JSON.stringify(payload) }),
+    cancel: (payload: { contactId?: string; scheduleId?: string }) =>
+      apiFetch<{ ok: boolean; error?: string }>('email/schedule/cancel', { method: 'POST', body: JSON.stringify(payload) }),
+    active: (params: { contactId?: string } = {}) => {
+      const search = new URLSearchParams();
+      if (params.contactId) search.set('contact_id', params.contactId);
+      const suffix = search.toString() ? `?${search.toString()}` : '';
+      return apiFetch<{ ok: boolean; schedules: EmailScheduleRow[]; error?: string }>(`email/schedule/active${suffix}`);
     },
   },
 

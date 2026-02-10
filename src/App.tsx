@@ -15,6 +15,14 @@ const BattleCardsPage = lazy(() => import('./pages/BattleCardsPage').then(m => (
 
 type AppMode = 'dialer' | 'meetcoach' | 'dial' | 'meet' | 'analyze' | 'battlecards';
 
+// Section metadata for nav tabs
+const SECTIONS: { id: AppMode; label: string; emoji: string; hash: string }[] = [
+  { id: 'dialer',      label: 'Dialer',    emoji: '📞', hash: '#dialer' },
+  { id: 'meetcoach',   label: 'Meet',      emoji: '🎤', hash: '#meet' },
+  { id: 'battlecards', label: 'Karty',     emoji: '🃏', hash: '#battlecards' },
+  { id: 'analyze',     label: 'Analýza',   emoji: '📊', hash: '#analyze' },
+];
+
 // Loading fallback component
 function AppLoader() {
   return (
@@ -30,6 +38,31 @@ function AppLoader() {
       <Spinner size={32} color="#2563eb" />
       <span style={{ fontSize: '14px', color: '#6b7280' }}>Loading...</span>
     </div>
+  );
+}
+
+// Unified top navigation
+function AppNav({ mode, onSwitch }: { mode: AppMode; onSwitch: (m: AppMode) => void }) {
+  return (
+    <nav className="app-nav" role="navigation" aria-label="Hlavní navigace">
+      <div className="app-nav-left">
+        <span className="app-nav-logo" onClick={() => onSwitch('dialer')}>D1</span>
+        <div className="app-nav-tabs" role="tablist">
+          {SECTIONS.map(sec => (
+            <button
+              key={sec.id}
+              role="tab"
+              aria-selected={mode === sec.id}
+              className={`app-nav-tab${mode === sec.id ? ' app-nav-tab-active' : ''}`}
+              onClick={() => onSwitch(sec.id)}
+            >
+              <span className="app-nav-tab-emoji">{sec.emoji}</span>
+              <span className="app-nav-tab-label">{sec.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </nav>
   );
 }
 
@@ -85,21 +118,31 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
+  // Show the unified nav for primary modes (not legacy dial/meet pages)
+  const showNav = mode !== 'dial' && mode !== 'meet';
+
   return (
     <ErrorBoundary>
-      <Suspense fallback={<AppLoader />}>
-        {mode === 'dial' ? (
-          <DialPage onSwitchMode={() => switchMode('meet')} />
-        ) : mode === 'meet' ? (
-          <MeetPage onSwitchMode={() => switchMode('dial')} />
-        ) : mode === 'analyze' ? (
-          <AnalysisDashboard />        ) : mode === 'battlecards' ? (
-          <BattleCardsPage onBack={() => switchMode('dialer')} />        ) : mode === 'meetcoach' ? (
-          <MeetCoachApp />
-        ) : (
-          <DialerApp onSwitchMode={() => switchMode('meetcoach')} />
-        )}
-      </Suspense>
+      <div className={`app-shell${showNav ? ' has-nav' : ''}`}>
+        {showNav && <AppNav mode={mode} onSwitch={switchMode} />}
+        <div className="app-content">
+          <Suspense fallback={<AppLoader />}>
+            {mode === 'dial' ? (
+              <DialPage onSwitchMode={() => switchMode('meet')} />
+            ) : mode === 'meet' ? (
+              <MeetPage onSwitchMode={() => switchMode('dial')} />
+            ) : mode === 'analyze' ? (
+              <AnalysisDashboard />
+            ) : mode === 'battlecards' ? (
+              <BattleCardsPage />
+            ) : mode === 'meetcoach' ? (
+              <MeetCoachApp />
+            ) : (
+              <DialerApp />
+            )}
+          </Suspense>
+        </div>
+      </div>
     </ErrorBoundary>
   );
 }

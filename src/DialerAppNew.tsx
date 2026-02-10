@@ -322,7 +322,7 @@ function DialerTranscriptSection({ contact, callDuration }: { contact: Contact; 
 }
 
 // ============ MAIN APP ============
-export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
+export function DialerApp() {
   const { contacts: salesContacts, isLoading, pipedriveConfigured, refresh, settings } = useSales();
   
   const contacts: Contact[] = useMemo(() => {
@@ -364,12 +364,46 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailCopied, setEmailCopied] = useState(false);
+  const [emailLogStatus, setEmailLogStatus] = useState<string | null>(null);
+  const [emailHistory, setEmailHistory] = useState<any[]>([]);
+  const [emailHistoryLoading, setEmailHistoryLoading] = useState(false);
   const [crmSaving, setCrmSaving] = useState(false);
   const [crmResult, setCrmResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [sequenceEnabled, setSequenceEnabled] = useState(false);
+  const [sequenceBusy, setSequenceBusy] = useState(false);
+  const [sequenceMsg, setSequenceMsg] = useState<string | null>(null);
+  const [sequenceSchedules, setSequenceSchedules] = useState<any[]>([]);
   const analyzedKeyRef = useRef<string>('');
 
   const contact = contacts[activeIndex] || null;
   const externalNavDisabled = import.meta.env.VITE_E2E_DISABLE_EXTERNAL_NAV === 'true';
+  const sequenceTime = (settings.sequenceSendTime || '09:00').toString().trim() || '09:00';
+  const sequenceTimeZone = 'Europe/Prague';
+
+  const computeZonedUtc = (y: number, m: number, d: number, hh: number, mm: number, timeZone: string) => {
+    const utcGuess = new Date(Date.UTC(y, m - 1, d, hh, mm, 0, 0));
+    const asLocal = new Date(utcGuess.toLocaleString('en-US', { timeZone }));
+    const offset = utcGuess.getTime() - asLocal.getTime();
+    return new Date(utcGuess.getTime() + offset);
+  };
+
+  const computeSequenceIso = (delayDays: number) => {
+    const [hhRaw, mmRaw] = sequenceTime.split(':');
+    const hh = Math.max(0, Math.min(23, Number(hhRaw) || 9));
+    const mm = Math.max(0, Math.min(59, Number(mmRaw) || 0));
+
+    const now = new Date();
+    const nowZoned = new Date(now.toLocaleString('en-US', { timeZone: sequenceTimeZone }));
+    const targetZoned = new Date(nowZoned);
+    targetZoned.setDate(targetZoned.getDate() + delayDays);
+    const y = targetZoned.getFullYear();
+    const m = targetZoned.getMonth() + 1;
+    const d = targetZoned.getDate();
+    return computeZonedUtc(y, m, d, hh, mm, sequenceTimeZone).toISOString();
+  };
+
+  const formatSequenceWhen = (iso: string) =>
+    new Date(iso).toLocaleString('cs-CZ', { timeZone: sequenceTimeZone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
   const { brief, script: aiScript, loading: briefLoading, error: briefError, generate: generateBrief, clear: clearBrief } = useBrief();
   const [companyDomain, setCompanyDomain] = useState('');
@@ -406,14 +440,65 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
       setEmailError(null);
       setEmailLoading(false);
       setEmailCopied(false);
+      setEmailLogStatus(null);
+      setEmailHistory([]);
+      setEmailHistoryLoading(false);
       setCrmSaving(false);
       setCrmResult(null);
+      setSequenceEnabled(false);
+      setSequenceBusy(false);
+      setSequenceMsg(null);
+      setSequenceSchedules([]);
       analyzedKeyRef.current = '';
       setWrapupOutcome(null);
       setPhase('ready');
       setCallDuration(0);
     }
   }, [contact?.id, session.domainByContact, session.notesByContact, clearBrief]);
+
+  // Email history (last 3)
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    if (!contact?.id) return;
+    if (phase !== 'wrapup') return;
+    let cancelled = false;
+    setEmailHistoryLoading(true);
+    echoApi.email.history(contact.id)
+      .then((res) => {
+        if (cancelled) return;
+        setEmailHistory(Array.isArray(res?.emails) ? res.emails : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEmailHistory([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setEmailHistoryLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [contact?.id, isSupabaseConfigured, phase]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    if (!contact?.id) return;
+    if (phase !== 'wrapup') return;
+    let cancelled = false;
+    echoApi.emailSchedule.active({ contactId: contact.id })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = Array.isArray(res?.schedules) ? res.schedules : [];
+        setSequenceSchedules(rows);
+        const has = rows.some((r: any) => String(r?.email_type || '').startsWith('sequence-') && (r?.status === 'pending' || r?.status === 'draft-created'));
+        setSequenceEnabled(has);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSequenceSchedules([]);
+        setSequenceEnabled(false);
+      });
+    return () => { cancelled = true; };
+  }, [contact?.id, isSupabaseConfigured, phase]);
 
   // Generate AI brief + script (PREP)
   useEffect(() => {
@@ -980,6 +1065,45 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
                     >
                       {emailCopied ? 'Zkopírováno ✓' : '📋 Kopírovat'}
                     </button>
+                    <button
+                      className="wrapup-email-copy"
+                      type="button"
+                      onClick={async () => {
+                        if (!contact) return;
+                        setEmailLogStatus(null);
+                        try {
+                          const lines = emailDraft.split('\n');
+                          const subjectLine = lines.find(l => l.startsWith('Předmět:'));
+                          const subject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${contact.company} – follow-up`;
+                          const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
+                          const body = bodyLines.join('\n').trim();
+
+                          const res = await echoApi.email.log({
+                            contactId: contact.id,
+                            contactName: contact.name,
+                            company: contact.company,
+                            emailType: 'cold',
+                            subject,
+                            body,
+                            recipientEmail: contact.email || undefined,
+                            source: 'manual',
+                          });
+                          if (!res?.ok) throw new Error(res?.error || 'Log selhal');
+                          setEmailLogStatus('Označeno jako odeslané ✓');
+                          // Refresh history
+                          try {
+                            const h = await echoApi.email.history(contact.id);
+                            setEmailHistory(Array.isArray(h?.emails) ? h.emails : []);
+                          } catch {
+                            // ignore
+                          }
+                        } catch {
+                          setEmailLogStatus('Nepodařilo se zalogovat e‑mail');
+                        }
+                      }}
+                    >
+                      ✅ Označit jako odeslané
+                    </button>
                     {contact?.email && (
                       <button
                         className="wrapup-email-mailto"
@@ -1002,9 +1126,21 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
                                   subject,
                                   body,
                                   bcc: bcc || undefined,
+                                  log: {
+                                    contactId: contact.id,
+                                    contactName: contact.name,
+                                    company: contact.company,
+                                    emailType: 'cold',
+                                  },
                                 });
                                 if (res?.ok && res.gmailUrl) {
                                   window.open(res.gmailUrl, '_blank', 'noopener,noreferrer');
+                                  try {
+                                    const h = await echoApi.email.history(contact.id);
+                                    setEmailHistory(Array.isArray(h?.emails) ? h.emails : []);
+                                  } catch {
+                                    // ignore
+                                  }
                                   return;
                                 }
                               }
@@ -1031,6 +1167,33 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
                   {settings.smartBccAddress && (
                     <div className="wrapup-email-hint muted">SmartBCC: {settings.smartBccAddress}</div>
                   )}
+                  {emailLogStatus && (
+                    <div className="wrapup-email-hint muted">{emailLogStatus}</div>
+                  )}
+                  {isSupabaseConfigured && contact?.id ? (
+                    emailHistoryLoading ? (
+                      <div className="wrapup-email-hint muted">Poslední e‑maily: ⏳ Načítám…</div>
+                    ) : emailHistory.length ? (
+                      <div className="wrapup-email-hint muted">
+                        <div>Poslední e‑maily:</div>
+                        <ul className="wrapup-ai-answers">
+                          {emailHistory.slice(0, 3).map((e: any) => {
+                            const when = e?.sent_at ? new Date(String(e.sent_at)).toLocaleDateString('cs-CZ') : '—';
+                            const type = String(e?.email_type || '');
+                            const typeLabel =
+                              type === 'cold' ? 'cold' :
+                              type === 'demo-followup' ? 'po demo' :
+                              type === 'sequence-d1' ? 'D+1' :
+                              type === 'sequence-d3' ? 'D+3' : type;
+                            const subj = e?.subject ? String(e.subject) : '—';
+                            return <li key={String(e?.id || `${when}-${type}-${subj}`)}>{when} · {typeLabel} · {subj}</li>;
+                          })}
+                        </ul>
+                      </div>
+                    ) : (
+                      <div className="wrapup-email-hint muted">Poslední e‑maily: —</div>
+                    )
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -1100,6 +1263,75 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
                 <div className={`wrapup-crm-msg ${crmResult.ok ? 'ok' : 'err'}`}>{crmResult.message}</div>
               ) : null}
             </div>
+
+            <div className="wrapup-email" style={{ marginTop: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={sequenceEnabled}
+                  disabled={!isSupabaseConfigured || sequenceBusy}
+                  onChange={async (e) => {
+                    if (!contact) return;
+                    const next = e.target.checked;
+                    setSequenceMsg(null);
+                    setSequenceBusy(true);
+                    try {
+                      if (!next) {
+                        await echoApi.emailSchedule.cancel({ contactId: contact.id });
+                        setSequenceEnabled(false);
+                        setSequenceSchedules([]);
+                        setSequenceMsg('Sekvence zrušena.');
+                        return;
+                      }
+
+                      if (!emailDraft.trim()) {
+                        setSequenceEnabled(false);
+                        setSequenceMsg('Nejdřív připrav follow‑up e‑mail (aby měl AI kontext).');
+                        return;
+                      }
+
+                      const lines = emailDraft.split('\n');
+                      const subjectLine = lines.find(l => l.startsWith('Předmět:'));
+                      const originalSubject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${contact.company} – krátký dotaz`;
+                      const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
+                      const originalBody = bodyLines.join('\n').trim();
+
+                      const d1 = computeSequenceIso(1);
+                      const d3 = computeSequenceIso(3);
+                      const baseContext = {
+                        sequenceKind: 'cold',
+                        contactName: contact.name,
+                        company: contact.company,
+                        recipientEmail: contact.email || '',
+                        bcc: settings.smartBccAddress || '',
+                        originalEmail: { subject: originalSubject, body: originalBody },
+                      };
+
+                      const res = await echoApi.emailSchedule.create({
+                        contactId: contact.id,
+                        schedules: [
+                          { emailType: 'sequence-d1', scheduledFor: d1, context: baseContext },
+                          { emailType: 'sequence-d3', scheduledFor: d3, context: baseContext },
+                        ],
+                      });
+                      if (!res?.ok) throw new Error(res?.error || 'Nepodařilo se naplánovat sekvenci');
+                      setSequenceEnabled(true);
+                      setSequenceSchedules(Array.isArray(res?.schedules) ? res.schedules : []);
+                      setSequenceMsg('Sekvence naplánována ✓');
+                    } catch (err) {
+                      setSequenceEnabled(false);
+                      setSequenceMsg(err instanceof Error ? err.message : 'Nepodařilo se naplánovat sekvenci');
+                    } finally {
+                      setSequenceBusy(false);
+                    }
+                  }}
+                />
+                <span style={{ fontWeight: 700 }}>Naplánovat follow‑up sekvenci</span>
+              </label>
+              <div className="wrapup-email-hint muted">→ D+1: krátký bump ({formatSequenceWhen(computeSequenceIso(1))})</div>
+              <div className="wrapup-email-hint muted">→ D+3: finální follow‑up ({formatSequenceWhen(computeSequenceIso(3))})</div>
+              {sequenceMsg ? <div className="wrapup-email-hint muted">{sequenceMsg}</div> : null}
+            </div>
           </div>
 
           <div className="wrapup-actions">
@@ -1138,13 +1370,10 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
   // ============ MAIN RENDER ============
   return (
     <div className="dialer-v2" data-testid="dialer-app">
-      {/* Minimal header */}
+      {/* Session header */}
       <header className="header-v2">
         <div className="header-v2-left">
-          <span className="logo-v2">D1</span>
-          {onSwitchMode && <button onClick={onSwitchMode} className="header-btn">→ MeetCoach</button>}
-          <button onClick={() => { window.location.hash = '#battlecards'; }} className="header-btn">🃏 Karty</button>
-          <button onClick={() => setShowSettings(true)} className="header-btn">⚙</button>
+          <button onClick={() => setShowSettings(true)} className="header-btn">⚙ Nastavení</button>
         </div>
 
         <div className="header-v2-stats">

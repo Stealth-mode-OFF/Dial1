@@ -1487,6 +1487,7 @@ app.use("*", async (c, next) => {
   if (c.req.method === "OPTIONS") return next();
   if (c.req.path.startsWith("/health")) return next();
   if (c.req.path.startsWith("/gmail/callback")) return next();
+  if (c.req.path.startsWith("/cron/")) return next();
 
   const userId = await resolveUserId(c);
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
@@ -1499,6 +1500,7 @@ app.use("*", async (c, next) => {
   if (c.req.method === "OPTIONS") return next();
   if (c.req.path.startsWith("/health")) return next();
   if (c.req.path.startsWith("/gmail/callback")) return next();
+  if (c.req.path.startsWith("/cron/")) return next();
 
   // Best-effort per-user+IP limiter. Use smaller budgets for expensive routes.
   const userId = getUserId(c);
@@ -4055,10 +4057,10 @@ app.post(`${BASE_PATH}/gmail/create-draft`, async (c) => {
   const subject = payload?.subject ? String(payload.subject).trim() : "";
   const bodyText = payload?.body ? String(payload.body) : "";
   const bcc = payload?.bcc ? String(payload.bcc).trim() : "";
-  if (!to || !subject) return c.json({ ok: false, error: "Missing to/subject" }, 400);
+  if (!to || !subject) return c.json({ ok: false, draftId: "", gmailUrl: "", error: "Missing to/subject" }, 400);
 
   const tokenInfo = await getValidGmailAccessToken(userId);
-  if (!tokenInfo) return c.json({ ok: false, error: "not_configured" }, 400);
+  if (!tokenInfo) return c.json({ ok: false, draftId: "", gmailUrl: "", error: "not_configured" }, 400);
 
   const rfc2822 = buildRfc2822Message({ to, subject, body: bodyText, bcc: bcc || undefined });
   const raw = base64UrlEncodeBytes(new TextEncoder().encode(rfc2822));
@@ -4091,7 +4093,7 @@ app.post(`${BASE_PATH}/gmail/create-draft`, async (c) => {
   const json = await res.json().catch(() => null);
   if (!res.ok) {
     const msg = json?.error?.message || json?.error || json?.message || `Gmail draft create failed (${res.status})`;
-    return c.json({ ok: false, error: msg }, 200);
+    return c.json({ ok: false, draftId: "", gmailUrl: "", error: msg }, 200);
   }
 
   const draftId = json?.id ? String(json.id) : "";
@@ -4100,7 +4102,389 @@ app.post(`${BASE_PATH}/gmail/create-draft`, async (c) => {
     ? `https://mail.google.com/mail/u/0/#drafts?compose=${encodeURIComponent(messageId)}`
     : `https://mail.google.com/mail/u/0/#drafts/${encodeURIComponent(draftId)}`;
 
+  // Best-effort: log to email history (non-blocking).
+  try {
+    const log = payload?.log && typeof payload.log === "object" ? payload.log : null;
+    const contactId = log?.contactId ? String(log.contactId).trim() : "";
+    const emailType = log?.emailType ? String(log.emailType).trim() : "";
+    if (contactId && emailType) {
+      const { admin } = requireAdmin(c);
+      if (admin) {
+        await admin.from("email_log").insert({
+          owner_user_id: userId,
+          contact_id: contactId,
+          contact_name: log?.contactName ? String(log.contactName) : null,
+          company: log?.company ? String(log.company) : null,
+          email_type: emailType,
+          subject,
+          body: bodyText,
+          recipient_email: to,
+          gmail_draft_id: draftId || null,
+          source: "gmail-draft",
+          sent_at: new Date().toISOString(),
+        });
+
+        if (emailType !== "cold" && emailType !== "demo-followup") {
+          await admin
+            .from("email_schedule")
+            .update({ status: "cancelled" })
+            .eq("owner_user_id", userId)
+            .eq("contact_id", contactId)
+            .in("status", ["pending", "draft-created"]);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("email_log insert failed (non-blocking):", e);
+  }
+
   return c.json({ ok: true, draftId, gmailUrl });
+});
+
+// --- EMAIL HISTORY ---
+app.post(`${BASE_PATH}/email/log`, async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json().catch(() => null);
+  const contactId = body?.contactId ? String(body.contactId).trim() : "";
+  const emailType = body?.emailType ? String(body.emailType).trim() : "";
+  if (!contactId || !emailType) return c.json({ ok: false, error: "Missing contactId/emailType" }, 400);
+
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const row = {
+    owner_user_id: userId,
+    contact_id: contactId,
+    contact_name: body?.contactName ? String(body.contactName) : null,
+    company: body?.company ? String(body.company) : null,
+    email_type: emailType,
+    subject: body?.subject ? String(body.subject) : null,
+    body: body?.body ? String(body.body) : null,
+    recipient_email: body?.recipientEmail ? String(body.recipientEmail) : null,
+    gmail_draft_id: body?.gmailDraftId ? String(body.gmailDraftId) : null,
+    source: body?.source ? String(body.source) : "manual",
+    sent_at: body?.sentAt ? String(body.sentAt) : new Date().toISOString(),
+  };
+
+  const { data, error: insertError } = await admin.from("email_log").insert(row).select("id").single();
+  if (insertError) return c.json({ ok: false, error: insertError.message }, 500);
+
+  // Auto-cancel any pending sequences for this contact (manual send overrides sequence).
+  const source = String(row.source || "manual");
+  const shouldCancelSequences =
+    source !== "auto-sequence" && emailType !== "cold" && emailType !== "demo-followup";
+  if (shouldCancelSequences) {
+    try {
+      await admin
+        .from("email_schedule")
+        .update({ status: "cancelled" })
+        .eq("owner_user_id", userId)
+        .eq("contact_id", contactId)
+        .in("status", ["pending", "draft-created"]);
+    } catch (e) {
+      console.error("email_schedule cancel failed (non-blocking):", e);
+    }
+  }
+
+  return c.json({ ok: true, id: data?.id });
+});
+
+app.get(`${BASE_PATH}/email/history`, async (c) => {
+  const userId = getUserId(c);
+  const contactId = (c.req.query("contact_id") || "").toString().trim();
+  if (!contactId) return c.json({ ok: false, error: "Missing contact_id" }, 400);
+
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const { data, error: qErr } = await admin
+    .from("email_log")
+    .select("id, email_type, subject, sent_at, source, gmail_draft_id, recipient_email")
+    .eq("owner_user_id", userId)
+    .eq("contact_id", contactId)
+    .order("sent_at", { ascending: false })
+    .limit(3);
+
+  if (qErr) return c.json({ ok: false, error: qErr.message }, 500);
+  return c.json({ ok: true, emails: data || [] });
+});
+
+// --- EMAIL SEQUENCING (D+1 / D+3) ---
+app.post(`${BASE_PATH}/email/schedule`, async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json().catch(() => null);
+  const contactId = body?.contactId ? String(body.contactId).trim() : "";
+  const schedules = Array.isArray(body?.schedules) ? body.schedules : [];
+  if (!contactId || schedules.length === 0) return c.json({ ok: false, error: "Missing contactId/schedules" }, 400);
+
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  // Avoid duplicates: cancel existing pending/draft-created sequence items for this contact.
+  await admin
+    .from("email_schedule")
+    .update({ status: "cancelled" })
+    .eq("owner_user_id", userId)
+    .eq("contact_id", contactId)
+    .in("status", ["pending", "draft-created"])
+    .like("email_type", "sequence-%");
+
+  const rows = schedules
+    .map((s: any) => ({
+      owner_user_id: userId,
+      contact_id: contactId,
+      email_type: s?.emailType ? String(s.emailType) : "",
+      scheduled_for: s?.scheduledFor ? String(s.scheduledFor) : "",
+      status: "pending",
+      context: s?.context ?? null,
+    }))
+    .filter((r: any) => r.email_type && r.scheduled_for);
+
+  if (rows.length === 0) return c.json({ ok: false, error: "No valid schedules" }, 400);
+
+  const { data, error: insErr } = await admin
+    .from("email_schedule")
+    .insert(rows)
+    .select("id, contact_id, email_type, scheduled_for, status, context, created_at");
+  if (insErr) return c.json({ ok: false, error: insErr.message }, 500);
+  return c.json({ ok: true, schedules: data || [] });
+});
+
+app.post(`${BASE_PATH}/email/schedule/cancel`, async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json().catch(() => null);
+  const scheduleId = body?.scheduleId ? String(body.scheduleId).trim() : "";
+  const contactId = body?.contactId ? String(body.contactId).trim() : "";
+  if (!scheduleId && !contactId) return c.json({ ok: false, error: "Missing scheduleId/contactId" }, 400);
+
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  let q = admin.from("email_schedule").update({ status: "cancelled" }).eq("owner_user_id", userId);
+  if (scheduleId) q = q.eq("id", scheduleId);
+  if (contactId) q = q.eq("contact_id", contactId);
+  const { error: updErr } = await q.in("status", ["pending", "draft-created"]);
+  if (updErr) return c.json({ ok: false, error: updErr.message }, 500);
+  return c.json({ ok: true });
+});
+
+app.get(`${BASE_PATH}/email/schedule/active`, async (c) => {
+  const userId = getUserId(c);
+  const contactId = (c.req.query("contact_id") || "").toString().trim();
+
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  let q = admin
+    .from("email_schedule")
+    .select("id, contact_id, email_type, scheduled_for, status, context, created_at")
+    .eq("owner_user_id", userId)
+    .in("status", ["pending", "draft-created"])
+    .order("scheduled_for", { ascending: true })
+    .limit(100);
+  if (contactId) q = q.eq("contact_id", contactId);
+  const { data, error: qErr } = await q;
+  if (qErr) return c.json({ ok: false, error: qErr.message }, 500);
+  return c.json({ ok: true, schedules: data || [] });
+});
+
+// --- CRON: process due scheduled emails (creates drafts, never sends) ---
+app.post(`${BASE_PATH}/cron/email-schedule/process`, async (c) => {
+  const secret = (Deno.env.get("CRON_SECRET") || "").toString().trim();
+  const provided = (c.req.header("x-cron-secret") || c.req.query("secret") || "").toString().trim();
+  if (!secret || provided !== secret) return c.json({ ok: false, error: "Unauthorized" }, 401);
+
+  const { admin, error } = requireAdmin(c);
+  if (error) return error;
+
+  const nowIso = new Date().toISOString();
+
+  const parseEmailContent = (content: string) => {
+    const lines = (content || "").split(/\r?\n/);
+    const subjectLine = lines.find((l) => l.trim().toLowerCase().startsWith("předmět:"));
+    const subject = subjectLine ? subjectLine.replace(/^\s*Předmět:\s*/i, "").trim() : "";
+    const body = lines.filter((l) => !l.trim().toLowerCase().startsWith("předmět:")).join("\n").trim();
+    return { subject, body };
+  };
+
+  const buildSequenceInstruction = (kind: string, type: string) => {
+    const k = (kind || "cold").toLowerCase();
+    const t = (type || "").toLowerCase();
+    if (k === "demo") {
+      if (t === "sequence-d1") return 'Krátký bump po demo: poděkuj a napiš, že jsi k dispozici pro otázky. Max 50 slov. Česky.';
+      return 'Finální follow-up po demo: přidej konkrétní value-add (case study / ROI / čísla). Max 100 slov. Česky.';
+    }
+    // cold
+    if (t === "sequence-d1") return 'Krátký bump e‑mail: navázat na původní cold e‑mail, slušně připomenout. Max 50 slov. Česky.';
+    return 'Finální follow‑up: navázat na původní cold e‑mail + přidat social proof nebo mini case study. Max 80 slov. Česky.';
+  };
+
+  const listRes = await admin
+    .from("email_schedule")
+    .select("id, owner_user_id, contact_id, email_type, scheduled_for, status, context, created_at")
+    .eq("status", "pending")
+    .lte("scheduled_for", nowIso)
+    .order("scheduled_for", { ascending: true })
+    .limit(25);
+
+  if (listRes.error) return c.json({ ok: false, error: listRes.error.message }, 500);
+  const due = Array.isArray(listRes.data) ? listRes.data : [];
+
+  const results: any[] = [];
+  for (const item of due) {
+    const scheduleId = String(item.id);
+    const ownerUserId = String(item.owner_user_id);
+    const contactId = String(item.contact_id);
+    const emailType = String(item.email_type || "");
+    const context = (item.context && typeof item.context === "object") ? item.context : {};
+
+    try {
+      // Guard: if a matching email was already logged after this schedule was created, cancel to avoid duplicates.
+      const existing = await admin
+        .from("email_log")
+        .select("id")
+        .eq("owner_user_id", ownerUserId)
+        .eq("contact_id", contactId)
+        .eq("email_type", emailType)
+        .gte("sent_at", item.created_at)
+        .limit(1);
+      if (existing.data && existing.data.length) {
+        await admin.from("email_schedule").update({ status: "cancelled" }).eq("id", scheduleId).eq("owner_user_id", ownerUserId);
+        results.push({ id: scheduleId, ok: true, skipped: "already_logged" });
+        continue;
+      }
+
+      const apiKey = await getOpenAiApiKeyForUser(ownerUserId);
+      if (!apiKey) {
+        await admin.from("email_schedule").update({ status: "cancelled", context: { ...context, error: "OpenAI not configured" } }).eq("id", scheduleId).eq("owner_user_id", ownerUserId);
+        results.push({ id: scheduleId, ok: false, error: "openai_not_configured" });
+        continue;
+      }
+
+      const contactName = context?.contactName ? String(context.contactName) : "";
+      const company = context?.company ? String(context.company) : "";
+      const recipientEmail = context?.recipientEmail ? String(context.recipientEmail) : "";
+      const bcc = context?.bcc ? String(context.bcc) : "";
+      const kind = context?.sequenceKind ? String(context.sequenceKind) : "cold";
+      const originalSubject = context?.originalEmail?.subject ? String(context.originalEmail.subject) : (context?.originalSubject ? String(context.originalSubject) : "");
+      const originalBody = context?.originalEmail?.body ? String(context.originalEmail.body) : (context?.originalBody ? String(context.originalBody) : "");
+
+      const instruction = buildSequenceInstruction(kind, emailType);
+      const system = [
+        "Jsi zkušený B2B obchodník. Piš česky. Nehalucinuj fakta o firmě.",
+        "Výstup musí být POUZE plaintext e‑mail.",
+        "První řádek vždy: \"Předmět: ...\"",
+        "Žádné markdown, žádné podpisové obrázky, žádné trackovací pixely.",
+      ].join("\n");
+
+      const user = [
+        `KONTAKT: ${contactName || "—"}`,
+        `FIRMA: ${company || "—"}`,
+        `TYP SEKQUENCE: ${kind}`,
+        `KROK: ${emailType}`,
+        "",
+        "PŮVODNÍ E‑MAIL:",
+        `Předmět: ${originalSubject || "—"}`,
+        originalBody || "—",
+        "",
+        `INSTRUKCE: ${instruction}`,
+      ].join("\n");
+
+      const openai = new OpenAI({ apiKey });
+      const completion = await openai.chat.completions.create({
+        model: Deno.env.get("EMAIL_SEQUENCE_MODEL") || "gpt-4o",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        temperature: 0.4,
+        max_tokens: 380,
+      });
+
+      const content = (completion.choices?.[0]?.message?.content || "").toString().trim();
+      if (!content) throw new Error("OpenAI returned empty content");
+
+      const parsed = parseEmailContent(content);
+      const subject = parsed.subject || `${company || "Follow‑up"} – krátká připomínka`;
+      const body = parsed.body || content;
+
+      let gmailDraftId: string | null = null;
+      let gmailUrl: string | null = null;
+
+      if (recipientEmail) {
+        const tokenInfo = await getValidGmailAccessToken(ownerUserId);
+        if (tokenInfo?.accessToken) {
+          const rfc2822 = buildRfc2822Message({ to: recipientEmail, subject, body, bcc: bcc || undefined });
+          const raw = base64UrlEncodeBytes(new TextEncoder().encode(rfc2822));
+          const draftRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${tokenInfo.accessToken}`, "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ message: { raw } }),
+          });
+          const draftJson = await draftRes.json().catch(() => null);
+          if (draftRes.ok) {
+            gmailDraftId = draftJson?.id ? String(draftJson.id) : null;
+            const messageId = draftJson?.message?.id ? String(draftJson.message.id) : "";
+            gmailUrl = messageId
+              ? `https://mail.google.com/mail/u/0/#drafts?compose=${encodeURIComponent(messageId)}`
+              : (gmailDraftId ? `https://mail.google.com/mail/u/0/#drafts/${encodeURIComponent(gmailDraftId)}` : null);
+          } else {
+            const msg = draftJson?.error?.message || draftJson?.error || draftJson?.message || `Gmail draft create failed (${draftRes.status})`;
+            console.error("Cron Gmail draft create failed:", msg);
+          }
+        }
+      }
+
+      const nextContext = {
+        ...(context || {}),
+        generated: {
+          generatedAt: nowIso,
+          content,
+          subject,
+          body,
+          gmailDraftId,
+          gmailUrl,
+        },
+      };
+
+      await admin
+        .from("email_schedule")
+        .update({ status: "draft-created", context: nextContext })
+        .eq("id", scheduleId)
+        .eq("owner_user_id", ownerUserId);
+
+      // Always log generated step so we can show history + prevent duplicates.
+      try {
+        await admin.from("email_log").insert({
+          owner_user_id: ownerUserId,
+          contact_id: contactId,
+          contact_name: contactName || null,
+          company: company || null,
+          email_type: emailType,
+          subject,
+          body,
+          recipient_email: recipientEmail || null,
+          gmail_draft_id: gmailDraftId,
+          source: "auto-sequence",
+          sent_at: nowIso,
+        });
+      } catch (e) {
+        console.error("Cron email_log insert failed (non-blocking):", e);
+      }
+
+      results.push({ id: scheduleId, ok: true, draft_created: Boolean(gmailDraftId) });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await admin
+        .from("email_schedule")
+        .update({ status: "cancelled", context: { ...(context || {}), error: msg, failedAt: nowIso } })
+        .eq("id", scheduleId)
+        .eq("owner_user_id", ownerUserId);
+      results.push({ id: scheduleId, ok: false, error: msg });
+    }
+  }
+
+  return c.json({ ok: true, processed: results.length, results });
 });
 
 // --- MEET LIVE TRANSCRIPT BRIDGE ---

@@ -12,10 +12,6 @@ import React, { useState, useMemo } from 'react';
 import { OBJECTION_CARDS, CATEGORY_LABELS, type ObjectionCategory } from '../data/objectionCards';
 import { BattleCardFlip } from '../components/BattleCardFlip';
 
-interface BattleCardsPageProps {
-  onBack?: () => void;
-}
-
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as ObjectionCategory[];
 
 // Only show categories that have at least one card
@@ -23,7 +19,7 @@ const usedCategories = ALL_CATEGORIES.filter((cat) =>
   OBJECTION_CARDS.some((c) => c.category === cat),
 );
 
-export const BattleCardsPage: React.FC<BattleCardsPageProps> = ({ onBack }) => {
+export const BattleCardsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<ObjectionCategory | null>(null);
 
@@ -53,28 +49,18 @@ export const BattleCardsPage: React.FC<BattleCardsPageProps> = ({ onBack }) => {
 
   return (
     <div className="bc-page">
-      {/* Header */}
-      <header className="bc-header">
-        <div className="bc-header-left">
-          {onBack && (
-            <button className="bc-back-btn" onClick={onBack}>
-              ← Zpět
-            </button>
-          )}
+      {/* Section header + Search + Filters */}
+      <div className="bc-controls">
+        <div className="bc-section-header">
           <div>
-            <h1 className="bc-page-title">🃏 Battle Cards</h1>
+            <h1 className="bc-page-title">Battle Cards</h1>
             <p className="bc-page-subtitle">Námitky klientů a funkční odpovědi</p>
           </div>
-        </div>
-        <div className="bc-header-right">
           <span className="bc-count">
-            {filteredCards.length} / {OBJECTION_CARDS.length} karet
+            {filteredCards.length} / {OBJECTION_CARDS.length}
           </span>
         </div>
-      </header>
 
-      {/* Search + Filters */}
-      <div className="bc-controls">
         <div className="bc-search-wrap">
           <span className="bc-search-icon">🔍</span>
           <input
