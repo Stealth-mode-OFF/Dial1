@@ -1,9 +1,10 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { Spinner } from './components/StatusIndicators';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import './dialer-v2.css';
 
 // Lazy load heavy components for better initial load
-const DialerApp = lazy(() => import('./DialerApp').then(m => ({ default: m.DialerApp })));
+const DialerApp = lazy(() => import('./DialerAppNew').then(m => ({ default: m.DialerApp })));
 const MeetCoachApp = lazy(() => import('./MeetCoachApp').then(m => ({ default: m.MeetCoachApp })));
 const DialPage = lazy(() => import('./pages/DialPage'));
 const MeetPage = lazy(() => import('./pages/MeetPage'));
@@ -84,7 +85,7 @@ export default function App() {
         ) : mode === 'meetcoach' ? (
           <MeetCoachApp onSwitchMode={() => switchMode('dialer')} currentMode="meetcoach" />
         ) : (
-          <DialerApp onSwitchMode={() => switchMode('meetcoach')} currentMode="dialer" />
+          <DialerApp onSwitchMode={() => switchMode('meetcoach')} />
         )}
       </Suspense>
     </ErrorBoundary>
