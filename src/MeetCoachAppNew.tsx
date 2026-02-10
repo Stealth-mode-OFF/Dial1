@@ -1261,7 +1261,7 @@ export const MeetCoachAppNew: React.FC = () => {
   }, [appPhase, liveCoachResponse?.tips?.length, spinOutput?.coach_whisper, spinPhase]);
   
   // Battlecard matching
-  const [cooldownByKey, setCooldownByKey] = useState<Record<string, number | undefined>>({});
+  const cooldownByKeyRef = useRef<Record<string, number | undefined>>({});
   
   useEffect(() => {
     if (captions.length === 0) return;
@@ -1278,7 +1278,7 @@ export const MeetCoachAppNew: React.FC = () => {
     const matches = pickTopMatches(feed, {
       windowMs: 40_000,
       now,
-      cooldownUntilByKey: cooldownByKey,
+      cooldownUntilByKey: cooldownByKeyRef.current,
       cards: battlecards,
     });
     
@@ -1287,16 +1287,16 @@ export const MeetCoachAppNew: React.FC = () => {
       if (matches.best.card.category === 'objection') {
         setObjectionCount((n) => n + 1);
       }
-      // Add cooldown for this card
-      setCooldownByKey(prev => ({
-        ...prev,
+      // Add cooldown for this card (ref, no re-render loop)
+      cooldownByKeyRef.current = {
+        ...cooldownByKeyRef.current,
         [matches.best!.card.key]: now + 60_000, // 60s cooldown
-      }));
+      };
       
       // Hide after 10s
       setTimeout(() => setMatchedCard(null), 10000);
     }
-  }, [battlecards, captions, cooldownByKey]);
+  }, [battlecards, captions]);
   
   // Keyboard shortcuts
   useEffect(() => {

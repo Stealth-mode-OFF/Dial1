@@ -812,123 +812,69 @@ export function DialerApp() {
 
       {/* Script */}
       <div className="script">
-        {aiScript?.openingVariants?.[0]?.text ? (
-          <div className="script-ai">
-            <div className="script-ai-title">AI scénář</div>
-            <div className="script-ai-block">
-              <div className="script-ai-label">Otevírací věta</div>
-              <p className="script-ai-quote">„{aiScript.openingVariants[0].text}“</p>
-            </div>
-            {(aiScript.objections || []).slice(0, 3).length ? (
-              <details className="script-ai-details">
-                <summary>Námitky (rychlý tahák)</summary>
-                <ul className="script-ai-list">
-                  {(aiScript.objections || []).slice(0, 3).map((o, idx) => (
-                    <li key={`${o.objection}-${idx}`}>
-                      <strong>{o.objection}</strong>
-                      <div className="script-ai-muted">{o.response}</div>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
+        <div className="script-ai">
+          <div className="script-ai-title">Skript hovoru</div>
+          <div className="script-ai-block">
+            <div className="script-ai-label">Otevírací věta</div>
+            <p className="script-ai-quote">„Dobrý den, tady Josef z Behavery. Řešíme lídrům, jako jste vy, aby jejich zaměstnanci byli více angažovaní…"</p>
           </div>
-        ) : null}
+        </div>
 
-        {aiScript?.qualification?.length ? (
-          <>
-            <p className="script-transition">Kvalifikační otázky</p>
-            {aiScript.qualification.slice(0, 3).map((q, idx) => (
-              <div key={`${q.question}-${idx}`} className="script-question">
-                <span className="script-q-num">{idx + 1}</span>
-                <div className="script-q-content">
-                  <p>{q.question}</p>
-                  <input
-                    value={aiQualAnswers[idx] || ''}
-                    onChange={(e) =>
-                      setAiQualAnswers((prev) => {
-                        const next = [...prev];
-                        next[idx] = e.target.value;
-                        return next;
-                      })
-                    }
-                    placeholder="Odpověď…"
-                  />
-                </div>
-              </div>
-            ))}
+        <p className="script-transition">Kvalifikační otázky</p>
 
-            <details className="script-fallback">
-              <summary>Původní otázky (volitelné)</summary>
+        <div className="script-question">
+          <span className="script-q-num">1</span>
+          <div className="script-q-content">
+            <p>…Naše řešení je nejvhodnější pro firmy od 50 do 500 zaměstnanců, kolik je vás?</p>
+            <input
+              value={aiQualAnswers[0] || ''}
+              onChange={(e) =>
+                setAiQualAnswers((prev) => {
+                  const next = [...prev];
+                  next[0] = e.target.value;
+                  return next;
+                })
+              }
+              placeholder="Odpověď…"
+            />
+          </div>
+        </div>
 
-              <p className="script-greeting">
-                „Dobrý den, <strong>{getSalutation(contact!.name)}</strong>, tady Josef Hofman z <strong>Behavery</strong>."
-              </p>
-              <p className="script-pitch">
-                Pomáháme CEO a vedoucím ve firmách podobného typu, aby <strong>včas viděli, kde se týmy začínají přetěžovat nebo ztrácet motivaci</strong>, aniž by museli dělat další HR procesy.
-              </p>
-              <p className="script-transition">Můžu se jen rychle zeptat…</p>
+        <div className="script-question">
+          <span className="script-q-num">2</span>
+          <div className="script-q-content">
+            <p>Zjišťujete pravidelně jaká je nálada ve vašich týmech?</p>
+            <input
+              value={aiQualAnswers[1] || ''}
+              onChange={(e) =>
+                setAiQualAnswers((prev) => {
+                  const next = [...prev];
+                  next[1] = e.target.value;
+                  return next;
+                })
+              }
+              placeholder="Odpověď…"
+            />
+          </div>
+        </div>
 
-              <div className="script-question">
-                <span className="script-q-num">A</span>
-                <div className="script-q-content">
-                  <p>Kolik je vás dnes přibližně ve firmě?</p>
-                  <input value={companySize} onChange={e => setCompanySize(e.target.value)} placeholder="např. 120 lidí" />
-                </div>
-              </div>
-
-              <div className="script-question">
-                <span className="script-q-num">B</span>
-                <div className="script-q-content">
-                  <p>Zjišťujete nějak pravidelně náladu nebo spokojenost týmů?</p>
-                  <input value={engagement} onChange={e => setEngagement(e.target.value)} placeholder="Ano / Ne / Jak?" />
-                </div>
-              </div>
-
-              <div className="script-question">
-                <span className="script-q-num">C</span>
-                <div className="script-q-content">
-                  <p>Jak často se k vám dostane informace o problému až pozdě?</p>
-                  <input value={lateInfo} onChange={e => setLateInfo(e.target.value)} placeholder="Stává se / Občas / Ne" />
-                </div>
-              </div>
-            </details>
-          </>
-        ) : (
-          <>
-            <p className="script-greeting">
-              „Dobrý den, <strong>{getSalutation(contact!.name)}</strong>, tady Josef Hofman z <strong>Behavery</strong>."
-            </p>
-            <p className="script-pitch">
-              Pomáháme CEO a vedoucím ve firmách podobného typu, aby <strong>včas viděli, kde se týmy začínají přetěžovat nebo ztrácet motivaci</strong>, aniž by museli dělat další HR procesy.
-            </p>
-            <p className="script-transition">Můžu se jen rychle zeptat…</p>
-
-            <div className="script-question">
-              <span className="script-q-num">1</span>
-              <div className="script-q-content">
-                <p>Kolik je vás dnes přibližně ve firmě?</p>
-                <input value={companySize} onChange={e => setCompanySize(e.target.value)} placeholder="např. 120 lidí" />
-              </div>
-            </div>
-
-            <div className="script-question">
-              <span className="script-q-num">2</span>
-              <div className="script-q-content">
-                <p>Zjišťujete nějak pravidelně náladu nebo spokojenost týmů?</p>
-                <input value={engagement} onChange={e => setEngagement(e.target.value)} placeholder="Ano / Ne / Jak?" />
-              </div>
-            </div>
-
-            <div className="script-question">
-              <span className="script-q-num">3</span>
-              <div className="script-q-content">
-                <p>Jak často se k vám dostane informace o problému až pozdě?</p>
-                <input value={lateInfo} onChange={e => setLateInfo(e.target.value)} placeholder="Stává se / Občas / Ne" />
-              </div>
-            </div>
-          </>
-        )}
+        <div className="script-question">
+          <span className="script-q-num">3</span>
+          <div className="script-q-content">
+            <p>Je třeba přizvat někoho dalšího pro případné rozhodnutí?</p>
+            <input
+              value={aiQualAnswers[2] || ''}
+              onChange={(e) =>
+                setAiQualAnswers((prev) => {
+                  const next = [...prev];
+                  next[2] = e.target.value;
+                  return next;
+                })
+              }
+              placeholder="Odpověď…"
+            />
+          </div>
+        </div>
 
         <div className="script-notes">
           <label>Poznámky</label>
@@ -939,6 +885,97 @@ export function DialerApp() {
             rows={3}
           />
         </div>
+
+        {/* Pipedrive akce */}
+        <div className="script-actions" style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+          <button
+            className="btn-end btn-end-done"
+            style={{ flex: 1, minWidth: 140 }}
+            disabled={crmSaving}
+            onClick={async () => {
+              if (!contact) return;
+              setCrmSaving(true);
+              setCrmResult(null);
+              try {
+                let personId: number | undefined;
+                try {
+                  const ctx = await echoApi.precall.context({
+                    contact_id: contact.id,
+                    include: [],
+                    ttl_hours: 24,
+                    timeline: { activities: 0, notes: 0, deals: 0 },
+                  });
+                  personId = ctx?.pipedrive?.person_id ?? undefined;
+                } catch { personId = undefined; }
+
+                const lines: string[] = [];
+                lines.push(`<b>📞 Hovor</b> – Echo Pulse`);
+                lines.push(`Klient: <b>${contact.name}</b> (${contact.title || '—'}) – <b>${contact.company}</b>`);
+                lines.push(`Délka: <b>${formatTime(callDuration)}</b>`);
+                const qa = aiQualAnswers.filter(Boolean).slice(0, 3).map((a) => `• ${a}`).join(' ');
+                if (qa) lines.push(`Kvalifikace: ${qa}`);
+                if (notes?.trim()) lines.push(`Poznámky: ${notes.trim()}`);
+                const content = lines.join('<br>');
+
+                const res = await echoApi.addPipedriveNote({ personId, orgId: contact.orgId, content });
+                setCrmResult({ ok: Boolean(res?.success), message: res?.success ? '✅ Poznámka uložena.' : 'Nepodařilo se uložit.' });
+              } catch (e) {
+                setCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Uložení selhalo' });
+              } finally { setCrmSaving(false); }
+            }}
+          >
+            {crmSaving ? '⏳ Ukládám…' : '💾 Uložit poznámku do Pipedrive'}
+          </button>
+
+          <button
+            className="btn-end btn-end-done"
+            style={{ flex: 1, minWidth: 140, background: '#22c55e' }}
+            onClick={async () => {
+              if (!contact) return;
+              try {
+                await echoApi.logCall({
+                  contactId: contact.id,
+                  contactName: contact.name,
+                  companyName: contact.company,
+                  disposition: 'connected',
+                  notes: notes || 'Dovoláno',
+                  duration: callDuration,
+                });
+                setCrmResult({ ok: true, message: '✅ Logováno: Dovoláno' });
+              } catch (e) {
+                setCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Log selhal' });
+              }
+            }}
+          >
+            ✅ Dovolal se
+          </button>
+
+          <button
+            className="btn-end btn-end-skip"
+            style={{ flex: 1, minWidth: 140 }}
+            onClick={async () => {
+              if (!contact) return;
+              try {
+                await echoApi.logCall({
+                  contactId: contact.id,
+                  contactName: contact.name,
+                  companyName: contact.company,
+                  disposition: 'no-answer',
+                  notes: 'Nedovoláno',
+                  duration: callDuration,
+                });
+                setCrmResult({ ok: true, message: '📵 Logováno: Nedovoláno' });
+              } catch (e) {
+                setCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Log selhal' });
+              }
+            }}
+          >
+            📵 Nedovolal se
+          </button>
+        </div>
+        {crmResult ? (
+          <div className={`wrapup-crm-msg ${crmResult.ok ? 'ok' : 'err'}`} style={{ marginTop: 8 }}>{crmResult.message}</div>
+        ) : null}
       </div>
 
       {/* Floating whisper */}

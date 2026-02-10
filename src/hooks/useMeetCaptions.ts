@@ -5,7 +5,7 @@
  * Returns caption lines and connection status.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export interface CaptionLine {
   id: string;
@@ -34,12 +34,19 @@ export function useMeetCaptions(): MeetCaptionsState {
   const [lines, setLines] = useState<CaptionLine[]>([]);
   const [lastCaptionAt, setLastCaptionAt] = useState<number | null>(null);
   const [bridgeReadyAt, setBridgeReadyAt] = useState<number | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
   
   const recentIdsRef = useRef<Set<string>>(new Set());
+  const lastCaptionAtRef = useRef<number | null>(null);
   
-  // Connection status: connected if we got a caption in last 10s
-  const now = Date.now();
-  const isConnected = lastCaptionAt !== null && (now - lastCaptionAt) <= 10_000;
+  // Periodically re-evaluate connection liveness (every 3s)
+  useEffect(() => {
+    const tick = setInterval(() => {
+      const ts = lastCaptionAtRef.current;
+      setIsConnected(ts !== null && (Date.now() - ts) <= 10_000);
+    }, 3000);
+    return () => clearInterval(tick);
+  }, []);
   
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -73,7 +80,10 @@ export function useMeetCaptions(): MeetCaptionsState {
           recentIdsRef.current = new Set(arr.slice(-50));
         }
         
-        setLastCaptionAt(Date.now());
+        const captionTime = Date.now();
+        lastCaptionAtRef.current = captionTime;
+        setLastCaptionAt(captionTime);
+        setIsConnected(true);
         setLines(prev => {
           const newLine: CaptionLine = { id, ts, text, speaker };
           const cutoff = Date.now() - 90_000; // Keep 90s of captions

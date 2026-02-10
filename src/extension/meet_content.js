@@ -177,6 +177,10 @@
           '[aria-live]',
           // Fallback heuristics: Meet sometimes nests captions in log-like containers.
           '[role="region"][aria-label*="captions" i]',
+          '[role="region"][aria-label*="titulky" i]',
+          '[data-is-persistent-button]',
+          // Modern Meet (2025+): caption region near bottom of viewport
+          'div[jscontroller] > div[aria-live]',
         ].join(','),
       )
       .forEach((el) => {
