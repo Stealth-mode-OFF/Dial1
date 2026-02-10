@@ -326,7 +326,7 @@ const FloatingWhisper: React.FC<{ whisper: Whisper | null }> = ({ whisper }) => 
   );
 };
 
-// Captions Bar (LIVE phase bottom)
+// Captions Bar (LIVE phase bottom) – kept for fallback, main display moved to LiveCaptionsPanel
 const CaptionsBar: React.FC<{
   captions: CaptionLine[];
   matchedCard: Battlecard | null;
@@ -351,6 +351,157 @@ const CaptionsBar: React.FC<{
         <div className="mc-captions-card">
           <span className="mc-captions-card-label">💡 {matchedCard.title}</span>
           <span className="mc-captions-card-text">{matchedCard.primary}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ============ NEW LIVE SIDEBAR COMPONENTS ============ */
+
+// Company brief for live sidebar
+const LiveBriefPanel: React.FC<{ lead: Lead }> = ({ lead }) => (
+  <div className="mc-sidebar-section">
+    <div className="mc-sidebar-heading">🏢 Firma & kontakt</div>
+    <div className="mc-sidebar-brief">
+      <div className="mc-brief-row">
+        <span className="mc-brief-label">Firma</span>
+        <span className="mc-brief-value">{lead.company}</span>
+      </div>
+      <div className="mc-brief-row">
+        <span className="mc-brief-label">Kontakt</span>
+        <span className="mc-brief-value">{lead.name}</span>
+      </div>
+      <div className="mc-brief-row">
+        <span className="mc-brief-label">Role</span>
+        <span className="mc-brief-value">{lead.role}</span>
+      </div>
+      {lead.industry && (
+        <div className="mc-brief-row">
+          <span className="mc-brief-label">Obor</span>
+          <span className="mc-brief-value">{lead.industry}</span>
+        </div>
+      )}
+      {lead.companySize && (
+        <div className="mc-brief-row">
+          <span className="mc-brief-label">Velikost</span>
+          <span className="mc-brief-value">{lead.companySize} zaměstnanců</span>
+        </div>
+      )}
+      {lead.notes && (
+        <div className="mc-brief-notes">{lead.notes}</div>
+      )}
+    </div>
+  </div>
+);
+
+// Phase questions list for live sidebar
+const PhaseQuestionsList: React.FC<{
+  script: ScriptBlock[];
+  currentPhase: SPINPhase;
+  currentBlockIndex: number;
+  onJump: (index: number) => void;
+}> = ({ script, currentPhase, currentBlockIndex, onJump }) => {
+  const phaseInfo = SPIN_PHASES.find(p => p.id === currentPhase)!;
+  const phaseBlocks = script
+    .map((b, i) => ({ block: b, globalIndex: i }))
+    .filter(({ block }) => block.phase === currentPhase);
+
+  return (
+    <div className="mc-sidebar-section">
+      <div className="mc-sidebar-heading" style={{ color: phaseInfo.color }}>
+        {phaseInfo.icon} {phaseInfo.name} — otázky ({phaseBlocks.length})
+      </div>
+      <ul className="mc-phase-questions">
+        {phaseBlocks.map(({ block, globalIndex }) => (
+          <li
+            key={globalIndex}
+            className={`mc-phase-q ${globalIndex === currentBlockIndex ? 'mc-phase-q--active' : ''} ${block.type !== 'question' ? 'mc-phase-q--tip' : ''}`}
+            onClick={() => onJump(globalIndex)}
+          >
+            <span className="mc-phase-q-marker">
+              {globalIndex === currentBlockIndex ? '▸' : block.type === 'question' ? '○' : '·'}
+            </span>
+            <span className="mc-phase-q-text">{block.text}</span>
+            {block.type !== 'question' && <span className="mc-phase-q-badge">{block.type === 'tip' ? 'tip' : '→'}</span>}
+          </li>
+        ))}
+        {phaseBlocks.length === 0 && (
+          <li className="mc-phase-q mc-phase-q--empty">Žádné otázky pro tuto fázi</li>
+        )}
+      </ul>
+    </div>
+  );
+};
+
+// Google Meet connection guide
+const MeetConnectGuide: React.FC<{ isConnected: boolean }> = ({ isConnected }) => (
+  <div className="mc-sidebar-section">
+    <div className="mc-sidebar-heading">📡 Google Meet</div>
+    {isConnected ? (
+      <div className="mc-meet-status mc-meet-status--ok">
+        <span className="mc-captions-dot connected" /> Připojeno — titulky běží
+      </div>
+    ) : (
+      <div className="mc-meet-guide">
+        <div className="mc-meet-status mc-meet-status--waiting">
+          <span className="mc-captions-dot" /> Čekám na připojení
+        </div>
+        <ol className="mc-meet-steps">
+          <li>Otevři <strong>Google Meet</strong> v tomto prohlížeči</li>
+          <li>Zapni <strong>titulky</strong> (CC tlačítko)</li>
+          <li>Nainstaluj rozšíření <a href="https://chromewebstore.google.com" target="_blank" rel="noopener noreferrer">Echo Meet Coach</a></li>
+          <li>Titulky se zobrazí automaticky</li>
+        </ol>
+      </div>
+    )}
+  </div>
+);
+
+// Live captions transcript panel (scrollable)
+const LiveCaptionsPanel: React.FC<{
+  captions: CaptionLine[];
+  isConnected: boolean;
+  matchedCard: Battlecard | null;
+}> = ({ captions, isConnected, matchedCard }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [captions.length]);
+
+  return (
+    <div className="mc-live-captions-panel">
+      <div className="mc-live-captions-header">
+        <span className={`mc-captions-dot ${isConnected ? 'connected' : ''}`} />
+        <span className="mc-live-captions-title">{isConnected ? 'Živý přepis' : 'Čekám na titulky z Google Meet'}</span>
+        <span className="mc-live-captions-count">{captions.length} zpráv</span>
+      </div>
+      <div className="mc-live-captions-scroll" ref={scrollRef}>
+        {captions.length === 0 ? (
+          <div className="mc-live-captions-empty">
+            {isConnected
+              ? 'Začněte mluvit — přepis se objeví zde...'
+              : 'Připojte Google Meet s titulky pro živý přepis hovoru.'}
+          </div>
+        ) : (
+          captions.map((c) => (
+            <div key={c.id} className="mc-live-caption-line">
+              <span className="mc-live-caption-speaker">{c.speaker || '—'}</span>
+              <span className="mc-live-caption-text">{c.text}</span>
+            </div>
+          ))
+        )}
+      </div>
+      {matchedCard && (
+        <div className="mc-live-battlecard">
+          <div className="mc-live-battlecard-label">💡 {matchedCard.title}</div>
+          <div className="mc-live-battlecard-primary">{matchedCard.primary}</div>
+          {matchedCard.alt_1 && (
+            <div className="mc-live-battlecard-secondary">{matchedCard.alt_1}</div>
+          )}
         </div>
       )}
     </div>
@@ -1238,6 +1389,15 @@ export const MeetCoachAppNew: React.FC = () => {
   // Get current block
   const currentBlock = script[currentBlockIndex];
 
+  // Phase-filtered blocks for sidebar
+  const jumpToBlock = useCallback((idx: number) => {
+    setCurrentBlockIndex(idx);
+    const block = script[idx];
+    if (block && block.phase !== spinPhase) {
+      changePhase(block.phase);
+    }
+  }, [script, spinPhase, changePhase]);
+
   const aiSuggestion = useMemo(() => {
     const confidence = Number(spinOutput?.confidence ?? 0);
     const sayNext = (spinOutput?.say_next || '').toString().trim();
@@ -1376,26 +1536,43 @@ export const MeetCoachAppNew: React.FC = () => {
               AI koučink není dostupný. {liveCoachError ? `LiveCoach: ${liveCoachError}` : ''}{spinError ? ` SPIN: ${spinError}` : ''}
             </div>
           ) : null}
-          
-          {currentBlock && (
-            <ScriptCard
-              block={currentBlock}
-              currentIndex={currentBlockIndex}
-              totalBlocks={script.length}
-              onNext={nextBlock}
-              onPrev={prevBlock}
-              aiSuggestion={aiSuggestion}
-              risk={riskText}
-            />
-          )}
+
+          <div className="mc-live-body">
+            {/* LEFT SIDEBAR */}
+            <aside className="mc-live-sidebar">
+              <LiveBriefPanel lead={lead} />
+              <PhaseQuestionsList
+                script={script}
+                currentPhase={spinPhase}
+                currentBlockIndex={currentBlockIndex}
+                onJump={jumpToBlock}
+              />
+              <MeetConnectGuide isConnected={isConnected} />
+            </aside>
+
+            {/* MAIN CONTENT */}
+            <div className="mc-live-main">
+              {currentBlock && (
+                <ScriptCard
+                  block={currentBlock}
+                  currentIndex={currentBlockIndex}
+                  totalBlocks={script.length}
+                  onNext={nextBlock}
+                  onPrev={prevBlock}
+                  aiSuggestion={aiSuggestion}
+                  risk={riskText}
+                />
+              )}
+
+              <LiveCaptionsPanel
+                captions={captions}
+                isConnected={isConnected}
+                matchedCard={matchedCard}
+              />
+            </div>
+          </div>
           
           <FloatingWhisper whisper={currentWhisper} />
-          
-          <CaptionsBar
-            captions={captions}
-            matchedCard={matchedCard}
-            isConnected={isConnected}
-          />
         </div>
       )}
       

@@ -156,6 +156,320 @@
   overflow: hidden;
 }
 
+/* LIVE body: sidebar + main */
+.mc-live-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .mc-live-body {
+    grid-template-columns: 1fr;
+  }
+  .mc-live-sidebar {
+    display: none;
+  }
+}
+
+/* ---- SIDEBAR ---- */
+.mc-live-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-right: 3px solid var(--border);
+  background: var(--surface);
+  overflow-y: auto;
+  padding: 0;
+}
+
+.mc-sidebar-section {
+  padding: var(--space-4);
+  border-bottom: 2px solid var(--border-light, #e5e5e5);
+}
+
+.mc-sidebar-section:last-child {
+  border-bottom: none;
+}
+
+.mc-sidebar-heading {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+}
+
+/* Brief panel */
+.mc-sidebar-brief {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mc-brief-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 13px;
+}
+
+.mc-brief-label {
+  color: var(--text-muted);
+  font-weight: 600;
+  flex-shrink: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mc-brief-value {
+  font-weight: 700;
+  color: var(--text);
+  text-align: right;
+}
+
+.mc-brief-notes {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* Phase questions list */
+.mc-phase-questions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mc-phase-q {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.mc-phase-q:hover {
+  background: var(--bg);
+}
+
+.mc-phase-q--active {
+  background: var(--neo-yellow);
+  font-weight: 700;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.mc-phase-q--tip {
+  opacity: 0.65;
+  font-style: italic;
+}
+
+.mc-phase-q--empty {
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: default;
+}
+
+.mc-phase-q-marker {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.mc-phase-q--active .mc-phase-q-marker {
+  color: var(--text);
+}
+
+.mc-phase-q-text {
+  flex: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.mc-phase-q-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--neo-lavender);
+  border: 1px solid var(--border);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Google Meet guide */
+.mc-meet-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mc-meet-status--ok {
+  background: var(--success-light, #d1fae5);
+  color: var(--success, #059669);
+}
+
+.mc-meet-status--waiting {
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.mc-meet-guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mc-meet-steps {
+  margin: 0;
+  padding: 0 0 0 20px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.mc-meet-steps li {
+  margin-bottom: var(--space-1);
+}
+
+.mc-meet-steps a {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+/* ---- MAIN CONTENT ---- */
+.mc-live-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---- LIVE CAPTIONS PANEL ---- */
+.mc-live-captions-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-top: 2px solid var(--border);
+  min-height: 150px;
+}
+
+.mc-live-captions-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-light, #e5e5e5);
+  flex-shrink: 0;
+}
+
+.mc-live-captions-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  flex: 1;
+}
+
+.mc-live-captions-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-feature-settings: 'tnum';
+}
+
+.mc-live-captions-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg);
+}
+
+.mc-live-captions-empty {
+  padding: var(--space-4);
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.mc-live-caption-line {
+  display: flex;
+  gap: var(--space-2);
+  padding: 3px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  animation: caption-fade 0.3s ease-out;
+}
+
+.mc-live-caption-speaker {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--primary);
+  min-width: 60px;
+}
+
+.mc-live-caption-text {
+  color: var(--text);
+}
+
+@keyframes caption-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Live battlecard (bottom of captions) */
+.mc-live-battlecard {
+  padding: var(--space-3) var(--space-4);
+  background: var(--neo-yellow);
+  border-top: 3px solid var(--border);
+  animation: card-in 0.3s ease-out;
+}
+
+.mc-live-battlecard-label {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: var(--space-1);
+}
+
+.mc-live-battlecard-primary {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.mc-live-battlecard-secondary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: var(--space-1);
+  line-height: 1.4;
+}
+
 /* SPIN Progress Bar */
 .mc-spin-bar {
   display: flex;
@@ -239,13 +553,12 @@
 
 /* Script Card (main content) */
 .mc-script-card {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  max-width: 720px;
-  width: 92%;
-  margin: auto;
-  padding: var(--space-6);
+  max-width: 100%;
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  flex-shrink: 0;
 }
 
 .mc-script-header {
@@ -327,7 +640,7 @@
 }
 
 .mc-script-text {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.35;
   color: var(--text);
@@ -336,7 +649,7 @@
 
 @media (min-width: 768px) {
   .mc-script-text {
-    font-size: 36px;
+    font-size: 26px;
   }
 }
 
