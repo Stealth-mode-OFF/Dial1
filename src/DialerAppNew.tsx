@@ -694,10 +694,10 @@ export function DialerApp() {
         </div>
 
         {!isSupabaseConfigured ? (
-          <div className="prep-ai-note">AI není nakonfigurovaná (Supabase). Otevři Nastavení a doplň klíče.</div>
+          <div className="prep-ai-note">Nastav Supabase klíče v ⚙ Nastavení — AI příprava se pak spustí automaticky.</div>
         ) : briefError ? (
           <div className="prep-ai-error">
-            <div className="prep-ai-error-title">Nepodařilo se vygenerovat přípravu</div>
+            <div className="prep-ai-error-title">Přípravu se nepodařilo načíst</div>
             <div className="prep-ai-error-msg">{briefError}</div>
           </div>
         ) : briefLoading ? (
@@ -710,80 +710,82 @@ export function DialerApp() {
           </div>
         ) : brief ? (
           <div className="prep-ai-content">
-            <div className="prep-ai-row">
-              <div className="prep-ai-card">
-                <div className="prep-ai-card-title">Firma</div>
-                <div className="prep-ai-text">
-                  <div className="prep-ai-company">{brief.company?.name || contact!.company}</div>
-                  <div className="prep-ai-muted">{brief.company?.industry || 'Obor neznámý'}</div>
-                  <div className="prep-ai-sub">{brief.company?.summary || '—'}</div>
+            {/* ── Kontext: firma + osoba v jednom kompaktním bloku ── */}
+            <div className="prep-section">
+              <div className="prep-ctx-row">
+                <span className="prep-ctx-icon">🏢</span>
+                <div className="prep-ctx-body">
+                  <strong>{brief.company?.name || contact!.company}</strong>
+                  {brief.company?.industry ? <span className="prep-ctx-dot"> · {brief.company.industry}</span> : null}
+                  {brief.company?.summary ? <p className="prep-ctx-summary">{brief.company.summary}</p> : null}
                 </div>
               </div>
-              <div className="prep-ai-card">
-                <div className="prep-ai-card-title">Osoba</div>
-                <div className="prep-ai-text">
+              <div className="prep-ctx-row">
+                <span className="prep-ctx-icon">👤</span>
+                <div className="prep-ctx-body">
                   <strong>{brief.person?.name || contact!.name}</strong>
-                  <div className="prep-ai-muted">{brief.person?.role || contact!.title || '—'}</div>
-                  {brief.person?.background ? <div className="prep-ai-sub">{brief.person.background}</div> : null}
+                  <span className="prep-ctx-dot"> · {brief.person?.role || contact!.title || 'role neznámá'}</span>
+                  {brief.person?.background ? <p className="prep-ctx-summary">{brief.person.background}</p> : null}
                 </div>
               </div>
             </div>
 
-            <div className="prep-ai-row">
-              <div className="prep-ai-card">
-                <div className="prep-ai-card-title">Signály</div>
-                <ul className="prep-ai-list">
-                  {(brief.signals || []).slice(0, 5).map((s, idx) => (
-                    <li key={`${s.type}-${idx}`}>{s.text}</li>
-                  ))}
-                  {(brief.signals || []).length === 0 ? <li>—</li> : null}
-                </ul>
+            {/* ── Signály + Rizika (chipy v jednom řádku) ── */}
+            {((brief.signals || []).length > 0 || (brief.landmines || []).length > 0) && (
+              <div className="prep-chips-row">
+                {(brief.signals || []).slice(0, 4).map((s, idx) => (
+                  <span key={`sig-${idx}`} className={`prep-chip prep-chip--${s.type}`}>
+                    {s.type === 'opportunity' ? '🟢' : s.type === 'risk' ? '🔴' : '⚪'} {s.text}
+                  </span>
+                ))}
+                {(brief.landmines || []).slice(0, 3).map((t, idx) => (
+                  <span key={`lm-${idx}`} className="prep-chip prep-chip--landmine">⚠️ {t}</span>
+                ))}
               </div>
-              <div className="prep-ai-card">
-                <div className="prep-ai-card-title">Landminy</div>
-                <ul className="prep-ai-list">
-                  {(brief.landmines || []).slice(0, 5).map((t, idx) => (
-                    <li key={`${t}-${idx}`}>{t}</li>
-                  ))}
-                  {(brief.landmines || []).length === 0 ? <li>—</li> : null}
-                </ul>
-              </div>
-            </div>
+            )}
 
+            {/* ── Scénář hovoru (rozbalovací sekce) ── */}
             {aiScript ? (
-              <div className="prep-ai-card">
-                <div className="prep-ai-card-title">Scénář (AI)</div>
-                <div className="prep-ai-text">
-                  <div className="prep-ai-subtitle">Otevírací věta</div>
-                  <div className="prep-ai-quote">„{aiScript.openingVariants?.[0]?.text || '—'}“</div>
-                  <div className="prep-ai-subtitle">Kvalifikace</div>
-                  <ol className="prep-ai-ol">
-                    {(aiScript.qualification || []).slice(0, 4).map((q, idx) => (
-                      <li key={`${q.question}-${idx}`}>
-                        <div className="prep-ai-q">{q.question}</div>
-                        <div className="prep-ai-muted">{q.why}</div>
-                      </li>
-                    ))}
-                    {(aiScript.qualification || []).length === 0 ? <li>—</li> : null}
-                  </ol>
-                  <details className="prep-ai-details">
-                    <summary>Námitky a reakce</summary>
-                    <ul className="prep-ai-list">
-                      {(aiScript.objections || []).slice(0, 6).map((o, idx) => (
-                        <li key={`${o.objection}-${idx}`}>
-                          <div className="prep-ai-q"><strong>{o.objection}</strong></div>
-                          <div className="prep-ai-sub">{o.response}</div>
+              <div className="prep-script">
+                <details className="prep-details" open>
+                  <summary className="prep-details-sum">📞 Jak začít hovor</summary>
+                  <div className="prep-details-body">
+                    <div className="prep-ai-quote">„{aiScript.openingVariants?.[0]?.text || '—'}"</div>
+                  </div>
+                </details>
+
+                <details className="prep-details">
+                  <summary className="prep-details-sum">🎯 Kvalifikační otázky <span className="prep-count">{(aiScript.qualification || []).length}</span></summary>
+                  <div className="prep-details-body">
+                    <ol className="prep-ai-ol">
+                      {(aiScript.qualification || []).slice(0, 4).map((q, idx) => (
+                        <li key={`q-${idx}`}>
+                          <div className="prep-ai-q">{q.question}</div>
+                          <div className="prep-ai-why">{q.why}</div>
                         </li>
                       ))}
-                      {(aiScript.objections || []).length === 0 ? <li>—</li> : null}
-                    </ul>
-                  </details>
-                </div>
+                    </ol>
+                  </div>
+                </details>
+
+                <details className="prep-details">
+                  <summary className="prep-details-sum">🛡️ Námitky a jak na ně <span className="prep-count">{(aiScript.objections || []).length}</span></summary>
+                  <div className="prep-details-body">
+                    <div className="prep-objections">
+                      {(aiScript.objections || []).slice(0, 6).map((o, idx) => (
+                        <div key={`obj-${idx}`} className="prep-objection">
+                          <div className="prep-objection-q">„{o.objection}"</div>
+                          <div className="prep-objection-a">→ {o.response}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </details>
               </div>
             ) : null}
           </div>
         ) : (
-          <div className="prep-ai-note">Zadej doménu a AI vygeneruje přípravu + scénář (cache 30 minut).</div>
+          <div className="prep-ai-note">Zadej doménu firmy — AI připraví scénář hovoru na míru.</div>
         )}
       </div>
 

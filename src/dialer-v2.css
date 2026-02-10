@@ -545,91 +545,208 @@ body {
   margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
-.prep-ai-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
+/* ── Context row: firma / osoba ── */
+.prep-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-@media (min-width: 860px) {
-  .prep-ai-row {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.prep-ai-card {
-  padding: 14px;
-  background: var(--surface);
+.prep-ctx-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg);
   border: 2px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-neo-sm);
 }
 
-.prep-ai-card-title {
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-  margin-bottom: 8px;
+.prep-ctx-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  line-height: 1.4;
 }
 
-.prep-ai-company {
-  font-size: 14px;
-  font-weight: 900;
-  margin-bottom: 2px;
-}
-
-.prep-ai-text {
+.prep-ctx-body {
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
-.prep-ai-muted {
+.prep-ctx-body strong {
+  font-weight: 800;
+}
+
+.prep-ctx-dot {
   color: var(--text-muted);
 }
 
-.prep-ai-sub {
-  margin-top: 8px;
-  color: var(--text);
+.prep-ctx-summary {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
-.prep-ai-subtitle {
-  margin-top: 10px;
-  font-size: 12px;
-  font-weight: 900;
+/* ── Signal / Landmine chips ── */
+.prep-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prep-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prep-chip--opportunity { background: var(--success-light); }
+.prep-chip--risk { background: var(--danger-light); }
+.prep-chip--neutral { background: var(--gray-100); }
+.prep-chip--landmine { background: #fff7ed; color: var(--amber-600); }
+
+/* ── Script details (accordion) ── */
+.prep-script {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prep-details {
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.prep-details + .prep-details {
+  margin-top: -2px;
+}
+
+.prep-details-sum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  background: var(--surface);
+  user-select: none;
+  list-style: none;
+}
+
+.prep-details-sum::-webkit-details-marker { display: none; }
+
+.prep-details-sum::before {
+  content: '▸';
+  font-size: 11px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.prep-details[open] > .prep-details-sum::before {
+  transform: rotate(90deg);
+}
+
+.prep-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--neo-yellow);
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  margin-left: auto;
+}
+
+.prep-details-body {
+  padding: 8px 14px 14px;
+  border-top: 2px solid var(--border);
+  background: var(--bg);
 }
 
 .prep-ai-quote {
-  margin-top: 6px;
   padding: 10px 12px;
   background: var(--neo-lavender);
   border: 2px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-neo-sm);
   font-weight: 700;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-.prep-ai-list,
 .prep-ai-ol {
-  margin: 8px 0 0;
-  padding-left: 18px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.prep-ai-ol li {
+  margin-bottom: 10px;
+}
+
+.prep-ai-ol li:last-child {
+  margin-bottom: 0;
 }
 
 .prep-ai-q {
-  font-weight: 800;
+  font-weight: 700;
+  font-size: 13px;
 }
 
-.prep-ai-details {
-  margin-top: 10px;
+.prep-ai-why {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
-.prep-ai-details summary {
-  cursor: pointer;
-  font-weight: 800;
+/* ── Objections ── */
+.prep-objections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prep-objection {
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.prep-objection-q {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.prep-objection-a {
+  font-size: 12px;
+  color: var(--text);
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.prep-ai-muted {
+  color: var(--text-muted);
 }
 
 /* ============ PHASE: CALLING ============ */

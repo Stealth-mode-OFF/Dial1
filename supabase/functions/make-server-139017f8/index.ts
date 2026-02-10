@@ -3400,8 +3400,11 @@ app.post(`${BASE_PATH}/ai/brief`, async (c) => {
 
   const openai = new OpenAI({ apiKey });
   const system = `You are an expert B2B sales intelligence analyst for the Czech market.
-  IMPORTANT: All string values in the JSON MUST be in Czech (except domains/URLs and fixed enum values).
-  Output ONLY valid JSON.`;
+RULES:
+- All string values MUST be in Czech (except domains, URLs, and fixed enum values).
+- Use natural, professional Czech — no corporate jargon.
+- Keep signal and landmine texts concise (max 15 words each).
+- Output ONLY valid JSON.`;
   const prompt = {
     task: "Create a structured company+person brief for a sales call.",
     domain,
@@ -3409,10 +3412,10 @@ app.post(`${BASE_PATH}/ai/brief`, async (c) => {
     role: role || "Unknown",
     notes: notes || "",
     schema: {
-      company: { name: "string", industry: "string", size: "string?", website: "string?", summary: "string (2-3 sentences)", recentNews: "string? (1 sentence if found)" },
-      person: { name: "string", role: "string", linkedin: "string?", background: "string? (1-2 sentences)", decisionPower: "'decision-maker' | 'influencer' | 'champion' | 'unknown'" },
-      signals: "[{ type: 'opportunity'|'risk'|'neutral', text: 'string' }] (2-4 items)",
-      landmines: "string[] (1-3 things to avoid in the call)",
+      company: { name: "string", industry: "string (in Czech)", size: "string?", website: "string?", summary: "string (2-3 sentences, natural Czech)", recentNews: "string? (1 sentence if found)" },
+      person: { name: "string (full name as given)", role: "string (in Czech)", linkedin: "string?", background: "string? (1-2 sentences, natural Czech)", decisionPower: "'decision-maker' | 'influencer' | 'champion' | 'unknown'" },
+      signals: "[{ type: 'opportunity'|'risk'|'neutral', text: 'string (concise, Czech, max 15 words)' }] (2-4 items)",
+      landmines: "string[] (1-3 things to avoid — short, practical Czech phrases)",
       sources: "string[] (where you inferred info from)",
     },
   };
@@ -3465,17 +3468,24 @@ app.post(`${BASE_PATH}/ai/call-script`, async (c) => {
 
   const openai = new OpenAI({ apiKey });
   const system = `You are an expert B2B cold call scriptwriter for the Czech market.
-  IMPORTANT: All string values in the JSON MUST be in Czech.
-  Output ONLY valid JSON.`;
+RULES:
+- All output text MUST be in Czech.
+- Address the prospect by LAST NAME with "pane/paní" (e.g. "pane Nováku", "paní Svobodová" — properly declined in 5th case / vokativ).
+- Never use first names — this is formal B2B in Czechia.
+- Use natural, human wording — NO corporate jargon, NO buzzwords. Write as a real salesperson would speak.
+- Keep sentences short and conversational, as if spoken aloud on a phone call.
+- Decline all Czech names and nouns correctly (cases / pády).
+- Output ONLY valid JSON.`;
   const prompt = {
     task: "Create a personalized call script to qualify the lead and book a demo.",
     brief,
     goal: goal || "Book a 20-minute Echo Pulse demo",
+    style: "Natural spoken Czech, formal but warm. Like a real human calling, not a robot. Short sentences.",
     schema: {
-      openingVariants: "[{ id: 'o1', text: 'string' }] (2-3 variants)",
+      openingVariants: "[{ id: 'o1', text: 'string (address by pane/paní + příjmení in vokativu)' }] (2-3 variants)",
       valueProps: "[{ persona: 'string', points: ['string'] }] (2-3 personas)",
-      qualification: "[{ question: 'string', why: 'string' }] (3-4 items)",
-      objections: "[{ objection: 'string', response: 'string' }] (4-6 items)",
+      qualification: "[{ question: 'string (natural spoken question)', why: 'string (internal note for salesperson — not to be read aloud)' }] (3-4 items)",
+      objections: "[{ objection: 'string (what prospect says)', response: 'string (natural comeback, address by příjmení)' }] (4-6 items)",
       closeVariants: "[{ id: 'c1', text: 'string' }] (2-3 variants)",
       nextSteps: "string[] (2-3 items)",
     },
