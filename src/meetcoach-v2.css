@@ -340,6 +340,46 @@
   }
 }
 
+/* ---- Tip / Transition differentiation ---- */
+.mc-script-main--tip {
+  background: var(--neo-lavender);
+  border-style: dashed;
+}
+
+.mc-tip-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 4px 12px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: var(--shadow-neo-sm);
+  margin-bottom: var(--space-3);
+  color: var(--text);
+}
+
+.mc-tip-badge em {
+  font-style: italic;
+  font-weight: 600;
+  text-transform: none;
+}
+
+.mc-script-text--tip {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+@media (min-width: 768px) {
+  .mc-script-text--tip {
+    font-size: 26px;
+  }
+}
+
 .mc-script-followup {
   margin: var(--space-4) 0 0;
   font-size: 16px;
@@ -500,27 +540,33 @@
 
 .mc-captions-card {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  background: var(--neo-green);
-  border: 2px solid var(--border);
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--neo-yellow);
+  border: 3px solid var(--border);
   border-radius: var(--radius);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  max-width: 300px;
+  max-width: 480px;
+  box-shadow: var(--shadow-neo-sm);
   animation: card-in 0.3s ease-out;
 }
 
 .mc-captions-card-label {
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 14px;
   flex-shrink: 0;
 }
 
 .mc-captions-card-text {
-  white-space: nowrap;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: normal;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 
 @keyframes card-in {

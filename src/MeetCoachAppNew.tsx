@@ -286,9 +286,12 @@ const ScriptCard: React.FC<{
           <span className="mc-script-counter">{currentIndex + 1} / {totalBlocks}</span>
         </div>
       </div>
-      <div className="mc-script-main">
+      <div className={`mc-script-main ${block.type !== 'question' ? 'mc-script-main--tip' : ''}`}>
+        {block.type !== 'question' && (
+          <div className="mc-tip-badge">🧠 {block.type === 'tip' ? 'Tip pro tebe' : 'Přechod'} — <em>nečti nahlas</em></div>
+        )}
         {aiSuggestion ? <div className="mc-ai-suggest-label">{aiSuggestion.label}</div> : null}
-        <p className="mc-script-text">{primaryText}</p>
+        <p className={`mc-script-text ${block.type !== 'question' ? 'mc-script-text--tip' : ''}`}>{primaryText}</p>
         {aiSuggestion ? (
           <p className="mc-script-followup">
             <span className="mc-script-followup-label">Plán:</span> {block.text}
