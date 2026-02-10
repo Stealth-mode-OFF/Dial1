@@ -16,6 +16,7 @@ import { BATTLECARDS, type Battlecard } from './meetcoach/battlecards';
 import { pickTopMatches, type FeedLine } from './meetcoach/engine';
 import { useLiveCoach } from './hooks/useLiveCoach';
 import { useDynamicBattlecards } from './hooks/useDynamicBattlecards';
+import { useBrief } from './hooks/useBrief';
 import { TranscriptInput, AnalysisResult } from './components/TranscriptAnalyzer';
 import type { TranscriptAnalysisResult } from './utils/echoApi';
 import type { Brief, SpinPhase as SpinPhaseLetter } from './types/contracts';
@@ -359,39 +360,79 @@ const CaptionsBar: React.FC<{
 
 /* ============ NEW LIVE SIDEBAR COMPONENTS ============ */
 
-// Company brief for live sidebar
-const LiveBriefPanel: React.FC<{ lead: Lead }> = ({ lead }) => (
+// Company brief for live sidebar – uses real Brief data when available
+const LiveBriefPanel: React.FC<{ lead: Lead; brief: Brief | null }> = ({ lead, brief }) => (
   <div className="mc-sidebar-section">
     <div className="mc-sidebar-heading">🏢 Firma & kontakt</div>
     <div className="mc-sidebar-brief">
       <div className="mc-brief-row">
         <span className="mc-brief-label">Firma</span>
-        <span className="mc-brief-value">{lead.company}</span>
+        <span className="mc-brief-value">{brief?.company?.name || lead.company}</span>
       </div>
       <div className="mc-brief-row">
         <span className="mc-brief-label">Kontakt</span>
-        <span className="mc-brief-value">{lead.name}</span>
+        <span className="mc-brief-value">{brief?.person?.name || lead.name}</span>
       </div>
       <div className="mc-brief-row">
         <span className="mc-brief-label">Role</span>
-        <span className="mc-brief-value">{lead.role}</span>
+        <span className="mc-brief-value">{brief?.person?.role || lead.role}</span>
       </div>
-      {lead.industry && (
+      {(brief?.company?.industry || lead.industry) && (
         <div className="mc-brief-row">
           <span className="mc-brief-label">Obor</span>
-          <span className="mc-brief-value">{lead.industry}</span>
+          <span className="mc-brief-value">{brief?.company?.industry || lead.industry}</span>
         </div>
       )}
-      {lead.companySize && (
+      {(brief?.company?.size || lead.companySize) && (
         <div className="mc-brief-row">
           <span className="mc-brief-label">Velikost</span>
-          <span className="mc-brief-value">{lead.companySize} zaměstnanců</span>
+          <span className="mc-brief-value">{brief?.company?.size || `${lead.companySize} zaměstnanců`}</span>
         </div>
       )}
-      {lead.notes && (
-        <div className="mc-brief-notes">{lead.notes}</div>
+      {brief?.person?.decisionPower && brief.person.decisionPower !== 'unknown' && (
+        <div className="mc-brief-row">
+          <span className="mc-brief-label">Typ</span>
+          <span className="mc-brief-value">
+            {brief.person.decisionPower === 'decision-maker' ? '🔑 Rozhodovatel' : brief.person.decisionPower === 'influencer' ? '💡 Influencer' : '🏅 Champion'}
+          </span>
+        </div>
       )}
+      {(brief?.company?.summary || lead.notes) && (
+        <div className="mc-brief-notes">{brief?.company?.summary || lead.notes}</div>
+      )}
+      {brief?.company?.recentNews && (
+        <div className="mc-brief-notes">📰 {brief.company.recentNews}</div>
+      )}
+      {brief?.person?.background && (
+        <div className="mc-brief-notes">👤 {brief.person.background}</div>
+      )}
+      {/* Quick links */}
+      <div className="mc-brief-links">
+        {brief?.company?.website ? (
+          <a href={brief.company.website.startsWith('http') ? brief.company.website : `https://${brief.company.website}`} target="_blank" rel="noopener noreferrer" className="mc-brief-link">🌐 Web</a>
+        ) : null}
+        {brief?.person?.linkedin ? (
+          <a href={brief.person.linkedin} target="_blank" rel="noopener noreferrer" className="mc-brief-link">💼 LinkedIn</a>
+        ) : null}
+        {lead.email ? (
+          <a href={`mailto:${lead.email}`} className="mc-brief-link">✉️ E-mail</a>
+        ) : null}
+      </div>
     </div>
+
+    {/* Signals & landmines */}
+    {brief && ((brief.signals || []).length > 0 || (brief.landmines || []).length > 0) && (
+      <div className="mc-brief-signals">
+        {(brief.signals || []).slice(0, 4).map((s, idx) => (
+          <span key={`sig-${idx}`} className={`mc-brief-chip mc-brief-chip--${s.type}`}>
+            {s.type === 'opportunity' ? '🟢' : s.type === 'risk' ? '🔴' : '⚪'} {s.text}
+          </span>
+        ))}
+        {(brief.landmines || []).slice(0, 3).map((t, idx) => (
+          <span key={`lm-${idx}`} className="mc-brief-chip mc-brief-chip--landmine">⚠️ {t}</span>
+        ))}
+      </div>
+    )}
   </div>
 );
 
@@ -960,8 +1001,12 @@ export const MeetCoachAppNew: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
 
+  // Brief from AI (real company data for Meet)
+  const { brief: aiBrief, loading: briefLoading, error: briefError, generate: generateBrief } = useBrief();
+  const [meetDomain, setMeetDomain] = useState('');
+
   const coachBrief: Brief = useMemo(
-    () => ({
+    () => aiBrief ? { ...aiBrief } : ({
       company: {
         name: lead.company,
         industry: lead.industry || 'Neznámý obor',
@@ -979,7 +1024,7 @@ export const MeetCoachAppNew: React.FC = () => {
       generatedAt: new Date().toISOString(),
       cached: true,
     }),
-    [lead.company, lead.industry, lead.name, lead.notes, lead.role],
+    [aiBrief, lead.company, lead.industry, lead.name, lead.notes, lead.role],
   );
   
   // SPIN tracking
@@ -1518,6 +1563,35 @@ export const MeetCoachAppNew: React.FC = () => {
       {appPhase === 'prep' && (
         <div className="mc-prep">
           <LeadHero lead={lead} onStart={startDemo} isLoading={isLoading} />
+          {/* Domain input for AI brief generation */}
+          <div className="mc-prep-brief">
+            <div className="mc-prep-domain">
+              <label htmlFor="meet-domain">🌐 Web firmy (doména pro AI přípravu)</label>
+              <div className="mc-prep-domain-row">
+                <input
+                  id="meet-domain"
+                  value={meetDomain}
+                  onChange={(e) => setMeetDomain(e.target.value.trim().toLowerCase())}
+                  placeholder="např. techcorp.cz"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+                <button
+                  className="mc-prep-domain-btn"
+                  onClick={() => {
+                    if (!meetDomain) return;
+                    generateBrief({ domain: meetDomain, personName: lead.name, role: lead.role, notes: lead.notes || '' });
+                  }}
+                  disabled={!meetDomain || briefLoading}
+                >
+                  {briefLoading ? '⏳' : '🔍 Načíst info'}
+                </button>
+              </div>
+              {briefError && <div className="mc-prep-domain-error">{briefError}</div>}
+              {aiBrief && !briefLoading && <div className="mc-prep-domain-ok">✅ Brief načten — firma, osoba, signály, LinkedIn</div>}
+            </div>
+          </div>
         </div>
       )}
       
@@ -1540,7 +1614,7 @@ export const MeetCoachAppNew: React.FC = () => {
           <div className="mc-live-body">
             {/* LEFT SIDEBAR */}
             <aside className="mc-live-sidebar">
-              <LiveBriefPanel lead={lead} />
+              <LiveBriefPanel lead={lead} brief={coachBrief} />
               <PhaseQuestionsList
                 script={script}
                 currentPhase={spinPhase}

@@ -710,14 +710,16 @@ export function DialerApp() {
           </div>
         ) : brief ? (
           <div className="prep-ai-content">
-            {/* ── Kontext: firma + osoba v jednom kompaktním bloku ── */}
+            {/* ── Kontext: firma + osoba ── */}
             <div className="prep-section">
               <div className="prep-ctx-row">
                 <span className="prep-ctx-icon">🏢</span>
                 <div className="prep-ctx-body">
                   <strong>{brief.company?.name || contact!.company}</strong>
                   {brief.company?.industry ? <span className="prep-ctx-dot"> · {brief.company.industry}</span> : null}
+                  {brief.company?.size ? <span className="prep-ctx-dot"> · {brief.company.size}</span> : null}
                   {brief.company?.summary ? <p className="prep-ctx-summary">{brief.company.summary}</p> : null}
+                  {brief.company?.recentNews ? <p className="prep-ctx-summary">📰 {brief.company.recentNews}</p> : null}
                 </div>
               </div>
               <div className="prep-ctx-row">
@@ -725,12 +727,29 @@ export function DialerApp() {
                 <div className="prep-ctx-body">
                   <strong>{brief.person?.name || contact!.name}</strong>
                   <span className="prep-ctx-dot"> · {brief.person?.role || contact!.title || 'role neznámá'}</span>
+                  {brief.person?.decisionPower && brief.person.decisionPower !== 'unknown' ? (
+                    <span className="prep-ctx-dot"> · {brief.person.decisionPower === 'decision-maker' ? '🔑 Rozhodovatel' : brief.person.decisionPower === 'influencer' ? '💡 Influencer' : '🏅 Champion'}</span>
+                  ) : null}
                   {brief.person?.background ? <p className="prep-ctx-summary">{brief.person.background}</p> : null}
                 </div>
               </div>
+              {/* Quick links */}
+              <div className="prep-links-row">
+                {brief.company?.website ? (
+                  <a href={brief.company.website.startsWith('http') ? brief.company.website : `https://${brief.company.website}`} target="_blank" rel="noopener noreferrer" className="prep-link">🌐 Web</a>
+                ) : companyDomain ? (
+                  <a href={`https://${companyDomain}`} target="_blank" rel="noopener noreferrer" className="prep-link">🌐 Web</a>
+                ) : null}
+                {brief.person?.linkedin ? (
+                  <a href={brief.person.linkedin} target="_blank" rel="noopener noreferrer" className="prep-link">💼 LinkedIn</a>
+                ) : null}
+                {contact!.email ? (
+                  <a href={`mailto:${contact!.email}`} className="prep-link">✉️ {contact!.email}</a>
+                ) : null}
+              </div>
             </div>
 
-            {/* ── Signály + Rizika (chipy v jednom řádku) ── */}
+            {/* ── Signály (jen pokud existují) ── */}
             {((brief.signals || []).length > 0 || (brief.landmines || []).length > 0) && (
               <div className="prep-chips-row">
                 {(brief.signals || []).slice(0, 4).map((s, idx) => (
@@ -744,41 +763,13 @@ export function DialerApp() {
               </div>
             )}
 
-            {/* ── Scénář hovoru (rozbalovací sekce) ── */}
-            {aiScript ? (
+            {/* ── Jen otevírací věta (cold call = jednoduchý) ── */}
+            {aiScript?.openingVariants?.[0]?.text ? (
               <div className="prep-script">
                 <details className="prep-details" open>
                   <summary className="prep-details-sum">📞 Jak začít hovor</summary>
                   <div className="prep-details-body">
-                    <div className="prep-ai-quote">„{aiScript.openingVariants?.[0]?.text || '—'}"</div>
-                  </div>
-                </details>
-
-                <details className="prep-details">
-                  <summary className="prep-details-sum">🎯 Kvalifikační otázky <span className="prep-count">{(aiScript.qualification || []).length}</span></summary>
-                  <div className="prep-details-body">
-                    <ol className="prep-ai-ol">
-                      {(aiScript.qualification || []).slice(0, 4).map((q, idx) => (
-                        <li key={`q-${idx}`}>
-                          <div className="prep-ai-q">{q.question}</div>
-                          <div className="prep-ai-why">{q.why}</div>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                </details>
-
-                <details className="prep-details">
-                  <summary className="prep-details-sum">🛡️ Námitky a jak na ně <span className="prep-count">{(aiScript.objections || []).length}</span></summary>
-                  <div className="prep-details-body">
-                    <div className="prep-objections">
-                      {(aiScript.objections || []).slice(0, 6).map((o, idx) => (
-                        <div key={`obj-${idx}`} className="prep-objection">
-                          <div className="prep-objection-q">„{o.objection}"</div>
-                          <div className="prep-objection-a">→ {o.response}</div>
-                        </div>
-                      ))}
-                    </div>
+                    <div className="prep-ai-quote">„{aiScript.openingVariants[0].text}"</div>
                   </div>
                 </details>
               </div>

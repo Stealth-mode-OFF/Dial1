@@ -599,6 +599,40 @@ body {
   line-height: 1.4;
 }
 
+/* ── Quick links row (web, linkedin, email) ── */
+.prep-links-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.prep-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: none;
+  box-shadow: var(--shadow-neo-sm);
+  transition: all var(--transition);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prep-link:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-neo);
+  background: var(--neo-lavender);
+}
+
 /* ── Signal / Landmine chips ── */
 .prep-chips-row {
   display: flex;
