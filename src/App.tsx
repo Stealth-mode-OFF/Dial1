@@ -3,6 +3,7 @@ import { Spinner } from './components/StatusIndicators';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './dialer-v2.css';
 import './transcript-analyzer.css';
+import './battlecards.css';
 
 // Lazy load heavy components for better initial load
 const DialerApp = lazy(() => import('./DialerAppNew').then(m => ({ default: m.DialerApp })));
@@ -10,8 +11,9 @@ const MeetCoachApp = lazy(() => import('./MeetCoachAppNew').then(m => ({ default
 const DialPage = lazy(() => import('./pages/DialPage'));
 const MeetPage = lazy(() => import('./pages/MeetPage'));
 const AnalysisDashboard = lazy(() => import('./components/TranscriptAnalyzer').then(m => ({ default: m.AnalysisDashboard })));
+const BattleCardsPage = lazy(() => import('./pages/BattleCardsPage').then(m => ({ default: m.BattleCardsPage })));
 
-type AppMode = 'dialer' | 'meetcoach' | 'dial' | 'meet' | 'analyze';
+type AppMode = 'dialer' | 'meetcoach' | 'dial' | 'meet' | 'analyze' | 'battlecards';
 
 // Loading fallback component
 function AppLoader() {
@@ -43,6 +45,7 @@ export default function App() {
       dial: '#dial',
       meet: '#meet-page',
       analyze: '#analyze',
+      battlecards: '#battlecards',
     };
     window.location.hash = hashMap[newMode] || '#dialer';
   };
@@ -69,6 +72,8 @@ export default function App() {
         setMode('meet');
       } else if (hash === '#analyze') {
         setMode('analyze');
+      } else if (hash === '#battlecards') {
+        setMode('battlecards');
       } else if (hash === '#dialer' || hash === '' || hash === '#') {
         setMode('dialer');
       }
@@ -88,8 +93,8 @@ export default function App() {
         ) : mode === 'meet' ? (
           <MeetPage onSwitchMode={() => switchMode('dial')} />
         ) : mode === 'analyze' ? (
-          <AnalysisDashboard />
-        ) : mode === 'meetcoach' ? (
+          <AnalysisDashboard />        ) : mode === 'battlecards' ? (
+          <BattleCardsPage onBack={() => switchMode('dialer')} />        ) : mode === 'meetcoach' ? (
           <MeetCoachApp />
         ) : (
           <DialerApp onSwitchMode={() => switchMode('meetcoach')} />

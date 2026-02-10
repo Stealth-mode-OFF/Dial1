@@ -1122,6 +1122,7 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
         <div className="header-v2-left">
           <span className="logo-v2">D1</span>
           {onSwitchMode && <button onClick={onSwitchMode} className="header-btn">→ MeetCoach</button>}
+          <button onClick={() => { window.location.hash = '#battlecards'; }} className="header-btn">🃏 Karty</button>
           <button onClick={() => setShowSettings(true)} className="header-btn">⚙</button>
         </div>
 

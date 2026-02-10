@@ -1,0 +1,463 @@
+/* ============================================
+   BATTLE CARDS – Neobrutalist Flip Cards
+   Matches Dial1 v2 design system
+   ============================================ */
+
+/* ============ PAGE LAYOUT ============ */
+.bc-page {
+  min-height: 100vh;
+  background: var(--bg, #f5f0e8);
+  padding: 0 0 48px;
+}
+
+.bc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 2px solid var(--border, #1a1a1a);
+  background: var(--surface, #fff);
+}
+
+.bc-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bc-back-btn {
+  padding: 8px 14px;
+  background: var(--surface, #fff);
+  border: 2px solid var(--border, #1a1a1a);
+  border-radius: var(--radius, 8px);
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: var(--shadow-neo-sm, 2px 2px 0 #1a1a1a);
+  transition: transform 0.1s;
+}
+.bc-back-btn:hover {
+  transform: translate(-1px, -1px);
+}
+.bc-back-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+
+.bc-page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+}
+
+.bc-page-subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-muted, #737373);
+}
+
+.bc-header-right {
+  display: flex;
+  align-items: center;
+}
+
+.bc-count {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted, #737373);
+  background: var(--neo-yellow, #fef08a);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 2px solid var(--border, #1a1a1a);
+}
+
+/* ============ SEARCH + FILTERS ============ */
+.bc-controls {
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bc-search-wrap {
+  position: relative;
+  max-width: 480px;
+}
+
+.bc-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.bc-search-input {
+  width: 100%;
+  padding: 10px 36px 10px 36px;
+  border: 2px solid var(--border, #1a1a1a);
+  border-radius: var(--radius, 8px);
+  font-size: 14px;
+  font-family: var(--font, sans-serif);
+  background: var(--surface, #fff);
+  box-shadow: var(--shadow-neo-sm, 2px 2px 0 #1a1a1a);
+  outline: none;
+  transition: box-shadow 0.15s;
+}
+.bc-search-input:focus {
+  box-shadow: 4px 4px 0 var(--primary, #3b82f6);
+}
+.bc-search-input::placeholder {
+  color: var(--text-muted, #737373);
+}
+
+.bc-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-muted, #737373);
+  padding: 4px;
+}
+
+.bc-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bc-chip {
+  padding: 6px 12px;
+  border: 2px solid var(--border, #1a1a1a);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font, sans-serif);
+  background: var(--surface, #fff);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.bc-chip:hover {
+  background: var(--neo-yellow, #fef08a);
+}
+.bc-chip-active {
+  background: var(--border, #1a1a1a);
+  color: #fff;
+  box-shadow: var(--shadow-neo-sm, 2px 2px 0 #1a1a1a);
+}
+.bc-chip-active:hover {
+  background: var(--border, #1a1a1a);
+  opacity: 0.9;
+}
+
+/* ============ GRID ============ */
+.bc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+  padding: 0 24px;
+}
+
+/* ============ EMPTY STATE ============ */
+.bc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  gap: 12px;
+  color: var(--text-muted, #737373);
+}
+
+.bc-empty-icon {
+  font-size: 36px;
+}
+
+.bc-empty p {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ============ FLIP CARD ============ */
+.bc-flip-container {
+  perspective: 1000px;
+  height: 260px;
+  cursor: pointer;
+  outline: none;
+}
+.bc-flip-container:focus-visible {
+  outline: 3px solid var(--primary, #3b82f6);
+  outline-offset: 4px;
+  border-radius: var(--radius, 8px);
+}
+
+.bc-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.22s ease;
+  transform-style: preserve-3d;
+}
+
+.bc-flipped .bc-flip-inner {
+  transform: rotateY(180deg);
+}
+
+/* When flipped, expand to fit content */
+.bc-flipped {
+  height: auto;
+  min-height: 260px;
+}
+
+.bc-face {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border: 2px solid var(--border, #1a1a1a);
+  border-radius: var(--radius-lg, 14px);
+  background: var(--surface, #fff);
+  box-shadow: var(--shadow-neo, 4px 4px 0 #1a1a1a);
+  overflow: hidden;
+}
+
+/* ============ FRONT FACE ============ */
+.bc-front {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  gap: 12px;
+}
+
+.bc-category-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--cat-color, #6b7280);
+  background: color-mix(in srgb, var(--cat-color, #6b7280) 12%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--cat-color, #6b7280) 30%, transparent);
+  align-self: flex-start;
+}
+
+.bc-category-badge-sm {
+  font-size: 10px;
+  padding: 3px 8px;
+}
+
+.bc-front-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: -0.3px;
+}
+
+.bc-front-says {
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text-muted, #737373);
+  line-height: 1.4;
+}
+
+.bc-flip-hint {
+  margin-top: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted, #737373);
+  opacity: 0.6;
+}
+
+/* ============ BACK FACE ============ */
+.bc-back {
+  transform: rotateY(180deg);
+  cursor: default;
+}
+
+/* When flipped, back is positioned normally to allow scrolling */
+.bc-flipped .bc-back {
+  position: relative;
+  height: auto;
+  min-height: 260px;
+}
+.bc-flipped .bc-front {
+  display: none;
+}
+
+.bc-back-scroll {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bc-back-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bc-close-btn {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--border, #1a1a1a);
+  border-radius: 50%;
+  background: var(--surface, #fff);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-neo-sm, 2px 2px 0 #1a1a1a);
+  transition: transform 0.1s;
+}
+.bc-close-btn:hover {
+  background: var(--danger, #ef4444);
+  color: #fff;
+}
+
+.bc-back-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+}
+
+/* ============ SECTIONS ============ */
+.bc-section {
+  padding: 10px 12px;
+  border-radius: var(--radius, 8px);
+  background: #fafaf8;
+  border: 1px solid #e5e5e0;
+}
+
+.bc-section-mistake {
+  background: #fff5f5;
+  border-color: #fecaca;
+}
+
+.bc-section-response {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.bc-section-direction {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.bc-section-label {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  color: var(--text-muted, #737373);
+}
+
+.bc-section-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.bc-section-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.bc-direction-text {
+  font-weight: 600;
+}
+
+.bc-response-list {
+  margin: 0;
+  padding: 0 0 0 16px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.bc-response-list li {
+  margin-bottom: 4px;
+}
+.bc-response-list li:last-child {
+  margin-bottom: 0;
+}
+
+/* ============ COPY BUTTON ============ */
+.bc-copy-btn {
+  padding: 4px 10px;
+  border: 1.5px solid var(--border, #1a1a1a);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--font, sans-serif);
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.bc-copy-btn:hover {
+  background: var(--neo-yellow, #fef08a);
+  box-shadow: var(--shadow-neo-sm, 2px 2px 0 #1a1a1a);
+}
+.bc-copy-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 768px) {
+  .bc-grid {
+    grid-template-columns: 1fr;
+    padding: 0 12px;
+  }
+
+  .bc-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+
+  .bc-controls {
+    padding: 12px 12px;
+  }
+
+  .bc-search-wrap {
+    max-width: 100%;
+  }
+
+  .bc-page-title {
+    font-size: 18px;
+  }
+
+  .bc-flip-container {
+    height: 220px;
+  }
+  .bc-flipped {
+    min-height: 220px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1100px) {
+  .bc-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
