@@ -323,7 +323,7 @@ function DialerTranscriptSection({ contact, callDuration }: { contact: Contact; 
 
 // ============ MAIN APP ============
 export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
-  const { contacts: salesContacts, isLoading, pipedriveConfigured, refresh } = useSales();
+  const { contacts: salesContacts, isLoading, pipedriveConfigured, refresh, settings } = useSales();
   
   const contacts: Contact[] = useMemo(() => {
     if (!salesContacts?.length) return [];
@@ -364,6 +364,8 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailCopied, setEmailCopied] = useState(false);
+  const [crmSaving, setCrmSaving] = useState(false);
+  const [crmResult, setCrmResult] = useState<{ ok: boolean; message: string } | null>(null);
   const analyzedKeyRef = useRef<string>('');
 
   const contact = contacts[activeIndex] || null;
@@ -404,6 +406,8 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
       setEmailError(null);
       setEmailLoading(false);
       setEmailCopied(false);
+      setCrmSaving(false);
+      setCrmResult(null);
       analyzedKeyRef.current = '';
       setWrapupOutcome(null);
       setPhase('ready');
@@ -554,7 +558,7 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
 
       <div className="prep-ai" aria-live="polite">
         <div className="prep-ai-header">
-          <h3>AI brief</h3>
+          <h3>AI příprava</h3>
           <button
             className="prep-ai-btn"
             onClick={() => {
@@ -608,7 +612,7 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
           <div className="prep-ai-note">AI není nakonfigurovaná (Supabase). Otevři Nastavení a doplň klíče.</div>
         ) : briefError ? (
           <div className="prep-ai-error">
-            <div className="prep-ai-error-title">Nepodařilo se vygenerovat brief</div>
+            <div className="prep-ai-error-title">Nepodařilo se vygenerovat přípravu</div>
             <div className="prep-ai-error-msg">{briefError}</div>
           </div>
         ) : briefLoading ? (
@@ -694,7 +698,7 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
             ) : null}
           </div>
         ) : (
-          <div className="prep-ai-note">Zadej doménu a AI vygeneruje brief + scénář (cache 30 minut).</div>
+          <div className="prep-ai-note">Zadej doménu a AI vygeneruje přípravu + scénář (cache 30 minut).</div>
         )}
       </div>
 
@@ -949,40 +953,19 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
             )}
 
             <div className="wrapup-email">
-              <button
-                className="wrapup-email-btn"
-                disabled={!isSupabaseConfigured || emailLoading}
-                onClick={async () => {
-                  if (!contact) return;
-                  setEmailLoading(true);
-                  setEmailError(null);
-                  setEmailCopied(false);
-                  try {
-                    const r = await echoApi.ai.generate({
-                      type: 'email',
-                      contactName: contact.name,
-                      company: contact.company,
-                      goal: 'Domluvit 20min demo',
-                      contextData: {
-                        outcome: outcomeLabel(wrapupOutcome),
-                        duration_sec: callDuration,
-                        notes,
-                        aiAnalysis: callAnalysis || null,
-                      },
-                    });
-                    const content = (r && typeof r === 'object' && 'content' in r) ? (r as any).content : r;
-                    setEmailDraft(typeof content === 'string' ? content : JSON.stringify(content));
-                  } catch (e) {
-                    setEmailError(e instanceof Error ? e.message : 'E‑mail se nepodařilo vygenerovat');
-                  } finally {
-                    setEmailLoading(false);
-                  }
-                }}
-              >
-                {emailLoading ? '⏳ Generuji follow‑up e‑mail…' : '✉️ Vygenerovat follow‑up e‑mail'}
-              </button>
-
-              {emailError ? <div className="wrapup-ai-error">{emailError}</div> : null}
+              {!emailDraft && (
+                <button
+                  className="wrapup-email-btn"
+                  onClick={() => {
+                    if (!contact) return;
+                    const firstName = contact.name.split(' ')[0] || contact.name;
+                    const template = `Předmět: ${contact.company} – krátký dotaz\n\nDobrý den${firstName ? ` ${firstName}` : ''},\n\nzkoušel/a jsem Vás zastihnout telefonicky – omlouvám se, že se to nepodařilo.\n\nŘeším jednu věc s firmami jako ${contact.company} – jak udržet klíčové lidi a mít přehled o tom, co se v týmu skutečně děje (ne jen to, co řeknou na poradě).\n\nPomáháme s tím přes krátké pulse-checky, které manažerům ukážou reálná data za 2 minuty.\n\nMělo by smysl se na to podívat? Stačí krátký 15min call.\n\nDěkuji a přeji hezký den,\n${settings.smartBccAddress ? '' : '[Vaše jméno]'}`;
+                    setEmailDraft(template);
+                  }}
+                >
+                  ✉️ Připravit follow‑up e‑mail
+                </button>
+              )}
 
               {emailDraft ? (
                 <div className="wrapup-email-editor">
@@ -995,11 +978,105 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
                         setTimeout(() => setEmailCopied(false), 1500);
                       }}
                     >
-                      {emailCopied ? 'Zkopírováno' : 'Kopírovat'}
+                      {emailCopied ? 'Zkopírováno ✓' : '📋 Kopírovat'}
                     </button>
+                    {contact?.email && (
+                      <a
+                        className="wrapup-email-mailto"
+                        href={(() => {
+                          const lines = emailDraft.split('\n');
+                          const subjectLine = lines.find(l => l.startsWith('Předmět:'));
+                          const subject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${contact.company} – follow-up`;
+                          const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
+                          const body = bodyLines.join('\n').trim();
+                          const bcc = settings.smartBccAddress || '';
+                          return `mailto:${encodeURIComponent(contact.email!)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${bcc ? `&bcc=${encodeURIComponent(bcc)}` : ''}`;
+                        })()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        📧 Otevřít v e‑mailu
+                      </a>
+                    )}
                   </div>
-                  <textarea value={emailDraft} readOnly rows={6} />
+                  <textarea
+                    value={emailDraft}
+                    onChange={(e) => setEmailDraft(e.target.value)}
+                    rows={8}
+                  />
+                  {!contact?.email && (
+                    <div className="wrapup-email-hint muted">Kontakt nemá e‑mail – zkopíruj text a pošli ručně.</div>
+                  )}
+                  {settings.smartBccAddress && (
+                    <div className="wrapup-email-hint muted">SmartBCC: {settings.smartBccAddress}</div>
+                  )}
                 </div>
+              ) : null}
+            </div>
+
+            <div className="wrapup-crm">
+              <button
+                className="wrapup-crm-btn"
+                disabled={!isSupabaseConfigured || crmSaving}
+                onClick={async () => {
+                  if (!contact) return;
+                  setCrmSaving(true);
+                  setCrmResult(null);
+                  try {
+                    let personId: number | undefined = undefined;
+                    try {
+                      const ctx = await echoApi.precall.context({
+                        contact_id: contact.id,
+                        include: [],
+                        ttl_hours: 24,
+                        timeline: { activities: 0, notes: 0, deals: 0 },
+                      });
+                      personId = ctx?.pipedrive?.person_id ?? undefined;
+                    } catch {
+                      personId = undefined;
+                    }
+
+                    if (!personId && !contact.orgId) {
+                      throw new Error('Chybí vazba do Pipedrive (personId/orgId).');
+                    }
+
+                    const lines: string[] = [];
+                    lines.push(`<b>📞 Hovor</b> – Echo Pulse`);
+                    lines.push(`Klient: <b>${contact.name}</b> (${contact.title || '—'}) – <b>${contact.company}</b>`);
+                    lines.push(`Výsledek: <b>${outcomeLabel(wrapupOutcome)}</b>`);
+                    lines.push(`Délka: <b>${formatTime(callDuration)}</b>`);
+                    if (callAnalysis?.score !== undefined) lines.push(`AI skóre: <b>${Number(callAnalysis.score)}</b>/100`);
+                    if (callAnalysis?.summary) lines.push(`Shrnutí: ${String(callAnalysis.summary)}`);
+                    if (Array.isArray(callAnalysis?.strengths) && callAnalysis.strengths.length) {
+                      lines.push(`Silné stránky: ${callAnalysis.strengths.slice(0, 3).map((s: string) => `• ${s}`).join(' ')}`);
+                    }
+                    if (Array.isArray(callAnalysis?.weaknesses) && callAnalysis.weaknesses.length) {
+                      lines.push(`Slabiny: ${callAnalysis.weaknesses.slice(0, 3).map((s: string) => `• ${s}`).join(' ')}`);
+                    }
+                    if (callAnalysis?.coachingTip) lines.push(`Tip kouče: ${String(callAnalysis.coachingTip)}`);
+                    const qa = aiQualAnswers.filter(Boolean).slice(0, 3).map((a) => `• ${a}`).join(' ');
+                    if (qa) lines.push(`Kvalifikace: ${qa}`);
+                    if (notes?.trim()) lines.push(`Poznámky: ${notes.trim()}`);
+                    const content = lines.join('<br>');
+
+                    const res = await echoApi.addPipedriveNote({
+                      personId,
+                      orgId: contact.orgId,
+                      content,
+                    });
+
+                    setCrmResult({ ok: Boolean(res?.success), message: res?.success ? 'Uloženo do Pipedrive.' : 'Nepodařilo se uložit do Pipedrive.' });
+                  } catch (e) {
+                    setCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Uložení do CRM selhalo' });
+                  } finally {
+                    setCrmSaving(false);
+                  }
+                }}
+              >
+                {crmSaving ? '⏳ Ukládám do CRM…' : '💾 Uložit do CRM (Pipedrive)'}
+              </button>
+              {crmResult ? (
+                <div className={`wrapup-crm-msg ${crmResult.ok ? 'ok' : 'err'}`}>{crmResult.message}</div>
               ) : null}
             </div>
           </div>

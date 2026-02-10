@@ -33,7 +33,7 @@ export function useBrief() {
     }
 
     if (!isSupabaseConfigured) {
-      setError('Backend not configured');
+      setError('Backend (Supabase) není nakonfigurovaný');
       return;
     }
 
@@ -60,7 +60,7 @@ export function useBrief() {
       // Cache both
       briefCache.set(key, { brief: briefResult, script: scriptResult, ts: Date.now() });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to generate brief';
+      const msg = e instanceof Error ? e.message : 'Nepodařilo se vygenerovat brief';
       setError(msg);
     } finally {
       setLoading(false);

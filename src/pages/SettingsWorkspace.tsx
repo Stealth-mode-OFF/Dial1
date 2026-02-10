@@ -55,6 +55,7 @@ export function SettingsWorkspace() {
     name: user.name,
     role: user.role,
     dailyCallGoal: settings.dailyCallGoal || 0,
+    smartBccAddress: settings.smartBccAddress || '',
   }));
 
   const [busy, setBusy] = useState(false);
@@ -111,8 +112,9 @@ export function SettingsWorkspace() {
       name: user.name,
       role: user.role,
       dailyCallGoal: settings.dailyCallGoal || 0,
+      smartBccAddress: settings.smartBccAddress || '',
     });
-  }, [user.name, user.role, settings.dailyCallGoal]);
+  }, [user.name, user.role, settings.dailyCallGoal, settings.smartBccAddress]);
 
   const runFunctionsCheck = async () => {
     if (!supabaseConfigured) {
@@ -224,7 +226,10 @@ export function SettingsWorkspace() {
 
   const saveProfile = () => {
     updateUser({ name: profile.name.trim(), role: profile.role.trim() });
-    updateSettings({ dailyCallGoal: Number(profile.dailyCallGoal) || 0 });
+    updateSettings({
+      dailyCallGoal: Number(profile.dailyCallGoal) || 0,
+      smartBccAddress: profile.smartBccAddress.trim(),
+    });
     setStatus('Profile saved.');
   };
 
@@ -348,6 +353,18 @@ export function SettingsWorkspace() {
               value={profile.dailyCallGoal}
               onChange={(e) => setProfile({ ...profile, dailyCallGoal: Number(e.target.value) })}
             />
+          </label>
+          <label className="field">
+            <span className="label">Pipedrive SmartBCC</span>
+            <input
+              type="email"
+              placeholder="abc123@pipedrivemail.com"
+              value={profile.smartBccAddress}
+              onChange={(e) => setProfile({ ...profile, smartBccAddress: e.target.value })}
+            />
+            <span className="muted" style={{ fontSize: '11px', marginTop: '2px' }}>
+              Najdeš v Pipedrive → E-mail sync → Smart BCC. E-maily se automaticky zalogují.
+            </span>
           </label>
         </div>
 

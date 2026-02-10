@@ -579,6 +579,59 @@ TARGET AUDIENCE & PAIN POINTS:
    - Pain: "Quiet Quitting", disconnected teams, efficiency drops.
 `;
 
+// "Red lines" pulled from the frontend battlecards (dont_say) – used to keep scripting honest.
+const BATTLECARD_DONT_SAY_BY_KEY: Record<string, string[]> = {
+  price: ["To se vám vrátí určitě.", "To je vlastně levné, když si to spočítáte."],
+  roi: ["ROI vám garantuju.", "Všichni naši klienti mají skvělé ROI."],
+  not_now: ["To je chyba, to musíte řešit hned.", "Když to neuděláte teď, dopadnete špatně."],
+  send_email: ["Jasně, pošlu a ozvěte se.", "Tak já vám to pošlu a pak si zavoláme."],
+  already_solution: ["To vaše řešení je špatně.", "My jsme lepší než všichni ostatní."],
+  gdpr: ["GDPR je v pohodě, to se řešit nemusí.", "Tohle podepisují všichni."],
+};
+
+const inferLikelyBattlecardKeys = (params: { industry?: string; role?: string; notes?: string }) => {
+  const hay = `${params.industry || ""} ${params.role || ""} ${params.notes || ""}`.toLowerCase();
+  const keys = new Set<string>();
+
+  // Common Czech deflections appear across segments
+  keys.add("send_email");
+  keys.add("roi");
+
+  if (hay.includes("ceo") || hay.includes("cfo") || hay.includes("owner") || hay.includes("ředit") || hay.includes("director")) {
+    keys.add("price");
+    keys.add("not_now");
+  }
+
+  if (hay.includes("it") || hay.includes("tech") || hay.includes("saas") || hay.includes("security") || hay.includes("gdpr")) {
+    keys.add("gdpr");
+  }
+
+  if (hay.includes("finance") || hay.includes("bank") || hay.includes("legal") || hay.includes("compliance")) {
+    keys.add("gdpr");
+  }
+
+  if (hay.includes("hr") || hay.includes("people") || hay.includes("recruit")) {
+    keys.add("already_solution");
+  }
+
+  if (hay.includes("výro") || hay.includes("manufact") || hay.includes("logist") || hay.includes("shift") || hay.includes("směn")) {
+    keys.add("price");
+  }
+
+  return Array.from(keys);
+};
+
+const buildRedLines = (params: { industry?: string; role?: string; notes?: string }) => {
+  const keys = inferLikelyBattlecardKeys(params);
+  const lines: string[] = [];
+  for (const key of keys) {
+    const items = BATTLECARD_DONT_SAY_BY_KEY[key] || [];
+    for (const s of items) lines.push(s);
+  }
+  // Unique + stable
+  return Array.from(new Set(lines)).slice(0, 18);
+};
+
 const CONTACT_SELECT_FIELDS =
   "id, name, title, company, phone, email, linkedin_url, manual_notes, company_website, source, external_id";
 
@@ -3206,7 +3259,9 @@ app.post(`${BASE_PATH}/ai/brief`, async (c) => {
   if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
 
   const openai = new OpenAI({ apiKey });
-  const system = `You are an expert B2B sales intelligence analyst. Output ONLY valid JSON.`;
+  const system = `You are an expert B2B sales intelligence analyst for the Czech market.
+  IMPORTANT: All string values in the JSON MUST be in Czech (except domains/URLs and fixed enum values).
+  Output ONLY valid JSON.`;
   const prompt = {
     task: "Create a structured company+person brief for a sales call.",
     domain,
@@ -3247,7 +3302,7 @@ app.post(`${BASE_PATH}/ai/brief`, async (c) => {
     return c.json(result);
   } catch (error) {
     console.error("Brief generation error:", error);
-    return c.json({ error: "Failed to generate brief" }, 500);
+    return c.json({ error: "Nepodařilo se vygenerovat brief" }, 500);
   }
 });
 
@@ -3269,7 +3324,9 @@ app.post(`${BASE_PATH}/ai/call-script`, async (c) => {
   if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
 
   const openai = new OpenAI({ apiKey });
-  const system = `You are an expert B2B cold call scriptwriter. Output ONLY valid JSON.`;
+  const system = `You are an expert B2B cold call scriptwriter for the Czech market.
+  IMPORTANT: All string values in the JSON MUST be in Czech.
+  Output ONLY valid JSON.`;
   const prompt = {
     task: "Create a personalized call script to qualify the lead and book a demo.",
     brief,
@@ -3309,7 +3366,7 @@ app.post(`${BASE_PATH}/ai/call-script`, async (c) => {
     return c.json(result);
   } catch (error) {
     console.error("Call script generation error:", error);
-    return c.json({ error: "Failed to generate call script" }, 500);
+    return c.json({ error: "Nepodařilo se vygenerovat scénář hovoru" }, 500);
   }
 });
 
@@ -3322,15 +3379,18 @@ app.post(`${BASE_PATH}/ai/live-coach`, async (c) => {
   if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
 
   const openai = new OpenAI({ apiKey });
-  const system = `You are a real-time B2B sales coach. Analyze the recent conversation and provide 1-3 short, actionable tips. Output ONLY valid JSON.`;
+  const system = `You are a real-time B2B sales coach for the Czech market.
+  Analyze the recent conversation and provide 1-3 short, actionable tips.
+  IMPORTANT: All tip texts and questions MUST be in Czech.
+  Output ONLY valid JSON.`;
   const prompt = {
     task: "Provide coaching tips based on the conversation so far.",
     recentConversation: captionsChunk.slice(0, 2000),
     context: brief ? { company: brief.company?.name, person: brief.person?.name, role: brief.person?.role } : null,
     currentSpinStage: currentSpinStage || "S",
     schema: {
-      tips: "[{ id: 't1', text: 'string (max 80 chars)', priority: 'high'|'medium'|'low' }] (1-3 items)",
-      nextSpinQuestion: "{ phase: 'S'|'P'|'I'|'N', question: 'string' } (optional, one question)",
+      tips: "[{ id: 't1', text: 'string (max 80 chars, Czech)', priority: 'high'|'medium'|'low' }] (1-3 items)",
+      nextSpinQuestion: "{ phase: 'S'|'P'|'I'|'N', question: 'string (Czech)' } (optional, one question)",
     },
   };
 
@@ -4140,6 +4200,7 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
 
     switch (type) {
       case 'email':
+      case 'email-cold':
         model = "gpt-4o"; 
         systemPrompt = `You are top-tier B2B Sales Copywriter for the Czech market.
         ${PRODUCT_KNOWLEDGE}
@@ -4164,8 +4225,89 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         `;
         break;
 
-      case 'spin-script':
+      case 'email-demo':
         model = "gpt-4o";
+        systemPrompt = `You are a top-tier B2B Sales Follow-Up Specialist for the Czech market.
+        ${PRODUCT_KNOWLEDGE}
+        ${INDUSTRY_KNOWLEDGE}
+        ${customKnowledge}
+        ${styleInstruction}
+
+        RULES FOR CZECH POST-DEMO FOLLOW-UP EMAIL:
+        1. This is a PERSONALIZED follow-up after a live demo/meeting — NOT a cold email.
+        2. Reference SPECIFIC things discussed during the demo (pain points, questions, objections).
+        3. Structure:
+           - Subject: Reference something specific from the call (e.g. "K vaší otázce o retenci" or "[Company] + Echo Pulse – další kroky")
+           - Opening: Thank for time + reference a SPECIFIC moment/topic from the call
+           - Value recap: 2-3 bullet points of how Echo Pulse solves THEIR specific problems (mentioned in call)
+           - Address objections: If any objections were raised, handle them briefly
+           - Clear CTA: Specific next step with proposed dates/times
+           - Offer: If relevant, include pilot/trial offer
+        4. Max 200 words. Be warm but professional.
+        5. If transcript/captions are provided, USE THEM to personalize heavily.
+        6. If AI analysis is provided, use the strengths/weaknesses to inform the email tone.
+        7. OUTPUT MUST BE IN CZECH LANGUAGE.
+        8. Format: Start with "Předmět: ..." on first line, then blank line, then email body.
+        `;
+        userPrompt = `Write a personalized post-demo follow-up email to ${contactName} from ${company}.
+        Goal: ${goal}.
+        
+        DEMO CONTEXT:
+        ${contextData?.totalTimeSec ? `Demo duration: ${Math.round(Number(contextData.totalTimeSec) / 60)} minutes` : ''}
+        ${contextData?.phaseTimes ? `SPIN phase distribution: ${JSON.stringify(contextData.phaseTimes)}` : ''}
+        ${contextData?.aiAnalysis ? `AI analysis of the demo: ${JSON.stringify(contextData.aiAnalysis)}` : ''}
+        ${contextData?.keyCaptions ? `Key moments from the conversation:\n${contextData.keyCaptions}` : ''}
+        ${contextData?.notes ? `Sales rep notes: ${contextData.notes}` : ''}
+        ${contextData?.outcome ? `Call outcome: ${contextData.outcome}` : ''}
+        ${contextData?.duration_sec ? `Call duration: ${Math.round(Number(contextData.duration_sec) / 60)} min` : ''}
+        
+        Use the conversation context to make the email hyper-specific. Reference their actual pain points and questions.
+        `;
+        break;
+
+      case 'spin-script': {
+        model = "gpt-4o";
+
+        const industry = contextData?.industry?.toString?.() || "";
+        const role = contextData?.role?.toString?.() || "";
+        const notes = contextData?.notes?.toString?.() || "";
+        const redLines = buildRedLines({ industry, role, notes });
+
+        const admin = getAdminClient();
+        const contactId = contextData?.contact_id ? String(contextData.contact_id) : null;
+        let approvedFacts: Array<{ claim?: string; source_url?: string; evidence_id?: string }> = [];
+        if (admin && contactId) {
+          try {
+            const { data } = await admin
+              .from("v_approved_facts")
+              .select("evidence_id, claim, source_url")
+              .eq("owner_user_id", userId)
+              .eq("contact_id", contactId)
+              .order("approved_at", { ascending: false })
+              .limit(10);
+            approvedFacts = Array.isArray(data) ? data : [];
+          } catch (e) {
+            console.error("spin-script: facts lookup failed (non-blocking):", e);
+            approvedFacts = [];
+          }
+        }
+
+        const approvedFactsText =
+          approvedFacts.length > 0
+            ? approvedFacts
+                .map((f) => `- ${String(f.claim || "").trim()}${f.source_url ? ` (${String(f.source_url).trim()})` : ""}`)
+                .filter((s) => s.length > 3)
+                .join("\n")
+            : "(none)";
+
+        const evidencePolicy = approvedFacts.length
+          ? `EVIDENCE MODE: FACTS AVAILABLE.
+          - You MAY use ONLY the provided APPROVED FACTS as proof points.
+          - When you cite a proof point, keep it short and attribute it as "ověřený fakt".`
+          : `EVIDENCE MODE: NO FACTS AVAILABLE.
+          - DO NOT make specific factual claims or numbers about the prospect.
+          - Replace claims with VALIDATION QUESTIONS (e.g., "Je to u vás podobně?").`;
+
         systemPrompt = `You are an expert sales coach creating a 20-minute DEMO MEETING script in Czech for Echo Pulse by Behavery.
         You combine SPIN Selling, Straight Line Persuasion, and Challenger Sale methodology.
 
@@ -4175,39 +4317,50 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         ${customKnowledge}
         ${styleInstruction}
 
+        ${evidencePolicy}
+
+        APPROVED FACTS (use only if present):
+        ${approvedFactsText}
+
+        RED LINES (things the rep must NEVER say):
+        ${redLines.length ? redLines.map((s) => `- ${s}`).join("\n") : "- (none)"}
+
         CONTEXT: This is NOT a cold call. The lead has already been qualified and agreed to a 20-minute demo.
         GOAL: Understand their specific needs deeply, demonstrate Echo Pulse value through their lens, and close a PILOT LAUNCH commitment.
 
-        DEMO MEETING PRINCIPLES:
-        1. SITUATION (3-4min): Confirm what you know from the cold call. Ask about current measurement methods, team size, turnover rate, HR processes. Listen 80%.
-        2. PROBLEM (4-5min): Dig into pain. Use Implication questions to make the cost of inaction concrete. "Co vás to stojí měsíčně?" "Jak to ovlivňuje produkci?"
-        3. IMPLICATION (4-5min): This is your Challenger Teaching moment. Show them data they don't have. Reframe their thinking about employee retention. Present Echo Pulse as THE answer to problems they just articulated. Live demo walk-through tied to THEIR specific pains.
-        4. NEED-PAYOFF (3-4min): Let THEM sell it to themselves: "Pomohlo by vám...?" Then close toward PILOT.
+        CERTAINTY TARGETING (Straight Line Persuasion):
+        - Each SPIN block MUST include "certaintyTarget" (1-10) = the certainty level this block should build toward.
+        - Start lower in Situation, increase toward Need-Payoff/close.
+
+        DEMO MEETING PRINCIPLES (tailor to their industry):
+        1. SITUATION (3-4min): Confirm what you know. Ask about current measurement methods, team size, turnover/stability, HR/ops reality. Listen 80%.
+        2. PROBLEM (4-5min): Surface pain. Use implication direction ("Co vás to stojí? Kde to přetéká do KPI?").
+        3. IMPLICATION (4-5min): Challenger teaching moment. Reframe their thinking with one concrete insight relevant to their sector.
+        4. NEED-PAYOFF (3-4min): Let them describe the ideal state. Then close toward PILOT.
 
         CLOSING FOR PILOT (not just "next steps"):
         - Pilot = 3-month trial with one team/department
         - Use Belfort's "reasonable man" tonality: calm, no pressure, logical
-        - Use Assumptive Close: "Má smysl to zkusit na jednom oddělení? Třeba výroba, kde je ta fluktuace největší?"
-        - If they hesitate: Loop back to their stated pain (from I-questions), raise Product certainty
-        - If "musím probrat s vedením": Offer to present to the team together, or prepare a 1-page summary for their boss
-
-        THREE TENS IN DEMO CONTEXT:
-        - Product certainty: Build via LIVE DEMO, show real dashboard, case studies from similar CZ companies
-        - You certainty: Show expertise about THEIR industry, reference specific metrics and benchmarks
-        - Company certainty: Client logos, CZ market commitment, support model, data security
+        - Use Assumptive Close: "Má smysl to zkusit na jednom oddělení? …"
+        - If they hesitate: Loop back to their stated pain, raise Product certainty
+        - If "musím probrat s vedením": Offer to present together, or prepare 1-page summary for their boss
 
         OUTPUT FORMAT: Valid JSON with this structure:
         {
           "totalDuration": "20 min",
+          "redLines": ["things never to say (CZ)"],
+          "evidenceMode": "facts" | "validation",
           "blocks": [
             {
-              "phase": "situation",
-              "title": "Zjištění současného stavu",
-              "duration": "3-4 min",
-              "content": "Hlavní body — co zjistit a jak reagovat na odpovědi. Vždy v kontextu JEJICH firmy/oboru.",
-              "questions": ["SPIN otázka 1 v češtině", "SPIN otázka 2", "SPIN otázka 3"],
-              "tips": ["Praktický tip pro prezentujícího — co sledovat, jak reagovat"],
-              "transitions": ["Přesný přechod do další fáze — co říct"]
+              "phase": "situation" | "problem" | "implication" | "need-payoff",
+              "title": "CZ title",
+              "duration": "e.g. 3-4 min",
+              "certaintyTarget": number (1-10),
+              "content": "Hlavní body — co zjistit a jak reagovat (CZ, spoken).",
+              "questions": ["ready-to-say Czech questions (SPIN)"],
+              "proofPoints": ["0-3 short proof points. If no evidence, use validation questions instead."],
+              "tips": ["Praktické tipy pro prezentujícího (CZ)"],
+              "transitions": ["Přesný přechod do další fáze (CZ)"]
             }
           ],
           "closingTechniques": [
@@ -4216,22 +4369,22 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
             {"name": "Next-Step Fallback", "script": "Pokud pilot hned ne, konkrétní alternativa..."}
           ],
           "objectionHandlers": [
-            {"objection": "Je to drahé", "response": "Looping: acknowledge → cost-of-inaction reframe → re-close na pilot. V češtině."},
-            {"objection": "Máme vlastní řešení", "response": "Challenger tension: response rate data, timing advantages. V češtině."},
+            {"objection": "Je to drahé", "response": "Looping: acknowledge → reframe → re-close na pilot. V češtině."},
+            {"objection": "Máme vlastní řešení", "response": "Challenger constructive tension. V češtině."},
             {"objection": "Musím to probrat s vedením", "response": "Three Tens check + nabídka společné prezentace. V češtině."},
-            {"objection": "Teď to není priorita", "response": "Reframe urgency: cost of waiting + easy pilot setup. V češtině."}
+            {"objection": "Teď to není priorita", "response": "Reframe urgency + easy pilot setup. V češtině."}
           ]
         }
 
         4 blocks required: situation, problem, implication, need-payoff.
-        ALL TEXT IN CZECH. Natural spoken language. The questions must be ready-to-say Czech phrases, not descriptions.
-        Closing techniques must be PILOT-focused, not just generic closes.
-        Objection handlers must use specific methodology (Looping, Reframe, Three Tens) and be full Czech sentences.
-        `;
-        userPrompt = prompt || `Create a full 20-minute demo meeting script for ${contactName || 'the lead'} at ${company || 'their company'}.
-        Goal: ${goal || 'Vést 20-min demo, pochopit potřeby, prodat pilotní spuštění Echo Pulse'}.
+        ALL TEXT IN CZECH. Natural spoken language. Questions must be ready-to-say Czech phrases.
+        Avoid hype. Be concrete. Follow evidence rules.`;
+
+        userPrompt = prompt || `Create a full 20-minute demo meeting script for ${contactName || 'klienta'} ve firmě ${company || '—'}.
+        Goal: ${goal || 'Vést 20-min demo, pochopit potřeby, dohodnout pilotní spuštění Echo Pulse'}.
         Context: ${JSON.stringify(contextData || {})}`;
         break;
+      }
 
       case 'script':
         model = "gpt-4o";
@@ -4394,12 +4547,26 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         2. QUALIFY using SPIN discovery questions (S→P→I→N sequence)
         3. HANDLE RESISTANCE using Belfort's Looping technique
         4. BOOK a 20-minute demo meeting using an Advance (not a Continuation)
+        
+        CZECH CULTURE CONTEXT:
+        - Czech B2B buyers are skeptical of hype and "marketing words".
+        - They value directness, calm confidence, and concrete ROI framing.
+        - They hate being "sold to" but respond well to consultative questions.
+        - Prefer short, specific sentences and avoid exaggerated guarantees.
 
         You MUST return a valid JSON object with EXACTLY these fields:
         {
           "companyInsight": "2-3 sentence strategic summary of the company — what they do, size estimate, market position, and why Echo Pulse matters to them. Include a Challenger-style reframe angle.",
           "painPoints": ["pain point 1 specific to their industry/role", "pain point 2", "pain point 3"],
           "openingLine": "A Straight Line opening: certain, sharp, under 4 seconds to hook. Reference their specific context. Then bridge to a Challenger teaching insight. Max 3 sentences in natural Czech. Example: 'Dobrý den, [jméno], tady [vaše jméno] z Behavery. Vidím, že [firma] je ve výrobě — víte, že firmy s 200+ lidmi ve výrobě přicházejí průměrně o 1.2M ročně kvůli fluktuaci, aniž by to tušily?'",
+          "openingVariants": [
+            {"angle": "zvědavost", "text": "Varianta 1 (20 sekund) — curiosity angle (CZ)"},
+            {"angle": "social_proof", "text": "Varianta 2 (20 sekund) — social proof (CZ)"},
+            {"angle": "direct_value", "text": "Varianta 3 (20 sekund) — direct value (CZ)"}
+          ],
+          "voicemailScript": "30s voicemail script (CZ)",
+          "gatekeeperScript": "How to get past the assistant/receptionist (CZ)",
+          "linkedInMessageDraft": "LinkedIn/InMail follow-up draft if no connect (CZ)",
           "qualifyingQuestions": [
             "(S) Situační otázka in Czech — understand their current state",
             "(P) Problémová otázka in Czech — surface an implicit need",
@@ -4510,6 +4677,10 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
                 companyInsight: parsed.companyInsight || '',
                 painPoints: Array.isArray(parsed.painPoints) ? parsed.painPoints : [],
                 openingLine: parsed.openingLine || '',
+                openingVariants: Array.isArray(parsed.openingVariants) ? parsed.openingVariants : [],
+                voicemailScript: parsed.voicemailScript || '',
+                gatekeeperScript: parsed.gatekeeperScript || '',
+                linkedInMessageDraft: parsed.linkedInMessageDraft || parsed.linkedinMessageDraft || parsed.linkedInMessage || '',
                 qualifyingQuestions: Array.isArray(parsed.qualifyingQuestions) ? parsed.qualifyingQuestions : [],
                 objectionHandlers: Array.isArray(parsed.objectionHandlers) ? parsed.objectionHandlers : [],
                 competitorMentions: Array.isArray(parsed.competitorMentions) ? parsed.competitorMentions : [],
@@ -4594,7 +4765,13 @@ app.post(`${BASE_PATH}/ai/analyze-call`, async (c) => {
     const { transcript, salesStyle, contact } = await c.req.json();
     
     if (!transcript || transcript.length < 2) {
-        return c.json({ score: 0, feedback: "Call too short to analyze." });
+        return c.json({
+          score: 0,
+          summary: "Hovor je příliš krátký na analýzu.",
+          strengths: [],
+          weaknesses: [],
+          coachingTip: "Příště si udělej aspoň 2–3 poznámky k situaci/problému a dalšímu kroku.",
+        });
     }
 
     const apiKey = await getOpenAiApiKeyForUser(userId);

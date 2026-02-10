@@ -39,7 +39,7 @@ export type CallRecord = {
 export type Deal = { id: string; value?: number; status?: string; stage?: string };
 
 export type UserProfile = { name: string; role: string; avatarInitials: string };
-export type UserSettings = { dailyCallGoal?: number };
+export type UserSettings = { dailyCallGoal?: number; smartBccAddress?: string };
 
 type SalesContextType = {
   isConfigured: boolean;

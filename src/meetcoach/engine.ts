@@ -70,16 +70,17 @@ export function scoreCard(card: Battlecard, lines: string[]): number {
 
 export function pickTopMatches(
   feed: FeedLine[],
-  opts: { windowMs: number; now: number; cooldownUntilByKey: Record<string, number | undefined> },
+  opts: { windowMs: number; now: number; cooldownUntilByKey: Record<string, number | undefined>; cards?: Battlecard[] },
 ): { best: MatchResult | null; alt: MatchResult | null; persona: MatchResult | null } {
   const cutoff = opts.now - opts.windowMs;
   const recent = feed.filter((l) => l.ts >= cutoff).map((l) => l.text);
   if (!recent.length) return { best: null, alt: null, persona: null };
 
+  const cards = Array.isArray(opts.cards) ? opts.cards : BATTLECARDS;
   const scored: MatchResult[] = [];
   const personas: MatchResult[] = [];
 
-  for (const card of BATTLECARDS) {
+  for (const card of cards) {
     const cooldownUntil = opts.cooldownUntilByKey[card.key];
     if (cooldownUntil && cooldownUntil > opts.now) continue;
 
@@ -117,4 +118,3 @@ export function pickTopMatches(
 export function getCategoryPriority(category: BattlecardCategory): number {
   return CATEGORY_PRIORITY[category] ?? 0;
 }
-

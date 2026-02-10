@@ -35,7 +35,7 @@ export function useLiveCoach() {
         });
         setResponse(result);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Coach request failed');
+        setError(e instanceof Error ? e.message : 'AI koučink selhal');
       } finally {
         setLoading(false);
         pendingRef.current = false;

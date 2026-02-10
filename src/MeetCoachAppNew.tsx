@@ -9,10 +9,13 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { echoApi } from './utils/echoApi';
+import { isSupabaseConfigured } from './utils/supabase/info';
+import { useSales } from './contexts/SalesContext';
 import { useMeetCaptions, type CaptionLine } from './hooks/useMeetCaptions';
 import { BATTLECARDS, type Battlecard } from './meetcoach/battlecards';
 import { pickTopMatches, type FeedLine } from './meetcoach/engine';
 import { useLiveCoach } from './hooks/useLiveCoach';
+import { useDynamicBattlecards } from './hooks/useDynamicBattlecards';
 import { TranscriptInput, AnalysisResult } from './components/TranscriptAnalyzer';
 import type { TranscriptAnalysisResult } from './utils/echoApi';
 import type { Brief, SpinPhase as SpinPhaseLetter } from './types/contracts';
@@ -359,7 +362,21 @@ const SummaryHero: React.FC<{
   totalTime: number;
   phaseTimes: Record<SPINPhase, number>;
   onNewDemo: () => void;
-}> = ({ lead, totalTime, phaseTimes, onNewDemo }) => {
+  analysis: any | null;
+  analysisLoading: boolean;
+  analysisError: string | null;
+  emailDraft: string;
+  emailLoading: boolean;
+  emailError: string | null;
+  emailCopied: boolean;
+  onGenerateEmail: () => void;
+  onCopyEmail: () => void;
+  onEmailDraftChange: (value: string) => void;
+  smartBccAddress: string;
+  crmSaving: boolean;
+  crmResult: { ok: boolean; message: string } | null;
+  onSaveCrm: () => void;
+}> = ({ lead, totalTime, phaseTimes, onNewDemo, analysis, analysisLoading, analysisError, emailDraft, emailLoading, emailError, emailCopied, onGenerateEmail, onCopyEmail, onEmailDraftChange, smartBccAddress, crmSaving, crmResult, onSaveCrm }) => {
   const [showScheduler, setShowScheduler] = useState(false);
 
   if (showScheduler) {
@@ -401,6 +418,94 @@ const SummaryHero: React.FC<{
         <span className="mc-summary-lead-label">Klient</span>
         <span className="mc-summary-lead-name">{lead.name}</span>
         <span className="mc-summary-lead-company">{lead.company}</span>
+      </div>
+
+      <div className="mc-ai-wrapup">
+        <div className="mc-ai-wrapup-title">AI hodnocení</div>
+        {!isSupabaseConfigured ? (
+          <div className="mc-ai-wrapup-note">AI není nakonfigurovaná.</div>
+        ) : analysisLoading ? (
+          <div className="mc-ai-wrapup-note">⏳ Analyzuji demo…</div>
+        ) : analysisError ? (
+          <div className="mc-ai-wrapup-error">Nepodařilo se analyzovat: {analysisError}</div>
+        ) : analysis ? (
+          <div className="mc-ai-wrapup-grid">
+            <div className="mc-ai-score">
+              <div className="mc-ai-score-num">{Number(analysis.score ?? 0)}</div>
+              <div className="mc-ai-score-label">/ 100</div>
+            </div>
+            <div className="mc-ai-wrapup-body">
+              {analysis.summary ? <div className="mc-ai-summary">{analysis.summary}</div> : null}
+              {Array.isArray(analysis.strengths) && analysis.strengths.length ? (
+                <div className="mc-ai-list">
+                  <div className="mc-ai-list-title">Silné stránky</div>
+                  <ul>{analysis.strengths.slice(0, 4).map((s: string, i: number) => <li key={`${s}-${i}`}>{s}</li>)}</ul>
+                </div>
+              ) : null}
+              {Array.isArray(analysis.weaknesses) && analysis.weaknesses.length ? (
+                <div className="mc-ai-list">
+                  <div className="mc-ai-list-title">Slabiny</div>
+                  <ul>{analysis.weaknesses.slice(0, 4).map((s: string, i: number) => <li key={`${s}-${i}`}>{s}</li>)}</ul>
+                </div>
+              ) : null}
+              {analysis.coachingTip ? <div className="mc-ai-tip"><strong>Tip:</strong> {analysis.coachingTip}</div> : null}
+            </div>
+          </div>
+        ) : (
+          <div className="mc-ai-wrapup-note">Počkej na titulky a AI udělá shrnutí.</div>
+        )}
+
+        <div className="mc-ai-email">
+          <button className="mc-ai-email-btn" onClick={onGenerateEmail} disabled={!isSupabaseConfigured || emailLoading}>
+            {emailLoading ? '⏳ Generuji follow‑up e‑mail…' : '✉️ Vygenerovat follow‑up e‑mail (AI)'}
+          </button>
+          {emailError ? <div className="mc-ai-wrapup-error">{emailError}</div> : null}
+          {emailDraft ? (
+            <div className="mc-ai-email-editor">
+              <div className="mc-ai-email-actions">
+                <button className="mc-ai-email-copy" onClick={onCopyEmail}>{emailCopied ? 'Zkopírováno ✓' : '📋 Kopírovat'}</button>
+                {lead.email && (
+                  <a
+                    className="mc-ai-email-mailto"
+                    href={(() => {
+                      const lines = emailDraft.split('\n');
+                      const subjectLine = lines.find(l => l.startsWith('Předmět:'));
+                      const subject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${lead.company} – follow-up po demo`;
+                      const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
+                      const body = bodyLines.join('\n').trim();
+                      const bcc = smartBccAddress || '';
+                      return `mailto:${encodeURIComponent(lead.email!)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${bcc ? `&bcc=${encodeURIComponent(bcc)}` : ''}`;
+                    })()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    📧 Otevřít v e‑mailu
+                  </a>
+                )}
+              </div>
+              <textarea
+                value={emailDraft}
+                onChange={(e) => onEmailDraftChange(e.target.value)}
+                rows={8}
+              />
+              {!lead.email && (
+                <div className="mc-ai-email-hint muted">Kontakt nemá e‑mail – zkopíruj text a pošli ručně.</div>
+              )}
+              {smartBccAddress && (
+                <div className="mc-ai-email-hint muted">SmartBCC: {smartBccAddress}</div>
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mc-ai-crm">
+          <button className="mc-ai-crm-btn" onClick={onSaveCrm} disabled={!isSupabaseConfigured || crmSaving}>
+            {crmSaving ? '⏳ Ukládám do CRM…' : '💾 Uložit do CRM (Pipedrive)'}
+          </button>
+          {crmResult ? (
+            <div className={`mc-ai-crm-msg ${crmResult.ok ? 'ok' : 'err'}`}>{crmResult.message}</div>
+          ) : null}
+        </div>
       </div>
       <div className="mc-summary-actions">
         <button className="mc-summary-btn primary" onClick={() => setShowScheduler(true)}>
@@ -454,6 +559,9 @@ const TranscriptWrapupSection: React.FC<{ lead: Lead; totalTime: number }> = ({ 
 
 /* ============ MAIN COMPONENT ============ */
 export const MeetCoachAppNew: React.FC = () => {
+  // Settings (for SmartBCC)
+  const { settings } = useSales();
+
   // App phase
   const [appPhase, setAppPhase] = useState<AppPhase>('prep');
   
@@ -495,6 +603,18 @@ export const MeetCoachAppNew: React.FC = () => {
     implication: 0,
     'need-payoff': 0,
   });
+
+  const changePhase = useCallback((newPhase: SPINPhase) => {
+    if (newPhase === spinPhase) return;
+    setSpinPhase(newPhase);
+    setPhaseTime(0);
+
+    // Find first block of this phase
+    const firstBlockIdx = script.findIndex((b) => b.phase === newPhase);
+    if (firstBlockIdx !== -1) {
+      setCurrentBlockIndex(firstBlockIdx);
+    }
+  }, [script, spinPhase]);
   
   // Whispers
   const [currentWhisper, setCurrentWhisper] = useState<Whisper | null>(null);
@@ -513,6 +633,10 @@ export const MeetCoachAppNew: React.FC = () => {
   // Captions & Battlecards
   const { lines: captions, isConnected } = useMeetCaptions();
   const [matchedCard, setMatchedCard] = useState<Battlecard | null>(null);
+  const [battlecards, setBattlecards] = useState<Battlecard[]>(BATTLECARDS);
+  const { cards: dynamicBattlecards, meta: dynamicMeta, loading: dynamicLoading, error: dynamicError, generate: generateDynamicBattlecards } =
+    useDynamicBattlecards();
+  const dynamicKeyRef = useRef<string>('');
 
   // Wrapup AI
   const [wrapupAnalysis, setWrapupAnalysis] = useState<any | null>(null);
@@ -522,6 +646,8 @@ export const MeetCoachAppNew: React.FC = () => {
   const [wrapupEmailLoading, setWrapupEmailLoading] = useState(false);
   const [wrapupEmailError, setWrapupEmailError] = useState<string | null>(null);
   const [wrapupEmailCopied, setWrapupEmailCopied] = useState(false);
+  const [wrapupCrmSaving, setWrapupCrmSaving] = useState(false);
+  const [wrapupCrmResult, setWrapupCrmResult] = useState<{ ok: boolean; message: string } | null>(null);
   const wrapupAnalysisKeyRef = useRef<string>('');
   
   // Timer effect (when LIVE)
@@ -539,6 +665,21 @@ export const MeetCoachAppNew: React.FC = () => {
     
     return () => clearInterval(interval);
   }, [appPhase, spinPhase]);
+
+  // Dynamic battlecards (PREP): generate sector-specific cards and merge with static
+  useEffect(() => {
+    if (appPhase !== 'prep') return;
+    const key = `${lead.company}::${lead.industry || ''}::${lead.role || ''}`;
+    if (dynamicKeyRef.current === key) return;
+    dynamicKeyRef.current = key;
+    generateDynamicBattlecards({ companyName: lead.company, industry: lead.industry, personTitle: lead.role });
+  }, [appPhase, generateDynamicBattlecards, lead.company, lead.industry, lead.role]);
+
+  useEffect(() => {
+    const byKey = new Map<string, Battlecard>();
+    for (const c of [...BATTLECARDS, ...(dynamicBattlecards || [])]) byKey.set(c.key, c);
+    setBattlecards(Array.from(byKey.values()));
+  }, [dynamicBattlecards]);
 
   // Post-demo AI analysis (WRAPUP)
   useEffect(() => {
@@ -704,6 +845,7 @@ export const MeetCoachAppNew: React.FC = () => {
       windowMs: 40_000,
       now,
       cooldownUntilByKey: cooldownByKey,
+      cards: battlecards,
     });
     
     if (matches.best) {
@@ -720,7 +862,7 @@ export const MeetCoachAppNew: React.FC = () => {
       // Hide after 10s
       setTimeout(() => setMatchedCard(null), 10000);
     }
-  }, [captions, cooldownByKey]);
+  }, [battlecards, captions, cooldownByKey]);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -776,6 +918,16 @@ export const MeetCoachAppNew: React.FC = () => {
     setSpinOutput(null);
     setSpinError(null);
     setObjectionCount(0);
+    setWrapupAnalysis(null);
+    setWrapupAnalysisError(null);
+    setWrapupAnalysisLoading(false);
+    setWrapupEmailDraft('');
+    setWrapupEmailError(null);
+    setWrapupEmailLoading(false);
+    setWrapupEmailCopied(false);
+    setWrapupCrmSaving(false);
+    setWrapupCrmResult(null);
+    wrapupAnalysisKeyRef.current = '';
     const blocks = await generateDemoScript(lead);
     setScript(blocks);
     setCurrentBlockIndex(0);
@@ -815,18 +967,6 @@ export const MeetCoachAppNew: React.FC = () => {
     }
   }, [currentBlockIndex, script, spinPhase]);
   
-  const changePhase = useCallback((newPhase: SPINPhase) => {
-    if (newPhase === spinPhase) return;
-    setSpinPhase(newPhase);
-    setPhaseTime(0);
-    
-    // Find first block of this phase
-    const firstBlockIdx = script.findIndex(b => b.phase === newPhase);
-    if (firstBlockIdx !== -1) {
-      setCurrentBlockIndex(firstBlockIdx);
-    }
-  }, [spinPhase, script]);
-  
   const endDemo = useCallback(() => {
     setAppPhase('wrapup');
   }, []);
@@ -845,6 +985,16 @@ export const MeetCoachAppNew: React.FC = () => {
     setSpinOutput(null);
     setSpinError(null);
     setObjectionCount(0);
+    setWrapupAnalysis(null);
+    setWrapupAnalysisError(null);
+    setWrapupAnalysisLoading(false);
+    setWrapupEmailDraft('');
+    setWrapupEmailError(null);
+    setWrapupEmailLoading(false);
+    setWrapupEmailCopied(false);
+    setWrapupCrmSaving(false);
+    setWrapupCrmResult(null);
+    wrapupAnalysisKeyRef.current = '';
   }, [clearLiveCoach]);
   
   // Get current block
@@ -874,6 +1024,96 @@ export const MeetCoachAppNew: React.FC = () => {
     }
     return String(risk);
   }, [spinOutput?.risk]);
+
+  const generateWrapupEmail = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    setWrapupEmailLoading(true);
+    setWrapupEmailError(null);
+    setWrapupEmailCopied(false);
+    try {
+      const keyLines = captions
+        .slice(-10)
+        .map((c) => `${c.speaker || '—'}: ${c.text}`)
+        .join('\n');
+
+      const r = await echoApi.ai.generate({
+        type: 'email-demo',
+        contactName: lead.name,
+        company: lead.company,
+        goal: 'Navázat po demo a domluvit další krok',
+        contextData: {
+          totalTimeSec: totalTime,
+          phaseTimes,
+          aiAnalysis: wrapupAnalysis || null,
+          keyCaptions: keyLines,
+        },
+      });
+      const content = (r && typeof r === 'object' && 'content' in r) ? (r as any).content : r;
+      setWrapupEmailDraft(typeof content === 'string' ? content : JSON.stringify(content));
+    } catch (e) {
+      setWrapupEmailError(e instanceof Error ? e.message : 'E‑mail se nepodařilo vygenerovat');
+    } finally {
+      setWrapupEmailLoading(false);
+    }
+  }, [captions, lead.company, lead.name, phaseTimes, totalTime, wrapupAnalysis]);
+
+  const copyWrapupEmail = useCallback(() => {
+    if (!wrapupEmailDraft) return;
+    navigator.clipboard.writeText(wrapupEmailDraft);
+    setWrapupEmailCopied(true);
+    setTimeout(() => setWrapupEmailCopied(false), 1500);
+  }, [wrapupEmailDraft]);
+
+  const wrapupCrmContent = useMemo(() => {
+    const lines: string[] = [];
+    lines.push(`<b>✅ Demo</b> – Echo Pulse`);
+    lines.push(`Klient: <b>${lead.name}</b> (${lead.role}) – <b>${lead.company}</b>`);
+    lines.push(`Délka: <b>${formatTime(totalTime)}</b>`);
+    lines.push(
+      `SPIN časy: Situace <b>${formatTime(phaseTimes.situation || 0)}</b> · Problém <b>${formatTime(phaseTimes.problem || 0)}</b> · Důsledky <b>${formatTime(phaseTimes.implication || 0)}</b> · Řešení <b>${formatTime(phaseTimes['need-payoff'] || 0)}</b>`,
+    );
+    if (wrapupAnalysis?.score !== undefined) lines.push(`AI skóre: <b>${Number(wrapupAnalysis.score)}</b>/100`);
+    if (wrapupAnalysis?.summary) lines.push(`Shrnutí: ${String(wrapupAnalysis.summary)}`);
+    if (wrapupAnalysis?.coachingTip) lines.push(`Tip kouče: ${String(wrapupAnalysis.coachingTip)}`);
+    lines.push('Další krok: domluvit follow‑up / pilot (konkrétní termín).');
+    const keyLines = captions
+      .slice(-8)
+      .map((c) => `${c.speaker || '—'}: ${c.text}`)
+      .join(' | ');
+    if (keyLines.trim()) lines.push(`Klíčové věty: ${keyLines}`);
+    return lines.join('<br>');
+  }, [captions, lead.company, lead.name, lead.role, phaseTimes, totalTime, wrapupAnalysis?.score, wrapupAnalysis?.summary]);
+
+  const saveWrapupToCrm = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    setWrapupCrmSaving(true);
+    setWrapupCrmResult(null);
+    try {
+      let personId: number | undefined = undefined;
+      let orgId: number | undefined = undefined;
+
+      try {
+        const ctx = await echoApi.precall.context({
+          contact_id: lead.id,
+          include: [],
+          ttl_hours: 24,
+          timeline: { activities: 0, notes: 0, deals: 0 },
+        });
+        personId = ctx?.pipedrive?.person_id ?? undefined;
+      } catch {
+        personId = undefined;
+        orgId = undefined;
+      }
+
+      if (!personId && !orgId) throw new Error('Chybí vazba do Pipedrive (personId/orgId).');
+      const res = await echoApi.addPipedriveNote({ personId, orgId, content: wrapupCrmContent });
+      setWrapupCrmResult({ ok: Boolean(res?.success), message: res?.success ? 'Uloženo do Pipedrive.' : 'Nepodařilo se uložit do Pipedrive.' });
+    } catch (e) {
+      setWrapupCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Uložení do CRM selhalo' });
+    } finally {
+      setWrapupCrmSaving(false);
+    }
+  }, [lead.id, wrapupCrmContent]);
   
   return (
     <div className={`mc-app mc-phase-${appPhase}`}>
@@ -896,7 +1136,7 @@ export const MeetCoachAppNew: React.FC = () => {
 
           {(liveCoachError || spinError) ? (
             <div className="mc-ai-error">
-              AI koučink není dostupný. {liveCoachError ? `Live: ${liveCoachError}` : ''}{spinError ? ` Spin: ${spinError}` : ''}
+              AI koučink není dostupný. {liveCoachError ? `LiveCoach: ${liveCoachError}` : ''}{spinError ? ` SPIN: ${spinError}` : ''}
             </div>
           ) : null}
           
@@ -930,6 +1170,20 @@ export const MeetCoachAppNew: React.FC = () => {
             totalTime={totalTime}
             phaseTimes={phaseTimes}
             onNewDemo={resetDemo}
+            analysis={wrapupAnalysis}
+            analysisLoading={wrapupAnalysisLoading}
+            analysisError={wrapupAnalysisError}
+            emailDraft={wrapupEmailDraft}
+            emailLoading={wrapupEmailLoading}
+            emailError={wrapupEmailError}
+            emailCopied={wrapupEmailCopied}
+            onGenerateEmail={generateWrapupEmail}
+            onCopyEmail={copyWrapupEmail}
+            onEmailDraftChange={setWrapupEmailDraft}
+            smartBccAddress={settings.smartBccAddress || ''}
+            crmSaving={wrapupCrmSaving}
+            crmResult={wrapupCrmResult}
+            onSaveCrm={saveWrapupToCrm}
           />
           <TranscriptWrapupSection lead={lead} totalTime={totalTime} />
         </div>
