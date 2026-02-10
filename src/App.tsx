@@ -5,7 +5,7 @@ import './dialer-v2.css';
 
 // Lazy load heavy components for better initial load
 const DialerApp = lazy(() => import('./DialerAppNew').then(m => ({ default: m.DialerApp })));
-const MeetCoachApp = lazy(() => import('./MeetCoachApp').then(m => ({ default: m.MeetCoachApp })));
+const MeetCoachApp = lazy(() => import('./MeetCoachAppNew').then(m => ({ default: m.MeetCoachAppNew })));
 const DialPage = lazy(() => import('./pages/DialPage'));
 const MeetPage = lazy(() => import('./pages/MeetPage'));
 
@@ -83,7 +83,7 @@ export default function App() {
         ) : mode === 'meet' ? (
           <MeetPage onSwitchMode={() => switchMode('dial')} />
         ) : mode === 'meetcoach' ? (
-          <MeetCoachApp onSwitchMode={() => switchMode('dialer')} currentMode="meetcoach" />
+          <MeetCoachApp />
         ) : (
           <DialerApp onSwitchMode={() => switchMode('meetcoach')} />
         )}
