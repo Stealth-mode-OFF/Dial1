@@ -204,14 +204,18 @@ function FloatingWhisper() {
 function QueueDrawer({
   contacts,
   activeIndex,
+  completedIds,
   onSelect,
   onClose,
 }: {
   contacts: Contact[];
   activeIndex: number;
+  completedIds: string[];
   onSelect: (i: number) => void;
   onClose: () => void;
 }) {
+  const completedSet = useMemo(() => new Set(completedIds), [completedIds]);
+  const doneCount = contacts.filter(c => completedSet.has(c.id)).length;
   return (
     <motion.div
       className="drawer-backdrop"
@@ -228,20 +232,24 @@ function QueueDrawer({
         onClick={e => e.stopPropagation()}
       >
         <div className="drawer-header">
-          <span>Fronta ({contacts.length})</span>
+          <span>Fronta — {doneCount}/{contacts.length} provoláno</span>
           <button onClick={onClose}>×</button>
         </div>
         <div className="drawer-list">
-          {contacts.map((c, i) => (
-            <button
-              key={c.id}
-              className={`drawer-item ${i === activeIndex ? 'active' : ''}`}
-              onClick={() => { onSelect(i); onClose(); }}
-            >
-              <span className="drawer-item-name">{c.name}</span>
-              <span className="drawer-item-company">{c.company}</span>
-            </button>
-          ))}
+          {contacts.map((c, i) => {
+            const done = completedSet.has(c.id);
+            return (
+              <button
+                key={c.id}
+                className={`drawer-item ${i === activeIndex ? 'active' : ''} ${done ? 'done' : ''}`}
+                onClick={() => { onSelect(i); onClose(); }}
+              >
+                <span className="drawer-item-status">{done ? '✓' : '○'}</span>
+                <span className="drawer-item-name" style={done ? { textDecoration: 'line-through', opacity: 0.55 } : undefined}>{c.name}</span>
+                <span className="drawer-item-company">{c.company}</span>
+              </button>
+            );
+          })}
         </div>
       </motion.aside>
     </motion.div>
@@ -342,7 +350,19 @@ export function DialerApp() {
   }, [salesContacts]);
 
   const [session, setSession] = useState<Session>(loadSession);
-  const [activeIndex, setActiveIndex] = useState(0);
+  // Find the first uncalled lead on init (skip already completed)
+  const [activeIndex, setActiveIndex] = useState(() => {
+    const s = loadSession();
+    if (!s.completedIds.length) return s.currentIndex || 0;
+    // If we have salesContacts available, find first uncalled
+    const completedSet = new Set(s.completedIds);
+    if (salesContacts?.length) {
+      const mapped = salesContacts.map(c => c.id);
+      const firstUncalled = mapped.findIndex(id => !completedSet.has(id));
+      if (firstUncalled >= 0) return firstUncalled;
+    }
+    return s.currentIndex || 0;
+  });
   const [phase, setPhase] = useState<AppPhase>('ready');
   const [callStart, setCallStart] = useState<number | null>(null);
   const [callDuration, setCallDuration] = useState(0);
@@ -415,6 +435,21 @@ export function DialerApp() {
     const t = setInterval(() => setCallDuration(Math.floor((Date.now() - callStart) / 1000)), 1000);
     return () => clearInterval(t);
   }, [callStart]);
+
+  // After import/refresh: jump to first uncalled lead (only when not mid-call)
+  const prevContactsLenRef = useRef(contacts.length);
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    // Only trigger when contacts list actually changes (e.g. after import)
+    if (contacts.length === prevContactsLenRef.current) return;
+    prevContactsLenRef.current = contacts.length;
+    if (!contacts.length) return;
+    const completedSet = new Set(session.completedIds);
+    const firstUncalled = contacts.findIndex(c => !completedSet.has(c.id));
+    if (firstUncalled >= 0) {
+      setActiveIndex(firstUncalled);
+    }
+  }, [contacts, session.completedIds, phase]);
 
   // Persist
   useEffect(() => { saveSession({ ...session, currentIndex: activeIndex }); }, [session, activeIndex]);
@@ -538,20 +573,36 @@ export function DialerApp() {
   const endCall = useCallback((outcome: 'connected' | 'no-answer' | 'meeting') => {
     const dur = callStart ? Math.floor((Date.now() - callStart) / 1000) : 0;
     setWrapupOutcome(outcome);
-    setSession(s => ({
-      ...s,
-      stats: {
-        ...s.stats,
-        talkTime: s.stats.talkTime + dur,
-        connected: outcome === 'connected' || outcome === 'meeting' ? s.stats.connected + 1 : s.stats.connected,
-        meetings: outcome === 'meeting' ? s.stats.meetings + 1 : s.stats.meetings,
-      },
-      notesByContact: { ...s.notesByContact, [contact!.id]: notes },
-      completedIds: outcome === 'meeting' ? [...s.completedIds, contact!.id] : s.completedIds,
-    }));
+    // Mark ALL outcomes as completed — every called lead is done
+    setSession(s => {
+      const alreadyDone = s.completedIds.includes(contact!.id);
+      return {
+        ...s,
+        stats: {
+          ...s.stats,
+          talkTime: s.stats.talkTime + dur,
+          connected: outcome === 'connected' || outcome === 'meeting' ? s.stats.connected + 1 : s.stats.connected,
+          meetings: outcome === 'meeting' ? s.stats.meetings + 1 : s.stats.meetings,
+        },
+        notesByContact: { ...s.notesByContact, [contact!.id]: notes },
+        completedIds: alreadyDone ? s.completedIds : [...s.completedIds, contact!.id],
+      };
+    });
     setCallStart(null);
     setCallDuration(dur);
     setPhase('wrapup');
+
+    // Auto-log to Pipedrive as done activity (fire-and-forget)
+    if (isSupabaseConfigured && contact) {
+      echoApi.logCall({
+        contactId: contact.id,
+        contactName: contact.name,
+        companyName: contact.company,
+        disposition: outcome,
+        notes: notes || (outcome === 'no-answer' ? 'Nedovoláno' : outcome === 'meeting' ? 'Demo domluveno' : 'Dovoláno'),
+        duration: dur,
+      }).catch(err => console.error('Auto-log to Pipedrive failed:', err));
+    }
   }, [callStart, contact, notes]);
 
   // Post-call AI analysis (WRAPUP)
@@ -599,16 +650,24 @@ export function DialerApp() {
     });
   }, [aiQualAnswers, aiScript?.qualification, callDuration, companySize, contact, engagement, lateInfo, notes, phase, wrapupOutcome]);
 
+  // Advance to the next UNCALLED lead (skip completed ones)
   const nextContact = useCallback(() => {
-    setActiveIndex(i => Math.min(i + 1, contacts.length - 1));
-  }, [contacts.length]);
+    setActiveIndex(current => {
+      const completedSet = new Set(session.completedIds);
+      // Look forward for the first uncalled lead
+      for (let i = current + 1; i < contacts.length; i++) {
+        if (!completedSet.has(contacts[i].id)) return i;
+      }
+      // If none found after current, just go to next (cap at end)
+      return Math.min(current + 1, contacts.length - 1);
+    });
+  }, [contacts, session.completedIds]);
 
   const handleWrapupDone = useCallback((booked: boolean) => {
     if (booked && contact) {
       setSession(s => ({
         ...s,
         stats: { ...s.stats, meetings: s.stats.meetings + 1 },
-        completedIds: [...s.completedIds, contact.id],
       }));
     }
     nextContact();
@@ -1386,10 +1445,10 @@ export function DialerApp() {
       <div className="empty-card">
         <span className="empty-icon">◎</span>
         <h2>Žádné kontakty</h2>
-        <p>Importuj leady z Pipedrive nebo nastav připojení.</p>
+        <p>Importuj 30 leadů z Pipedrive a začni volat.</p>
         <div className="empty-actions">
           <button onClick={handleImport} disabled={importing || !pipedriveConfigured}>
-            {importing ? 'Importuji…' : 'Importovat 30 leadů'}
+            {importing ? 'Importuji…' : '↓ Importovat 30 leadů'}
           </button>
           <button onClick={() => setShowSettings(true)}>⚙ Nastavení</button>
         </div>
@@ -1407,8 +1466,10 @@ export function DialerApp() {
         </div>
 
         <div className="header-v2-stats">
-          <span>{session.stats.calls} hovory</span>
-          <span>{session.stats.meetings} dema</span>
+          <span title="Provoláno dnes">{session.completedIds.length}/{contacts.length} leadů</span>
+          <span>{session.stats.calls} hovorů</span>
+          <span>{session.stats.connected} spojeno</span>
+          <span>{session.stats.meetings} dem</span>
           <span>{formatTime(session.stats.talkTime)}</span>
         </div>
 
@@ -1418,11 +1479,20 @@ export function DialerApp() {
             disabled={importing || !pipedriveConfigured}
             className="header-btn header-btn-import"
           >
-            {importing ? '...' : '↓ Import'}
+            {importing ? '...' : '↓ Import 30 leadů'}
           </button>
-          <span className="header-queue-count">{contacts.length}</span>
         </div>
       </header>
+
+      {/* Progress bar */}
+      {contacts.length > 0 && (
+        <div className="progress-bar-wrap">
+          <div
+            className="progress-bar-fill"
+            style={{ width: `${Math.round((session.completedIds.length / contacts.length) * 100)}%` }}
+          />
+        </div>
+      )}
 
       {/* Main content */}
       <main className="main-v2">
@@ -1445,6 +1515,7 @@ export function DialerApp() {
           <QueueDrawer
             contacts={contacts}
             activeIndex={activeIndex}
+            completedIds={session.completedIds}
             onSelect={setActiveIndex}
             onClose={() => setShowQueue(false)}
           />
