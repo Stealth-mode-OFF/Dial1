@@ -646,6 +646,58 @@ body {
   background: var(--neo-mint);
 }
 
+/* ============ SCHEDULER EMBED ============ */
+.scheduler-embed {
+  width: min(680px, 96vw);
+  height: min(720px, 85vh);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 3px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 var(--border);
+  overflow: hidden;
+}
+
+.scheduler-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 2px solid var(--border);
+  background: var(--neo-mint);
+}
+
+.scheduler-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.scheduler-close {
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--border);
+  transition: all 0.15s;
+}
+
+.scheduler-close:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--border);
+}
+
+.scheduler-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+}
+
 /* ============ PHASE: EMPTY ============ */
 .phase-empty {
   display: flex;

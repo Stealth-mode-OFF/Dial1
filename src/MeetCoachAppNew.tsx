@@ -265,41 +265,67 @@ const CaptionsBar: React.FC<{
 };
 
 // Summary Hero (WRAPUP phase)
+const SCHEDULER_URL = 'https://behavera.pipedrive.com/scheduler/GX27Q8iw/konzultace-jak-ziskat-jasna-data-o-svem-tymu-30-minutes';
+
 const SummaryHero: React.FC<{
   lead: Lead;
   totalTime: number;
   phaseTimes: Record<SPINPhase, number>;
   onNewDemo: () => void;
-}> = ({ lead, totalTime, phaseTimes, onNewDemo }) => (
-  <div className="mc-summary">
-    <div className="mc-summary-header">
-      <span className="mc-summary-icon">✅</span>
-      <h2 className="mc-summary-title">Demo dokončeno</h2>
-    </div>
-    <div className="mc-summary-stats">
-      <div className="mc-summary-stat">
-        <span className="mc-summary-stat-value">{formatTime(totalTime)}</span>
-        <span className="mc-summary-stat-label">Celkový čas</span>
-      </div>
-      {SPIN_PHASES.map(phase => (
-        <div key={phase.id} className="mc-summary-stat" style={{ '--phase-color': phase.color } as React.CSSProperties}>
-          <span className="mc-summary-stat-value">{formatTime(phaseTimes[phase.id] || 0)}</span>
-          <span className="mc-summary-stat-label">{phase.icon} {phase.name}</span>
+}> = ({ lead, totalTime, phaseTimes, onNewDemo }) => {
+  const [showScheduler, setShowScheduler] = useState(false);
+
+  if (showScheduler) {
+    return (
+      <div className="mc-scheduler-embed">
+        <div className="mc-scheduler-header">
+          <h3>📅 Naplánuj follow-up</h3>
+          <button className="mc-scheduler-close" onClick={() => setShowScheduler(false)}>✕ Zavřít</button>
         </div>
-      ))}
+        <iframe
+          src={SCHEDULER_URL}
+          className="mc-scheduler-iframe"
+          title="Pipedrive Scheduler"
+          allow="payment"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mc-summary">
+      <div className="mc-summary-header">
+        <span className="mc-summary-icon">✅</span>
+        <h2 className="mc-summary-title">Demo dokončeno</h2>
+      </div>
+      <div className="mc-summary-stats">
+        <div className="mc-summary-stat">
+          <span className="mc-summary-stat-value">{formatTime(totalTime)}</span>
+          <span className="mc-summary-stat-label">Celkový čas</span>
+        </div>
+        {SPIN_PHASES.map(phase => (
+          <div key={phase.id} className="mc-summary-stat" style={{ '--phase-color': phase.color } as React.CSSProperties}>
+            <span className="mc-summary-stat-value">{formatTime(phaseTimes[phase.id] || 0)}</span>
+            <span className="mc-summary-stat-label">{phase.icon} {phase.name}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mc-summary-lead">
+        <span className="mc-summary-lead-label">Klient</span>
+        <span className="mc-summary-lead-name">{lead.name}</span>
+        <span className="mc-summary-lead-company">{lead.company}</span>
+      </div>
+      <div className="mc-summary-actions">
+        <button className="mc-summary-btn primary" onClick={() => setShowScheduler(true)}>
+          📅 Naplánovat follow-up
+        </button>
+        <button className="mc-summary-btn secondary" onClick={onNewDemo}>
+          🔄 Nové demo
+        </button>
+      </div>
     </div>
-    <div className="mc-summary-lead">
-      <span className="mc-summary-lead-label">Klient</span>
-      <span className="mc-summary-lead-name">{lead.name}</span>
-      <span className="mc-summary-lead-company">{lead.company}</span>
-    </div>
-    <div className="mc-summary-actions">
-      <button className="mc-summary-btn primary" onClick={onNewDemo}>
-        🔄 Nové demo
-      </button>
-    </div>
-  </div>
-);
+  );
+};
 
 /* ============ MAIN COMPONENT ============ */
 export const MeetCoachAppNew: React.FC = () => {

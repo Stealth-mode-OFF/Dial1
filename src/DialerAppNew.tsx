@@ -453,30 +453,49 @@ export function DialerApp({ onSwitchMode }: { onSwitchMode?: () => void }) {
     </div>
   );
 
+  // Scheduler embed
+  const [showScheduler, setShowScheduler] = useState(false);
+  const SCHEDULER_URL = 'https://behavera.pipedrive.com/scheduler/GX27Q8iw/konzultace-jak-ziskat-jasna-data-o-svem-tymu-30-minutes';
+
   // ============ RENDER: WRAPUP PHASE ============
   const renderWrapup = () => (
     <div className="phase-wrapup">
-      <div className="wrapup-card">
-        <h2>Hovor ukončen</h2>
-        <p className="wrapup-contact">{contact!.name} · {contact!.company}</p>
-        <p className="wrapup-duration">{formatTime(callDuration)} min</p>
-
-        <div className="wrapup-summary">
-          {companySize && <div><strong>Velikost:</strong> {companySize}</div>}
-          {engagement && <div><strong>Engagement:</strong> {engagement}</div>}
-          {lateInfo && <div><strong>Pozdní info:</strong> {lateInfo}</div>}
-          {notes && <div><strong>Poznámky:</strong> {notes}</div>}
+      {showScheduler ? (
+        <div className="scheduler-embed">
+          <div className="scheduler-header">
+            <h3>📅 Naplánuj demo</h3>
+            <button className="scheduler-close" onClick={() => setShowScheduler(false)}>✕ Zavřít</button>
+          </div>
+          <iframe
+            src={SCHEDULER_URL}
+            className="scheduler-iframe"
+            title="Pipedrive Scheduler"
+            allow="payment"
+          />
         </div>
+      ) : (
+        <div className="wrapup-card">
+          <h2>Hovor ukončen</h2>
+          <p className="wrapup-contact">{contact!.name} · {contact!.company}</p>
+          <p className="wrapup-duration">{formatTime(callDuration)} min</p>
 
-        <div className="wrapup-actions">
-          <button className="btn-wrapup btn-wrapup-next" onClick={() => handleWrapupDone(false)}>
-            Další kontakt →
-          </button>
-          <button className="btn-wrapup btn-wrapup-meeting" onClick={() => handleWrapupDone(true)}>
-            📅 Naplánované demo
-          </button>
+          <div className="wrapup-summary">
+            {companySize && <div><strong>Velikost:</strong> {companySize}</div>}
+            {engagement && <div><strong>Engagement:</strong> {engagement}</div>}
+            {lateInfo && <div><strong>Pozdní info:</strong> {lateInfo}</div>}
+            {notes && <div><strong>Poznámky:</strong> {notes}</div>}
+          </div>
+
+          <div className="wrapup-actions">
+            <button className="btn-wrapup btn-wrapup-next" onClick={() => handleWrapupDone(false)}>
+              Další kontakt →
+            </button>
+            <button className="btn-wrapup btn-wrapup-meeting" onClick={() => { setShowScheduler(true); handleWrapupDone(true); }}>
+              📅 Naplánovat demo
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 
