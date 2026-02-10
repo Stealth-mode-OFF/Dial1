@@ -7,7 +7,12 @@ type AuthGateProps = {
 };
 
 export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
-  const bypassAuth = import.meta.env.VITE_E2E_BYPASS_AUTH === 'true';
+  // Bypass auth when:
+  // 1. Explicit E2E bypass flag is set, OR
+  // 2. DEV mode AND Supabase is not configured (no .env)
+  const bypassAuth =
+    import.meta.env.VITE_E2E_BYPASS_AUTH === 'true' ||
+    (import.meta.env.DEV && !supabaseClient);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);

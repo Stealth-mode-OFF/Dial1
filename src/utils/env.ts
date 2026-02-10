@@ -142,8 +142,9 @@ export function checkEnvironment(): void {
     console.group('🔧 Environment Check');
     
     if (validation.errors.length > 0) {
-      console.error('❌ Errors:');
-      validation.errors.forEach(e => console.error(`   - ${e}`));
+      // In dev, missing Supabase config is expected — treat as info, not error
+      console.info('ℹ️ Missing config (app runs in demo mode without Supabase):');
+      validation.errors.forEach(e => console.info(`   - ${e}`));
     }
     
     if (validation.warnings.length > 0) {
