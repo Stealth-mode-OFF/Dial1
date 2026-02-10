@@ -5170,6 +5170,453 @@ app.post(`${BASE_PATH}/seed`, async (c) => {
   return c.json({ message: "Seeding disabled. Production mode active." });
 });
 
+// ============ TRANSCRIPT ANALYSIS (tLDV paste) ============
+
+// Czech filler words to detect
+const FILLER_WORDS_CZ = [
+  "uhm", "uh", "um", "hm", "hmm", "ehm", "eee", "eeh", "ee",
+  "jako", "prostě", "vlastně", "jakoby", "takže", "no",
+  "v podstatě", "víceméně", "tak nějak", "řekněme",
+];
+
+// Parse tLDV transcript (multiple formats supported)
+function parseTldvTranscript(raw: string): { speaker: string; text: string; timestamp?: string }[] {
+  const lines = raw.trim().split("\n");
+  const turns: { speaker: string; text: string; timestamp?: string }[] = [];
+
+  // Format 1: "[MM:SS] Speaker: Text"
+  const fmt1 = /^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(.+?):\s*(.+)$/;
+  // Format 2: "Speaker Name HH:MM:SS" + next line is text
+  const fmt2 = /^(.+?)\s+(\d{1,2}:\d{2}(?::\d{2})?)\s*$/;
+  // Format 3: "HH:MM:SS Speaker Name" + next line is text
+  const fmt3 = /^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+?)\s*$/;
+  // Format 4: "Speaker: Text" (simple, no timestamp)
+  const fmt4 = /^(.+?):\s+(.+)$/;
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    if (!line) { i++; continue; }
+
+    // Try Format 1: [00:15] Josef: Dobrý den
+    let m = line.match(fmt1);
+    if (m) {
+      turns.push({ timestamp: m[1], speaker: m[2].trim(), text: m[3].trim() });
+      i++;
+      continue;
+    }
+
+    // Try Format 2: "Josef Hofman 00:15" + next line text
+    m = line.match(fmt2);
+    if (m && i + 1 < lines.length) {
+      const textLine = lines[i + 1]?.trim();
+      if (textLine && !textLine.match(fmt2) && !textLine.match(fmt3)) {
+        turns.push({ speaker: m[1].trim(), timestamp: m[2], text: textLine });
+        i += 2;
+        continue;
+      }
+    }
+
+    // Try Format 3: "00:15 Josef Hofman" + next line text
+    m = line.match(fmt3);
+    if (m && i + 1 < lines.length) {
+      const textLine = lines[i + 1]?.trim();
+      if (textLine && !textLine.match(fmt2) && !textLine.match(fmt3)) {
+        turns.push({ speaker: m[2].trim(), timestamp: m[1], text: textLine });
+        i += 2;
+        continue;
+      }
+    }
+
+    // Try Format 4: "Speaker: Text"
+    m = line.match(fmt4);
+    if (m) {
+      turns.push({ speaker: m[1].trim(), text: m[2].trim() });
+      i++;
+      continue;
+    }
+
+    // Fallback: append to last turn if exists, otherwise skip
+    if (turns.length > 0) {
+      turns[turns.length - 1].text += " " + line;
+    }
+    i++;
+  }
+
+  return turns;
+}
+
+// Identify which speaker is "me" (the sales rep)
+function identifyMeSpeaker(turns: { speaker: string; text: string }[]): string {
+  // Heuristic: the first speaker is usually "me" (the rep starts the call)
+  // Also check for common self-identification patterns
+  const speakers = [...new Set(turns.map(t => t.speaker))];
+  if (speakers.length <= 1) return speakers[0] || "Me";
+  return speakers[0]; // First speaker = rep
+}
+
+// Count words per speaker
+function computeTalkMetrics(turns: { speaker: string; text: string }[], meSpeaker: string) {
+  let wordsByMe = 0;
+  let wordsByProspect = 0;
+  const fillerCounts: Record<string, number> = {};
+  let myTotalWords = 0;
+
+  for (const turn of turns) {
+    const words = turn.text.split(/\s+/).filter(w => w.length > 0);
+    const isMe = turn.speaker === meSpeaker;
+
+    if (isMe) {
+      wordsByMe += words.length;
+      myTotalWords += words.length;
+
+      // Count filler words (case-insensitive)
+      const lowerText = turn.text.toLowerCase();
+      for (const filler of FILLER_WORDS_CZ) {
+        // Count occurrences using word boundary-ish matching
+        const regex = new RegExp(`\\b${filler.replace(/\s+/g, "\\s+")}\\b`, "gi");
+        const matches = lowerText.match(regex);
+        if (matches) {
+          fillerCounts[filler] = (fillerCounts[filler] || 0) + matches.length;
+        }
+      }
+    } else {
+      wordsByProspect += words.length;
+    }
+  }
+
+  const totalWords = wordsByMe + wordsByProspect;
+  const totalFillers = Object.values(fillerCounts).reduce((a, b) => a + b, 0);
+
+  return {
+    totalWordsMe: wordsByMe,
+    totalWordsProspect: wordsByProspect,
+    talkRatioMe: totalWords > 0 ? Math.round((wordsByMe / totalWords) * 10000) / 100 : 50,
+    talkRatioProspect: totalWords > 0 ? Math.round((wordsByProspect / totalWords) * 10000) / 100 : 50,
+    fillerWords: fillerCounts,
+    fillerWordRate: myTotalWords > 0 ? Math.round((totalFillers / myTotalWords) * 10000) / 100 : 0,
+  };
+}
+
+// Full transcript analysis endpoint
+app.post(`${BASE_PATH}/transcript/analyze`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    const { rawTranscript, contactName, contactCompany, contactRole, durationSeconds, meSpeakerOverride } = await c.req.json();
+
+    if (!rawTranscript || rawTranscript.trim().length < 50) {
+      return c.json({ error: "Transcript too short (minimum 50 chars)" }, 400);
+    }
+
+    const apiKey = await getOpenAiApiKeyForUser(userId);
+    if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
+
+    // 1. Parse transcript
+    const parsed = parseTldvTranscript(rawTranscript);
+    if (parsed.length < 2) {
+      return c.json({ error: "Could not parse transcript — need at least 2 turns" }, 400);
+    }
+
+    // 2. Identify speakers & compute metrics
+    const meSpeaker = meSpeakerOverride || identifyMeSpeaker(parsed);
+    const metrics = computeTalkMetrics(parsed, meSpeaker);
+
+    // 3. Format transcript for AI
+    const formattedTranscript = parsed.map(t => {
+      const role = t.speaker === meSpeaker ? "[REP]" : "[PROSPECT]";
+      return `${role} ${t.speaker}: ${t.text}`;
+    }).join("\n");
+
+    // 4. Call OpenAI for comprehensive analysis
+    const systemPrompt = `Jsi přísný ale férový Sales Coach. Analyzuješ transkripty sales hovorů.
+
+TVŮJ ÚKOL:
+Analyzuj tento přepis hovoru a vrať podrobný JSON report. Hodnotíš prodejce (označen [REP]).
+
+KRITÉRIA HODNOCENÍ:
+1. Rapport & otevření (0-20 bodů): Navázal kontakt? Byl přirozený?
+2. Discovery & otázky (0-25 bodů): Kladl otevřené otázky? Používal SPIN?
+3. Aktivní naslouchání (0-15 bodů): Reagoval na to co prospect řekl? Parafrázoval?
+4. Řešení námitek (0-20 bodů): Jak zvládl námitky? Validoval pocity?
+5. Další kroky & close (0-20 bodů): Navrhl konkrétní další krok?
+
+FILLER WORDS DETECTED: ${JSON.stringify(metrics.fillerWords)}
+TALK RATIO: Rep ${metrics.talkRatioMe}% / Prospect ${metrics.talkRatioProspect}%
+
+SPIN ANALÝZA:
+- Identifikuj které otázky patří do S/P/I/N fáze
+- Ohodnoť pokrytí jednotlivých fází
+
+ANALÝZA OTÁZEK:
+- Seznam všech otázek které rep položil
+- Klasifikuj je: otevřená/uzavřená, SPIN fáze, kvalita (silná/slabá)
+
+NÁMITKY:
+- Seznam všech námitek od prospekta
+- Jak na ně rep reagoval
+- Kvalita reakce (dobrá/slabá/zmeškená)
+
+ATTENTION: Parazitní slova (jako, prostě, vlastně, ehm, uhm, v podstatě, jakoby, takže, no...) — vyhodnoť závažnost.
+
+DŮLEŽITÉ: Vše piš česky. Buď konkrétní, cituj z přepisu.
+
+OUTPUT JSON (strict):
+{
+  "score": 0-100,
+  "summary": "2-3 věty celkové hodnocení",
+  "categoryScores": {
+    "rapport": { "score": 0-20, "note": "..." },
+    "discovery": { "score": 0-25, "note": "..." },
+    "listening": { "score": 0-15, "note": "..." },
+    "objectionHandling": { "score": 0-20, "note": "..." },
+    "closing": { "score": 0-20, "note": "..." }
+  },
+  "strengths": ["konkrétní silné stránky s citací"],
+  "weaknesses": ["konkrétní slabé stránky s citací"],
+  "coachingTip": "Jeden nejdůležitější tip pro příště",
+  "fillerWordsAnalysis": "Hodnocení parazitních slov - jak moc to ruší",
+  "talkRatioAnalysis": "Hodnocení poměru mluvení - ideál je 30-40% rep",
+  "spinCoverage": {
+    "situation": { "count": 0, "examples": ["..."], "quality": "silné/slabé/chybí" },
+    "problem": { "count": 0, "examples": ["..."], "quality": "..." },
+    "implication": { "count": 0, "examples": ["..."], "quality": "..." },
+    "needPayoff": { "count": 0, "examples": ["..."], "quality": "..." }
+  },
+  "questionsAsked": [
+    { "text": "...", "type": "open|closed", "phase": "situation|problem|implication|need-payoff|other", "quality": "strong|weak" }
+  ],
+  "objectionsHandled": [
+    { "objection": "co prospect řekl", "response": "co rep odpověděl", "quality": "good|weak|missed" }
+  ],
+  "spinNotesPipedrive": "Formátované SPIN poznámky pro CRM:\\n\\n📋 SITUACE:\\n- ...\\n\\n🎯 PROBLÉM:\\n- ...\\n\\n⚡ DŮSLEDKY:\\n- ...\\n\\n✨ ŘEŠENÍ/NEXT STEP:\\n- ...\\n\\n📊 SKÓRE: X/100\\n🔑 KLÍČOVÝ INSIGHT: ..."
+}`;
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `PŘEPIS HOVORU:\n\n${formattedTranscript}` }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+      }),
+    });
+
+    const data = await response.json();
+    if (!data.choices?.[0]?.message?.content) {
+      console.error("OpenAI response error:", JSON.stringify(data));
+      return c.json({ error: "AI analysis failed" }, 500);
+    }
+
+    const analysis = JSON.parse(data.choices[0].message.content);
+
+    // 5. Save to Supabase
+    const admin = getAdminClient();
+    let savedId: string | null = null;
+
+    if (admin) {
+      const { data: inserted, error: insertError } = await admin
+        .from("call_analyses")
+        .insert({
+          user_id: userId,
+          contact_name: contactName || null,
+          contact_company: contactCompany || null,
+          contact_role: contactRole || null,
+          duration_seconds: durationSeconds || null,
+          raw_transcript: rawTranscript,
+          parsed_turns: parsed,
+          talk_ratio_me: metrics.talkRatioMe,
+          talk_ratio_prospect: metrics.talkRatioProspect,
+          total_words_me: metrics.totalWordsMe,
+          total_words_prospect: metrics.totalWordsProspect,
+          filler_words: metrics.fillerWords,
+          filler_word_rate: metrics.fillerWordRate,
+          ai_score: analysis.score,
+          ai_summary: analysis.summary,
+          ai_strengths: analysis.strengths,
+          ai_weaknesses: analysis.weaknesses,
+          ai_coaching_tip: analysis.coachingTip,
+          spin_stage_coverage: analysis.spinCoverage,
+          spin_notes_pipedrive: analysis.spinNotesPipedrive,
+          questions_asked: analysis.questionsAsked,
+          objections_handled: analysis.objectionsHandled,
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        console.error("Failed to save analysis:", insertError);
+      } else {
+        savedId = inserted?.id || null;
+      }
+    }
+
+    // 6. Return full result
+    return c.json({
+      id: savedId,
+      metrics: {
+        talkRatioMe: metrics.talkRatioMe,
+        talkRatioProspect: metrics.talkRatioProspect,
+        totalWordsMe: metrics.totalWordsMe,
+        totalWordsProspect: metrics.totalWordsProspect,
+        fillerWords: metrics.fillerWords,
+        fillerWordRate: metrics.fillerWordRate,
+        turnCount: parsed.length,
+        speakers: [...new Set(parsed.map(t => t.speaker))],
+        meSpeaker,
+      },
+      analysis,
+      saved: !!savedId,
+    });
+
+  } catch (e) {
+    console.error("Transcript Analysis Error", e);
+    return c.json({ error: "Transcript analysis failed" }, 500);
+  }
+});
+
+// List saved analyses (dashboard)
+app.get(`${BASE_PATH}/transcript/analyses`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    const admin = getAdminClient();
+    if (!admin) return c.json({ error: "DB not configured" }, 500);
+
+    const limit = parseInt(c.req.query("limit") || "20");
+    const offset = parseInt(c.req.query("offset") || "0");
+
+    const { data, error, count } = await admin
+      .from("call_analyses")
+      .select("id, contact_name, contact_company, contact_role, call_date, duration_seconds, ai_score, ai_summary, talk_ratio_me, talk_ratio_prospect, filler_word_rate, spin_stage_coverage, created_at", { count: "exact" })
+      .eq("user_id", userId)
+      .order("call_date", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      console.error("List analyses error:", error);
+      return c.json({ error: "Failed to fetch analyses" }, 500);
+    }
+
+    return c.json({ analyses: data || [], total: count || 0 });
+
+  } catch (e) {
+    console.error("List Analyses Error", e);
+    return c.json({ error: "Failed to list analyses" }, 500);
+  }
+});
+
+// Get single analysis detail
+app.get(`${BASE_PATH}/transcript/analyses/:id`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    const analysisId = c.req.param("id");
+    const admin = getAdminClient();
+    if (!admin) return c.json({ error: "DB not configured" }, 500);
+
+    const { data, error } = await admin
+      .from("call_analyses")
+      .select("*")
+      .eq("id", analysisId)
+      .eq("user_id", userId)
+      .single();
+
+    if (error || !data) {
+      return c.json({ error: "Analysis not found" }, 404);
+    }
+
+    return c.json(data);
+
+  } catch (e) {
+    console.error("Get Analysis Error", e);
+    return c.json({ error: "Failed to get analysis" }, 500);
+  }
+});
+
+// Dashboard aggregate stats
+app.get(`${BASE_PATH}/transcript/stats`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    const admin = getAdminClient();
+    if (!admin) return c.json({ error: "DB not configured" }, 500);
+
+    const days = parseInt(c.req.query("days") || "30");
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+
+    const { data, error } = await admin
+      .from("call_analyses")
+      .select("ai_score, talk_ratio_me, filler_word_rate, call_date, spin_stage_coverage, questions_asked, objections_handled")
+      .eq("user_id", userId)
+      .gte("call_date", since)
+      .order("call_date", { ascending: true });
+
+    if (error) {
+      console.error("Stats error:", error);
+      return c.json({ error: "Failed to fetch stats" }, 500);
+    }
+
+    const analyses = data || [];
+    if (analyses.length === 0) {
+      return c.json({ totalCalls: 0, avgScore: 0, avgTalkRatio: 0, avgFillerRate: 0, trend: [], questionStats: {}, objectionStats: {} });
+    }
+
+    // Aggregate
+    const avgScore = Math.round(analyses.reduce((s, a) => s + (a.ai_score || 0), 0) / analyses.length);
+    const avgTalkRatio = Math.round(analyses.reduce((s, a) => s + (a.talk_ratio_me || 0), 0) / analyses.length * 100) / 100;
+    const avgFillerRate = Math.round(analyses.reduce((s, a) => s + (a.filler_word_rate || 0), 0) / analyses.length * 100) / 100;
+
+    // Score trend over time
+    const trend = analyses.map(a => ({
+      date: a.call_date,
+      score: a.ai_score,
+      talkRatio: a.talk_ratio_me,
+      fillerRate: a.filler_word_rate,
+    }));
+
+    // Question type distribution
+    const questionStats: Record<string, { total: number; strong: number; weak: number }> = {};
+    for (const a of analyses) {
+      for (const q of (a.questions_asked || [])) {
+        const phase = q.phase || "other";
+        if (!questionStats[phase]) questionStats[phase] = { total: 0, strong: 0, weak: 0 };
+        questionStats[phase].total++;
+        if (q.quality === "strong") questionStats[phase].strong++;
+        if (q.quality === "weak") questionStats[phase].weak++;
+      }
+    }
+
+    // Objection handling stats
+    let objTotal = 0, objGood = 0, objWeak = 0, objMissed = 0;
+    for (const a of analyses) {
+      for (const o of (a.objections_handled || [])) {
+        objTotal++;
+        if (o.quality === "good") objGood++;
+        if (o.quality === "weak") objWeak++;
+        if (o.quality === "missed") objMissed++;
+      }
+    }
+
+    return c.json({
+      totalCalls: analyses.length,
+      avgScore,
+      avgTalkRatio,
+      avgFillerRate,
+      trend,
+      questionStats,
+      objectionStats: { total: objTotal, good: objGood, weak: objWeak, missed: objMissed },
+    });
+
+  } catch (e) {
+    console.error("Stats Error", e);
+    return c.json({ error: "Failed to compute stats" }, 500);
+  }
+});
+
 // Supabase Edge Functions gateway sometimes forwards requests with an extra
 // `/<function-slug>` prefix (e.g. "/make-server-139017f8/health"). Mount the app
 // under both variants to avoid 404s.

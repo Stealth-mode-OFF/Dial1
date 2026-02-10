@@ -2,14 +2,16 @@ import React, { useState, lazy, Suspense } from 'react';
 import { Spinner } from './components/StatusIndicators';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './dialer-v2.css';
+import './transcript-analyzer.css';
 
 // Lazy load heavy components for better initial load
 const DialerApp = lazy(() => import('./DialerAppNew').then(m => ({ default: m.DialerApp })));
 const MeetCoachApp = lazy(() => import('./MeetCoachAppNew').then(m => ({ default: m.MeetCoachAppNew })));
 const DialPage = lazy(() => import('./pages/DialPage'));
 const MeetPage = lazy(() => import('./pages/MeetPage'));
+const AnalysisDashboard = lazy(() => import('./components/TranscriptAnalyzer').then(m => ({ default: m.AnalysisDashboard })));
 
-type AppMode = 'dialer' | 'meetcoach' | 'dial' | 'meet';
+type AppMode = 'dialer' | 'meetcoach' | 'dial' | 'meet' | 'analyze';
 
 // Loading fallback component
 function AppLoader() {
@@ -40,6 +42,7 @@ export default function App() {
       meetcoach: '#meet',
       dial: '#dial',
       meet: '#meet-page',
+      analyze: '#analyze',
     };
     window.location.hash = hashMap[newMode] || '#dialer';
   };
@@ -64,6 +67,8 @@ export default function App() {
         setMode('dial');
       } else if (hash === '#meet-page') {
         setMode('meet');
+      } else if (hash === '#analyze') {
+        setMode('analyze');
       } else if (hash === '#dialer' || hash === '' || hash === '#') {
         setMode('dialer');
       }
@@ -82,6 +87,8 @@ export default function App() {
           <DialPage onSwitchMode={() => switchMode('meet')} />
         ) : mode === 'meet' ? (
           <MeetPage onSwitchMode={() => switchMode('dial')} />
+        ) : mode === 'analyze' ? (
+          <AnalysisDashboard />
         ) : mode === 'meetcoach' ? (
           <MeetCoachApp />
         ) : (

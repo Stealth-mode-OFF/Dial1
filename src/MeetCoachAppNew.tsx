@@ -7,11 +7,15 @@
  * 3. WRAPUP - Summary and notes
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { echoApi } from './utils/echoApi';
 import { useMeetCaptions, type CaptionLine } from './hooks/useMeetCaptions';
 import { BATTLECARDS, type Battlecard } from './meetcoach/battlecards';
 import { pickTopMatches, type FeedLine } from './meetcoach/engine';
+import { useLiveCoach } from './hooks/useLiveCoach';
+import { TranscriptInput, AnalysisResult } from './components/TranscriptAnalyzer';
+import type { TranscriptAnalysisResult } from './utils/echoApi';
+import type { Brief, SpinPhase as SpinPhaseLetter } from './types/contracts';
 import './meetcoach-v2.css';
 
 /* ============ TYPES ============ */
@@ -99,19 +103,91 @@ const formatTime = (seconds: number): string => {
   return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
+const toSpinLetter = (phase: SPINPhase): SpinPhaseLetter => {
+  if (phase === 'situation') return 'S';
+  if (phase === 'problem') return 'P';
+  if (phase === 'implication') return 'I';
+  return 'N';
+};
+
+const toOrchestratorStage = (phase: SPINPhase): 'situation' | 'problem' | 'implication' | 'payoff' => {
+  if (phase === 'situation') return 'situation';
+  if (phase === 'problem') return 'problem';
+  if (phase === 'implication') return 'implication';
+  return 'payoff';
+};
+
+const fromOrchestratorStage = (stage: string | null | undefined): SPINPhase | null => {
+  const s = (stage || '').toString().toLowerCase();
+  if (s === 'situation') return 'situation';
+  if (s === 'problem') return 'problem';
+  if (s === 'implication') return 'implication';
+  if (s === 'payoff' || s === 'need-payoff' || s === 'need_payoff') return 'need-payoff';
+  return null;
+};
+
+const captionsToChunk = (captions: CaptionLine[], maxChars: number) => {
+  const text = captions
+    .slice(-60)
+    .map((c) => `${c.speaker || '—'}: ${c.text}`)
+    .join('\n');
+  if (text.length <= maxChars) return text;
+  return text.slice(text.length - maxChars);
+};
+
+const spinScriptToBlocks = (script: any): ScriptBlock[] => {
+  const out: ScriptBlock[] = [];
+
+  // Already in UI format
+  if (Array.isArray(script)) {
+    for (const b of script) {
+      if (b && typeof b === 'object' && typeof b.phase === 'string' && typeof b.text === 'string') {
+        out.push(b as ScriptBlock);
+      }
+    }
+    return out;
+  }
+
+  const blocks = Array.isArray(script?.blocks) ? script.blocks : [];
+  for (const block of blocks) {
+    const phase = (block?.phase || '').toString() as SPINPhase;
+    const questions = Array.isArray(block?.questions) ? block.questions : [];
+    const tips = Array.isArray(block?.tips) ? block.tips : [];
+    const transitions = Array.isArray(block?.transitions) ? block.transitions : [];
+
+    for (const q of questions.slice(0, 6)) {
+      out.push({ phase, type: 'question', text: String(q) });
+    }
+    if (!questions.length && typeof block?.content === 'string' && block.content.trim()) {
+      out.push({ phase, type: 'tip', text: block.content.trim() });
+    }
+    for (const t of tips.slice(0, 2)) {
+      out.push({ phase, type: 'tip', text: String(t) });
+    }
+    for (const tr of transitions.slice(0, 1)) {
+      out.push({ phase, type: 'transition', text: String(tr) });
+    }
+  }
+
+  return out.filter((b) => ['situation', 'problem', 'implication', 'need-payoff'].includes(b.phase));
+};
+
 const generateDemoScript = async (lead: Lead): Promise<ScriptBlock[]> => {
   try {
     const result = await echoApi.ai.generate({
       type: 'spin-script',
-      context: {
-        name: lead.name,
-        company: lead.company,
+      contactName: lead.name,
+      company: lead.company,
+      goal: 'Vést 20min demo, pochopit potřeby a dohodnout pilotní spuštění',
+      contextData: {
+        contact_id: lead.id,
         role: lead.role,
         industry: lead.industry,
         notes: lead.notes,
       },
     });
-    return result.blocks || [];
+    const script = result?.script || null;
+    return spinScriptToBlocks(script);
   } catch {
     // Fallback script
     return [
@@ -192,22 +268,33 @@ const ScriptCard: React.FC<{
   onPrev: () => void;
   currentIndex: number;
   totalBlocks: number;
-}> = ({ block, onNext, onPrev, currentIndex, totalBlocks }) => {
+  aiSuggestion?: { label: string; text: string } | null;
+  risk?: string | null;
+}> = ({ block, onNext, onPrev, currentIndex, totalBlocks, aiSuggestion, risk }) => {
   const phase = SPIN_PHASES.find(p => p.id === block.phase)!;
+  const primaryText = aiSuggestion?.text || block.text;
   
   return (
     <div className="mc-script-card" style={{ '--phase-color': phase.color } as React.CSSProperties}>
       <div className="mc-script-header">
         <span className="mc-script-phase">{phase.icon} {phase.name}</span>
-        <span className="mc-script-counter">{currentIndex + 1} / {totalBlocks}</span>
+        <div className="mc-script-header-right">
+          {risk ? <span className="mc-risk">⚠ {risk}</span> : null}
+          <span className="mc-script-counter">{currentIndex + 1} / {totalBlocks}</span>
+        </div>
       </div>
       <div className="mc-script-main">
-        <p className="mc-script-text">{block.text}</p>
-        {block.followUp && (
+        {aiSuggestion ? <div className="mc-ai-suggest-label">{aiSuggestion.label}</div> : null}
+        <p className="mc-script-text">{primaryText}</p>
+        {aiSuggestion ? (
           <p className="mc-script-followup">
-            <span className="mc-script-followup-label">Follow-up:</span> {block.followUp}
+            <span className="mc-script-followup-label">Plán:</span> {block.text}
           </p>
-        )}
+        ) : block.followUp ? (
+          <p className="mc-script-followup">
+            <span className="mc-script-followup-label">Doptání:</span> {block.followUp}
+          </p>
+        ) : null}
       </div>
       <div className="mc-script-nav">
         <button className="mc-script-btn secondary" onClick={onPrev} disabled={currentIndex === 0}>
@@ -327,6 +414,44 @@ const SummaryHero: React.FC<{
   );
 };
 
+/* ============ TRANSCRIPT WRAPUP SECTION ============ */
+const TranscriptWrapupSection: React.FC<{ lead: Lead; totalTime: number }> = ({ lead, totalTime }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<TranscriptAnalysisResult | null>(null);
+
+  if (analysisResult) {
+    return (
+      <div className="ta-wrapup-inline" style={{ marginTop: '16px' }}>
+        <AnalysisResult
+          result={analysisResult}
+          onBack={() => setAnalysisResult(null)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="ta-wrapup-inline" style={{ marginTop: '16px' }}>
+      <button className="ta-wrapup-toggle" onClick={() => setExpanded(!expanded)}>
+        <h3>📋 Analyzovat přepis hovoru</h3>
+        <span className={expanded ? 'open' : ''}>▼</span>
+      </button>
+      {expanded && (
+        <div className="ta-wrapup-body">
+          <TranscriptInput
+            contactName={lead.name}
+            contactCompany={lead.company}
+            contactRole={lead.role}
+            durationSeconds={totalTime}
+            onAnalyzed={setAnalysisResult}
+            compact
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ============ MAIN COMPONENT ============ */
 export const MeetCoachAppNew: React.FC = () => {
   // App phase
@@ -337,6 +462,28 @@ export const MeetCoachAppNew: React.FC = () => {
   const [script, setScript] = useState<ScriptBlock[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
+
+  const coachBrief: Brief = useMemo(
+    () => ({
+      company: {
+        name: lead.company,
+        industry: lead.industry || 'Neznámý obor',
+        summary: lead.notes || '',
+        website: undefined,
+      },
+      person: {
+        name: lead.name,
+        role: lead.role,
+        decisionPower: 'unknown',
+      },
+      signals: [],
+      landmines: [],
+      sources: [],
+      generatedAt: new Date().toISOString(),
+      cached: true,
+    }),
+    [lead.company, lead.industry, lead.name, lead.notes, lead.role],
+  );
   
   // SPIN tracking
   const [spinPhase, setSpinPhase] = useState<SPINPhase>('situation');
@@ -352,10 +499,30 @@ export const MeetCoachAppNew: React.FC = () => {
   // Whispers
   const [currentWhisper, setCurrentWhisper] = useState<Whisper | null>(null);
   const whisperTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const { response: liveCoachResponse, loading: liveCoachLoading, error: liveCoachError, fetchTips: fetchCoachTips, clear: clearLiveCoach } =
+    useLiveCoach();
+
+  const [spinOutput, setSpinOutput] = useState<any | null>(null);
+  const [spinError, setSpinError] = useState<string | null>(null);
+  const lastSpinCallRef = useRef(0);
+  const lastSpinKeyRef = useRef<string>('');
+  const spinPendingRef = useRef(false);
+  const [objectionCount, setObjectionCount] = useState(0);
   
   // Captions & Battlecards
   const { lines: captions, isConnected } = useMeetCaptions();
   const [matchedCard, setMatchedCard] = useState<Battlecard | null>(null);
+
+  // Wrapup AI
+  const [wrapupAnalysis, setWrapupAnalysis] = useState<any | null>(null);
+  const [wrapupAnalysisLoading, setWrapupAnalysisLoading] = useState(false);
+  const [wrapupAnalysisError, setWrapupAnalysisError] = useState<string | null>(null);
+  const [wrapupEmailDraft, setWrapupEmailDraft] = useState('');
+  const [wrapupEmailLoading, setWrapupEmailLoading] = useState(false);
+  const [wrapupEmailError, setWrapupEmailError] = useState<string | null>(null);
+  const [wrapupEmailCopied, setWrapupEmailCopied] = useState(false);
+  const wrapupAnalysisKeyRef = useRef<string>('');
   
   // Timer effect (when LIVE)
   useEffect(() => {
@@ -372,11 +539,130 @@ export const MeetCoachAppNew: React.FC = () => {
     
     return () => clearInterval(interval);
   }, [appPhase, spinPhase]);
+
+  // Post-demo AI analysis (WRAPUP)
+  useEffect(() => {
+    if (appPhase !== 'wrapup') return;
+    if (!isSupabaseConfigured) return;
+    if (!captions.length) return;
+
+    const lastId = captions[captions.length - 1]?.id || '';
+    const key = `${lead.id}::${lastId}`;
+    if (wrapupAnalysisKeyRef.current === key) return;
+    wrapupAnalysisKeyRef.current = key;
+
+    const transcript = captions.slice(-120).map((c) => ({ speaker: c.speaker || '—', text: c.text }));
+    if (transcript.length < 2) return;
+
+    setWrapupAnalysisLoading(true);
+    setWrapupAnalysisError(null);
+    echoApi.ai
+      .analyzeCall({
+        transcript,
+        salesStyle: 'SPIN',
+        contact: { name: lead.name, role: lead.role },
+      })
+      .then((r) => setWrapupAnalysis(r || null))
+      .catch((e) => setWrapupAnalysisError(e instanceof Error ? e.message : 'Analýza selhala'))
+      .finally(() => setWrapupAnalysisLoading(false));
+  }, [appPhase, captions, lead.id, lead.name, lead.role]);
   
-  // Whisper rotation (every 20s show a tip)
+  // Live coach: feed captions + SPIN stage (debounced in hook)
   useEffect(() => {
     if (appPhase !== 'live') return;
-    
+    const chunk = captionsToChunk(captions, 2000);
+    fetchCoachTips(chunk, coachBrief, toSpinLetter(spinPhase));
+  }, [appPhase, captions, coachBrief, fetchCoachTips, spinPhase]);
+
+  // Show AI coach tips as floating whispers
+  useEffect(() => {
+    if (appPhase !== 'live') return;
+    const tip = liveCoachResponse?.tips?.[0];
+    if (!tip || !tip.text) return;
+
+    if (whisperTimeoutRef.current) clearTimeout(whisperTimeoutRef.current);
+    setCurrentWhisper({
+      id: `${tip.id || Date.now()}_${Date.now()}`,
+      text: tip.text,
+      type: tip.priority === 'high' ? 'warning' : 'tip',
+      timestamp: Date.now(),
+    });
+    whisperTimeoutRef.current = setTimeout(() => setCurrentWhisper(null), 8000);
+  }, [appPhase, liveCoachResponse?.tips]);
+
+  // SPIN orchestrator (ai/spin/next): adaptive "say next" + whisper + stage suggestion
+  useEffect(() => {
+    if (appPhase !== 'live') return;
+    if (!captions.length) return;
+    if (!isConnected) return;
+
+    const last = captions[captions.length - 1];
+    const key = `${spinPhase}|${last?.id || ''}`;
+    if (lastSpinKeyRef.current === key) return;
+    lastSpinKeyRef.current = key;
+
+    const now = Date.now();
+    if (spinPendingRef.current) return;
+    if (now - lastSpinCallRef.current < 8000) return;
+    lastSpinCallRef.current = now;
+    spinPendingRef.current = true;
+    setSpinError(null);
+
+    const transcriptWindow = captions.slice(-14).map((l) => `${l.speaker || '—'}: ${l.text}`);
+    const recap = captions
+      .slice(-4)
+      .map((l) => l.text)
+      .join(' ')
+      .slice(0, 900);
+
+    const stageTimers = {
+      situation: phaseTimes.situation || 0,
+      problem: phaseTimes.problem || 0,
+      implication: phaseTimes.implication || 0,
+      payoff: phaseTimes['need-payoff'] || 0,
+    };
+
+    echoApi.ai
+      .spinNext({
+        transcriptWindow,
+        recap,
+        dealState: { stage: toOrchestratorStage(spinPhase), objectionCount },
+        stage: toOrchestratorStage(spinPhase),
+        stageTimers,
+      })
+      .then((res) => {
+        const out = res?.output || null;
+        setSpinOutput(out);
+        const next = fromOrchestratorStage(out?.stage);
+        if (next && next !== spinPhase) {
+          changePhase(next);
+        }
+        const whisper = (out?.coach_whisper || '').toString().trim();
+        if (whisper) {
+          if (whisperTimeoutRef.current) clearTimeout(whisperTimeoutRef.current);
+          setCurrentWhisper({
+            id: `spin_${Date.now()}`,
+            text: whisper,
+            type: 'tip',
+            timestamp: Date.now(),
+          });
+          whisperTimeoutRef.current = setTimeout(() => setCurrentWhisper(null), 8000);
+        }
+      })
+      .catch((e) => {
+        setSpinError(e instanceof Error ? e.message : 'Spin coach selhal');
+      })
+      .finally(() => {
+        spinPendingRef.current = false;
+      });
+  }, [appPhase, captions, changePhase, isConnected, objectionCount, phaseTimes, spinPhase]);
+
+  // Fallback whispers when AI isn't available
+  useEffect(() => {
+    if (appPhase !== 'live') return;
+    const hasAiTips = Boolean(liveCoachResponse?.tips?.length) || Boolean(spinOutput?.coach_whisper);
+    if (hasAiTips) return;
+
     const showWhisper = () => {
       const tips = WHISPER_TIPS[spinPhase];
       const tip = tips[Math.floor(Math.random() * tips.length)];
@@ -386,24 +672,18 @@ export const MeetCoachAppNew: React.FC = () => {
         type: 'tip',
         timestamp: Date.now(),
       });
-      
-      // Hide after 8s
-      whisperTimeoutRef.current = setTimeout(() => {
-        setCurrentWhisper(null);
-      }, 8000);
+      whisperTimeoutRef.current = setTimeout(() => setCurrentWhisper(null), 8000);
     };
-    
-    // Show first whisper after 5s
+
     const firstTimeout = setTimeout(showWhisper, 5000);
-    // Then every 20s
     const interval = setInterval(showWhisper, 20000);
-    
+
     return () => {
       clearTimeout(firstTimeout);
       clearInterval(interval);
       if (whisperTimeoutRef.current) clearTimeout(whisperTimeoutRef.current);
     };
-  }, [appPhase, spinPhase]);
+  }, [appPhase, liveCoachResponse?.tips?.length, spinOutput?.coach_whisper, spinPhase]);
   
   // Battlecard matching
   const [cooldownByKey, setCooldownByKey] = useState<Record<string, number | undefined>>({});
@@ -428,6 +708,9 @@ export const MeetCoachAppNew: React.FC = () => {
     
     if (matches.best) {
       setMatchedCard(matches.best.card);
+      if (matches.best.card.category === 'objection') {
+        setObjectionCount((n) => n + 1);
+      }
       // Add cooldown for this card
       setCooldownByKey(prev => ({
         ...prev,
@@ -489,6 +772,10 @@ export const MeetCoachAppNew: React.FC = () => {
   // Actions
   const startDemo = useCallback(async () => {
     setIsLoading(true);
+    clearLiveCoach();
+    setSpinOutput(null);
+    setSpinError(null);
+    setObjectionCount(0);
     const blocks = await generateDemoScript(lead);
     setScript(blocks);
     setCurrentBlockIndex(0);
@@ -498,7 +785,7 @@ export const MeetCoachAppNew: React.FC = () => {
     setPhaseTimes({ situation: 0, problem: 0, implication: 0, 'need-payoff': 0 });
     setAppPhase('live');
     setIsLoading(false);
-  }, [lead]);
+  }, [clearLiveCoach, lead]);
   
   const nextBlock = useCallback(() => {
     if (currentBlockIndex >= script.length - 1) {
@@ -554,10 +841,39 @@ export const MeetCoachAppNew: React.FC = () => {
     setPhaseTimes({ situation: 0, problem: 0, implication: 0, 'need-payoff': 0 });
     setCurrentWhisper(null);
     setMatchedCard(null);
-  }, []);
+    clearLiveCoach();
+    setSpinOutput(null);
+    setSpinError(null);
+    setObjectionCount(0);
+  }, [clearLiveCoach]);
   
   // Get current block
   const currentBlock = script[currentBlockIndex];
+
+  const aiSuggestion = useMemo(() => {
+    const confidence = Number(spinOutput?.confidence ?? 0);
+    const sayNext = (spinOutput?.say_next || '').toString().trim();
+    if (sayNext) {
+      if (confidence < 0.35 || sayNext === '(pause)') {
+        return { label: 'AI: Pauza', text: 'Pauza — poslouchej víc.' };
+      }
+      return { label: 'AI: Řekni teď', text: sayNext };
+    }
+    const fallback = liveCoachResponse?.nextSpinQuestion?.question;
+    if (fallback) return { label: 'AI: Další otázka', text: fallback };
+    return null;
+  }, [liveCoachResponse?.nextSpinQuestion?.question, spinOutput?.confidence, spinOutput?.say_next]);
+
+  const riskText = useMemo(() => {
+    const risk = spinOutput?.risk;
+    if (!risk) return null;
+    if (typeof risk === 'string') return risk;
+    if (typeof risk === 'object') {
+      const label = (risk.label || risk.text || risk.reason || '').toString().trim();
+      return label || 'Riziko';
+    }
+    return String(risk);
+  }, [spinOutput?.risk]);
   
   return (
     <div className={`mc-app mc-phase-${appPhase}`}>
@@ -577,6 +893,12 @@ export const MeetCoachAppNew: React.FC = () => {
             totalTime={totalTime}
             onPhaseChange={changePhase}
           />
+
+          {(liveCoachError || spinError) ? (
+            <div className="mc-ai-error">
+              AI koučink není dostupný. {liveCoachError ? `Live: ${liveCoachError}` : ''}{spinError ? ` Spin: ${spinError}` : ''}
+            </div>
+          ) : null}
           
           {currentBlock && (
             <ScriptCard
@@ -585,6 +907,8 @@ export const MeetCoachAppNew: React.FC = () => {
               totalBlocks={script.length}
               onNext={nextBlock}
               onPrev={prevBlock}
+              aiSuggestion={aiSuggestion}
+              risk={riskText}
             />
           )}
           
@@ -607,6 +931,7 @@ export const MeetCoachAppNew: React.FC = () => {
             phaseTimes={phaseTimes}
             onNewDemo={resetDemo}
           />
+          <TranscriptWrapupSection lead={lead} totalTime={totalTime} />
         </div>
       )}
     </div>

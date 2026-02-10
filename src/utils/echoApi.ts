@@ -399,6 +399,85 @@ export const echoApi = {
         body: JSON.stringify(payload),
       }),
   },
+
+  transcript: {
+    analyze: (payload: {
+      rawTranscript: string;
+      contactName?: string;
+      contactCompany?: string;
+      contactRole?: string;
+      durationSeconds?: number;
+      meSpeakerOverride?: string;
+    }) => apiFetch<TranscriptAnalysisResult>('transcript/analyze', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+    list: (limit = 20, offset = 0) =>
+      apiFetch<{ analyses: TranscriptAnalysisSummary[]; total: number }>(
+        `transcript/analyses?limit=${limit}&offset=${offset}`
+      ),
+    get: (id: string) =>
+      apiFetch<any>(`transcript/analyses/${id}`),
+    stats: (days = 30) =>
+      apiFetch<TranscriptDashboardStats>(`transcript/stats?days=${days}`),
+  },
 };
+
+// Transcript analysis types
+export interface TranscriptAnalysisResult {
+  id: string | null;
+  metrics: {
+    talkRatioMe: number;
+    talkRatioProspect: number;
+    totalWordsMe: number;
+    totalWordsProspect: number;
+    fillerWords: Record<string, number>;
+    fillerWordRate: number;
+    turnCount: number;
+    speakers: string[];
+    meSpeaker: string;
+  };
+  analysis: {
+    score: number;
+    summary: string;
+    categoryScores: Record<string, { score: number; note: string }>;
+    strengths: string[];
+    weaknesses: string[];
+    coachingTip: string;
+    fillerWordsAnalysis: string;
+    talkRatioAnalysis: string;
+    spinCoverage: Record<string, { count: number; examples: string[]; quality: string }>;
+    questionsAsked: { text: string; type: string; phase: string; quality: string }[];
+    objectionsHandled: { objection: string; response: string; quality: string }[];
+    spinNotesPipedrive: string;
+  };
+  saved: boolean;
+}
+
+export interface TranscriptAnalysisSummary {
+  id: string;
+  contact_name: string | null;
+  contact_company: string | null;
+  contact_role: string | null;
+  call_date: string;
+  duration_seconds: number | null;
+  ai_score: number | null;
+  ai_summary: string | null;
+  talk_ratio_me: number | null;
+  talk_ratio_prospect: number | null;
+  filler_word_rate: number | null;
+  spin_stage_coverage: any;
+  created_at: string;
+}
+
+export interface TranscriptDashboardStats {
+  totalCalls: number;
+  avgScore: number;
+  avgTalkRatio: number;
+  avgFillerRate: number;
+  trend: { date: string; score: number; talkRatio: number; fillerRate: number }[];
+  questionStats: Record<string, { total: number; strong: number; weak: number }>;
+  objectionStats: { total: number; good: number; weak: number; missed: number };
+}
 
 export { apiFetch };
