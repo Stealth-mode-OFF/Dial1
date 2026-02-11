@@ -1485,12 +1485,12 @@ const extractEvidenceClaimsInternal = async (params: {
 
 app.use("*", async (c, next) => {
   if (c.req.method === "OPTIONS") return next();
-  const path = c.req.path.startsWith("/make-server-139017f8/")
+  const routePath = c.req.path.startsWith("/make-server-139017f8/")
     ? c.req.path.slice("/make-server-139017f8".length)
     : c.req.path;
-  if (path.startsWith("/health")) return next();
-  if (path.startsWith("/gmail/callback")) return next();
-  if (path.startsWith("/cron/")) return next();
+  if (routePath.startsWith("/health")) return next();
+  if (routePath.startsWith("/gmail/callback")) return next();
+  if (routePath.startsWith("/cron/")) return next();
 
   const userId = await resolveUserId(c);
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
@@ -1501,17 +1501,17 @@ app.use("*", async (c, next) => {
 
 app.use("*", async (c, next) => {
   if (c.req.method === "OPTIONS") return next();
-  const path = c.req.path.startsWith("/make-server-139017f8/")
-    ? c.req.path.slice("/make-server-139017f8".length)
-    : c.req.path;
-  if (path.startsWith("/health")) return next();
-  if (path.startsWith("/gmail/callback")) return next();
-  if (path.startsWith("/cron/")) return next();
+  const path = (c.req.path || "").toString();
+  const routePath = path.startsWith("/make-server-139017f8/")
+    ? path.slice("/make-server-139017f8".length)
+    : path;
+  if (routePath.startsWith("/health")) return next();
+  if (routePath.startsWith("/gmail/callback")) return next();
+  if (routePath.startsWith("/cron/")) return next();
 
   // Best-effort per-user+IP limiter. Use smaller budgets for expensive routes.
   const userId = getUserId(c);
   const ip = getClientIp(c) || "unknown";
-  const path = (c.req.path || "").toString();
   const method = (c.req.method || "GET").toUpperCase();
 
   let max = 120;
