@@ -68,10 +68,11 @@ export function ReadyPhase({
 
       <div className="seq-ready-actions">
         <button className="seq-call-btn" onClick={onCall}>
-          📞 Zavolat <span className="wow-kbd">C</span>
+          📞 Zavolat
         </button>
-        <button className="seq-skip-btn" onClick={onSkip}>Přeskočit <span className="wow-kbd">→</span></button>
+        <button className="seq-skip-btn" onClick={onSkip}>Přeskočit →</button>
       </div>
+      <p className="seq-hint">C = zavolat · → = přeskočit</p>
     </div>
   );
 }

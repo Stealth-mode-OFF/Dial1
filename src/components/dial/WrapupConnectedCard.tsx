@@ -39,11 +39,9 @@ export function WrapupConnectedCard({
   return (
     <div className="seq-wrapup-card">
       <div className="seq-wrapup-header">
-        <span className="seq-wrapup-outcome">
-          {wrapupOutcome === 'meeting' ? '📅 Demo domluveno!' : '✅ Dovoláno'}
-        </span>
-        <span className="seq-wrapup-contact">{contact.name} · {contact.company}</span>
-        <span className="seq-wrapup-time">{formatTime(callDuration)}</span>
+        <span className="seq-wrapup-outcome">{wrapupOutcome === 'meeting' ? '📅 Demo domluveno' : '✅ Dovoláno'}</span>
+        <span className="seq-wrapup-contact">{contact.name} – {contact.company}</span>
+        <span className="seq-wrapup-time">⏱️ {formatTime(callDuration)}</span>
       </div>
 
       <div className="seq-qual">
@@ -74,11 +72,11 @@ export function WrapupConnectedCard({
 
       <div className="seq-wrapup-actions">
         <button className="seq-save-btn" disabled={crmSaving || !isSupabaseConfigured} onClick={onSave}>
-          {crmSaving ? '⏳ Ukládám...' : '💾 Uložit + Další'}
+          {crmSaving ? '⏳ Ukládám...' : '💾 Uložit + Další →'}
         </button>
         {wrapupOutcome === 'meeting' && (
           <button className="seq-demo-btn" onClick={onShowScheduler}>
-            📅 Naplánovat
+            📅 Naplánovat demo
           </button>
         )}
       </div>

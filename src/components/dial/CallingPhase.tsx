@@ -29,15 +29,9 @@ export function CallingPhase({
         </div>
         <span className="call-timer">{formatTime(callDuration)}</span>
         <div className="call-bar-actions">
-          <button className="btn-end btn-end-skip" onClick={() => onEndCall('no-answer')}>
-            Nedovoláno <span className="wow-kbd" style={{ background: 'rgba(255,255,255,0.15)', marginLeft: 6, padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>1</span>
-          </button>
-          <button className="btn-end btn-end-done" onClick={() => onEndCall('connected')}>
-            Spojeno <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 10 }}>2</span>
-          </button>
-          <button className="btn-end btn-end-meeting" onClick={() => onEndCall('meeting')}>
-            📅 Demo <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 10 }}>3</span>
-          </button>
+          <button className="btn-end btn-end-skip" onClick={() => onEndCall('no-answer')}>Nedovoláno</button>
+          <button className="btn-end btn-end-done" onClick={() => onEndCall('connected')}>Spojeno</button>
+          <button className="btn-end btn-end-meeting" onClick={() => onEndCall('meeting')}>📅 Demo</button>
         </div>
       </div>
 
