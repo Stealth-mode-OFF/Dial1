@@ -4,6 +4,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import './dialer-v2.css';
 import './transcript-analyzer.css';
 import './battlecards.css';
+import './styles/wow.css';
 
 // Lazy load heavy components for better initial load
 const DialerApp = lazy(() => import('./DialerAppNew').then(m => ({ default: m.DialerApp })));
@@ -37,8 +38,19 @@ function AppLoader() {
       gap: '16px',
       background: '#fafbfc',
     }}>
-      <Spinner size={32} color="#2563eb" />
-      <span style={{ fontSize: '14px', color: '#6b7280' }}>Loading...</span>
+      <div style={{
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+        display: 'grid',
+        placeItems: 'center',
+        animation: 'wow-float 2s ease-in-out infinite',
+        boxShadow: '0 8px 24px rgba(59, 130, 246, 0.3)',
+      }}>
+        <span style={{ color: 'white', fontWeight: 800, fontSize: 14, letterSpacing: '0.05em' }}>D1</span>
+      </div>
+      <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 500 }}>Loading...</span>
     </div>
   );
 }

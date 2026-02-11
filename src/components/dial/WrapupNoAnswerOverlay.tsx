@@ -24,11 +24,11 @@ export function WrapupNoAnswerOverlay({
       <div className="seq-overlay-card">
         <div className="seq-overlay-icon">📵</div>
         <h2 className="seq-overlay-title">Nedovoláno</h2>
-        <p className="seq-overlay-name">{contact.name} – {contact.company}</p>
+        <p className="seq-overlay-name">{contact.name} · {contact.company}</p>
 
         <div className="seq-overlay-status">
           <span className="seq-check">✅ Zalogováno do CRM</span>
-          <span className="seq-check">📅 Follow-up za 2 dny naplánován</span>
+          <span className="seq-check">📅 Follow-up naplánován</span>
         </div>
 
         <div className="seq-overlay-actions">
@@ -40,11 +40,11 @@ export function WrapupNoAnswerOverlay({
         {autoDialCountdown > 0 ? (
           <div className="seq-countdown">
             <div className="seq-countdown-num">{autoDialCountdown}</div>
-            <p>Další hovor za {autoDialCountdown}s</p>
+            <p style={{ margin: '4px 0 8px', color: '#64748b', fontSize: 13 }}>Další hovor za {autoDialCountdown}s</p>
             <button className="seq-pause-btn" onClick={onPauseAutoDial}>⏸️ Pozastavit</button>
           </div>
         ) : (
-          <button className="seq-next-btn" onClick={onAutoDialNext}>
+          <button className="seq-next-btn" onClick={onAutoDialNext} style={{ marginTop: 16, width: '100%' }}>
             📞 Zavolat dalšímu →
           </button>
         )}

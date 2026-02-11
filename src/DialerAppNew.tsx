@@ -74,6 +74,8 @@ export function DialerApp() {
   const [crmSaving, setCrmSaving] = useState(false);
   const [crmResult, setCrmResult] = useState<{ ok: boolean; message: string } | null>(null);
 
+  const [showCelebration, setShowCelebration] = useState(false);
+
   const contact = contacts[activeIndex] || null;
   const externalNavDisabled = import.meta.env.VITE_E2E_DISABLE_EXTERNAL_NAV === 'true';
 
@@ -197,6 +199,12 @@ export function DialerApp() {
     setCallStart(null);
     setCallDuration(dur);
     setPhase('wrapup');
+
+    // Celebration for meetings
+    if (outcome === 'meeting') {
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 1500);
+    }
 
     if (isSupabaseConfigured) {
       echoApi.logCall({
@@ -373,6 +381,22 @@ export function DialerApp() {
     { question: 'Kdo rozhoduje o nákupu?' },
   ]).slice(0, 3);
 
+  // Momentum: compute current streak of completed calls
+  const completedIds = Object.keys(session.completedOutcomes);
+  const connectedCount = contacts.filter((c) => session.completedOutcomes[c.id] === 'connected' || session.completedOutcomes[c.id] === 'meeting').length;
+  const progressPct = contacts.length > 0 ? Math.round((completedIds.length / contacts.length) * 100) : 0;
+
+  // Streak: count consecutive calls from the end
+  let streak = 0;
+  for (let i = contacts.length - 1; i >= 0; i--) {
+    if (contacts[i].id in session.completedOutcomes) { streak++; } else { break; }
+  }
+  // Actually count from current position backwards
+  streak = 0;
+  for (let i = activeIndex - 1; i >= 0; i--) {
+    if (contacts[i]?.id && contacts[i].id in session.completedOutcomes) { streak++; } else { break; }
+  }
+
   return (
     <div className="dialer-v2" data-testid="dialer-app">
       <header className="header-v2">
@@ -381,11 +405,28 @@ export function DialerApp() {
         </div>
 
         <div className="header-v2-stats">
-          <span title="Provoláno dnes">{Object.keys(session.completedOutcomes).length}/{contacts.length} leadů</span>
-          <span>{session.stats.calls} hovorů</span>
-          <span>{session.stats.connected} spojeno</span>
-          <span>{session.stats.meetings} dem</span>
-          <span>{formatTime(session.stats.talkTime)}</span>
+          <span className="wow-stat">
+            <span className="wow-stat-num">{completedIds.length}</span>
+            <span className="wow-stat-label">/{contacts.length}</span>
+          </span>
+          <span className="wow-stat-divider" />
+          <span className="wow-stat" title="Spojeno">
+            <span className="wow-stat-icon">✅</span>
+            <span className="wow-stat-num">{connectedCount}</span>
+          </span>
+          <span className="wow-stat" title="Schůzky">
+            <span className="wow-stat-icon">📅</span>
+            <span className="wow-stat-num">{session.stats.meetings}</span>
+          </span>
+          <span className="wow-stat" title="Čas na telefonu">
+            <span className="wow-stat-icon">⏱️</span>
+            <span className="wow-stat-num">{formatTime(session.stats.talkTime)}</span>
+          </span>
+          {streak >= 3 && (
+            <span className="wow-streak" title="Streak!">
+              🔥 {streak}
+            </span>
+          )}
         </div>
 
         <div className="header-v2-right">
@@ -394,7 +435,7 @@ export function DialerApp() {
             disabled={importing || !pipedriveConfigured}
             className="header-btn header-btn-import"
           >
-            {importing ? '...' : '↓ Import 30 leadů'}
+            {importing ? '...' : '↓ Import'}
           </button>
         </div>
       </header>
@@ -402,18 +443,17 @@ export function DialerApp() {
       {contacts.length > 0 && (
         <div className="seq-progress-bar">
           <span className="seq-progress-label">
-            Lead {Math.min(Object.keys(session.completedOutcomes).length + 1, contacts.length)}/{contacts.length}
+            {progressPct}%
           </span>
           <div className="seq-progress-track">
             <div
               className="seq-progress-fill"
-              style={{ width: `${Math.round((Object.keys(session.completedOutcomes).length / contacts.length) * 100)}%` }}
+              style={{ width: `${progressPct}%` }}
             />
           </div>
           <div className="seq-progress-stats">
-            <span>✅ {contacts.filter((c) => session.completedOutcomes[c.id] === 'connected' || session.completedOutcomes[c.id] === 'meeting').length}</span>
-            <span>❌ {contacts.filter((c) => session.completedOutcomes[c.id] === 'no-answer').length}</span>
-            <span>⏱️ {formatTime(session.stats.talkTime)}</span>
+            <span>{session.stats.calls} hovorů</span>
+            <span>{connectedCount} spojeno</span>
           </div>
         </div>
       )}
@@ -533,6 +573,12 @@ export function DialerApp() {
           />
         )}
       </AnimatePresence>
+
+      {showCelebration && (
+        <div className="wow-celebrate">
+          <div className="wow-celebrate-text">🎉 Demo!</div>
+        </div>
+      )}
     </div>
   );
 }
