@@ -43,16 +43,12 @@ export function PreCallBattleCard({ contact, onReady, onSkip }: PreCallBattleCar
       // If we already have cached data, use it
       if (contact.aiSummary && contact.hiringSignal) {
         setBattleCard({
-          opening: `Dobrý den, ${contact.name}, u telefonu kolega z Behavery. Vidím, že ve firmě ${contact.company} řešíte...`,
-          painPoint: contact.hiringSignal || "Pravděpodobně řeší fluktuaci nebo přetížení týmů.",
-          hook: "Pomáháme firmám zachytit problémy v týmech dřív, než se to projeví odchody nebo poklesem výkonu.",
-          objectionHandlers: [
-            { objection: "Nemáme budget", response: "Kolik vás stojí jeden odchod kvalitního člověka? Obvykle 3-6 měsíčních platů." },
-            { objection: "Nemáme čas", response: "Puls trvá 2-3 minuty měsíčně. Kolik času vám berou výstupní pohovory a nábory?" },
-            { objection: "Máme už nástroj", response: "Jak často ho používáte? Většina pulzů končí jako \"survey hell\". Náš je jiný - měříme konkrétní signály jako micro-toxicitu." }
-          ],
+          opening: `Dobrý den, ${contact.name}, volám ohledně firmy ${contact.company}...`,
+          painPoint: contact.hiringSignal || "",
+          hook: "",
+          objectionHandlers: [],
           estimatedDuration: "3-5 min",
-          callToAction: "Mohli bychom si na 15 minut zavolat příští týden? Ukážu vám, jak to funguje."
+          callToAction: ""
         });
         return;
       }
@@ -86,16 +82,12 @@ export function PreCallBattleCard({ contact, onReady, onSkip }: PreCallBattleCar
           
           // Set battle card
           setBattleCard({
-            opening: data.openingLine || `Dobrý den, ${contact.name}, u telefonu kolega z Behavery. Vidím, že ve firmě ${contact.company} řešíte...`,
-            painPoint: data.hiringSignal || "Pravděpodobně řeší fluktuaci nebo přetížení týmů.",
-            hook: "Pomáháme firmám zachytit problémy v týmech dřív, než se to projeví odchody.",
-            objectionHandlers: [
-              { objection: "Nemáme budget", response: "Kolik vás stojí jeden odchod kvalitního člověka?" },
-              { objection: "Nemáme čas", response: "Puls trvá 2-3 minuty měsíčně." },
-              { objection: "Máme už nástroj", response: "Jak často ho používáte? Náš měří konkrétní signály jako micro-toxicitu." }
-            ],
+            opening: data.openingLine || `Dobrý den, ${contact.name}, volám ohledně firmy ${contact.company}...`,
+            painPoint: data.hiringSignal || "",
+            hook: "",
+            objectionHandlers: [],
             estimatedDuration: "3-5 min",
-            callToAction: "Mohli bychom si na 15 minut zavolat příští týden?"
+            callToAction: ""
           });
 
           // Save to backend
@@ -120,15 +112,12 @@ export function PreCallBattleCard({ contact, onReady, onSkip }: PreCallBattleCar
         console.error("Failed to load battle card", e);
         // Fallback to generic battle card
         setBattleCard({
-          opening: `Dobrý den, ${contact.name}, volám z Behavery.`,
-          painPoint: "Firma pravděpodobně řeší problém s angažovaností týmů.",
-          hook: "Pomáháme zachytit problémy dřív, než vedou k odchodům.",
-          objectionHandlers: [
-            { objection: "Nemáme budget", response: "Kolik vás stojí jeden odchod?" },
-            { objection: "Nemáme čas", response: "Trvá to 2-3 minuty měsíčně." }
-          ],
+          opening: `Dobrý den, ${contact.name}, volám ohledně firmy ${contact.company}.`,
+          painPoint: "",
+          hook: "",
+          objectionHandlers: [],
           estimatedDuration: "3-5 min",
-          callToAction: "Mohli bychom si zavolat příští týden?"
+          callToAction: ""
         });
       } finally {
         setIsLoading(false);
@@ -241,7 +230,7 @@ export function PreCallBattleCard({ contact, onReady, onSkip }: PreCallBattleCar
                         </p>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p className="text-xs">Zdroj: Behavery Sales Codex (Best Practices)</p>
+                        <p className="text-xs">Zdroj: Sales Codex (Best Practices)</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

@@ -362,7 +362,7 @@ function AIPrepPanel({ prep, isLoading, onRefresh, error }: { prep: AIPrep | nul
                       {[
                         { key: 'product' as const, icon: '📦', label: 'Product', sub: 'Věří, že to funguje?' },
                         { key: 'you' as const, icon: '🤝', label: 'You', sub: 'Věří mně jako expertovi?' },
-                        { key: 'company' as const, icon: '🏢', label: 'Company', sub: 'Věří Behavery jako firmě?' },
+                        { key: 'company' as const, icon: '🏢', label: 'Company', sub: 'Věří firmě?' },
                       ].map(t => (
                         <div key={t.key} className="certainty-item">
                           <div className="certainty-header">

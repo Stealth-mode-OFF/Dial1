@@ -22,12 +22,7 @@ type SessionState = {
 
 const STORAGE_KEY = 'dial1.neo.session.v1';
 
-const defaultContacts: Contact[] = [
-  { id: 'c1', name: 'Jan Novák', company: 'TechCorp s.r.o.', phone: '+420 123 456 789' },
-  { id: 'c2', name: 'Marie K.', company: 'Beta Logistics', phone: '+420 777 987 654' },
-  { id: 'c3', name: 'Pavel S.', company: 'ACME s.r.o.', phone: '+420 777 123 456' },
-  { id: 'c4', name: 'Lucie R.', company: 'Delta Systems', phone: '+420 606 111 222' },
-];
+const defaultContacts: Contact[] = [];
 
 const loadSession = (): SessionState => {
   const fallback: SessionState = {

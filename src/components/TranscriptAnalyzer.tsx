@@ -69,7 +69,7 @@ export const TranscriptInput: React.FC<TranscriptInputProps> = ({
         className="ta-textarea"
         value={transcript}
         onChange={e => setTranscript(e.target.value)}
-        placeholder={`[00:00] Josef: Dobrý den, volám z Behavery...\n[00:15] Martin: Dobrý den, řekněte.\n[00:23] Josef: Chtěl jsem se zeptat...\n\nNebo:\n\nJosef Hofman 00:00\nDobrý den, volám z Behavery...\n\nMartin Novák 00:15\nDobrý den, řekněte.`}
+        placeholder={`[00:00] Prodejce: Dobrý den, volám ohledně...\n[00:15] Klient: Dobrý den, řekněte.\n[00:23] Prodejce: Chtěl jsem se zeptat...\n\nNebo:\n\nProdejce 00:00\nDobrý den, volám ohledně...\n\nKlient 00:15\nDobrý den, řekněte.`}
         rows={compact ? 6 : 12}
       />
 

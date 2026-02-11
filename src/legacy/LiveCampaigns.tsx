@@ -110,12 +110,7 @@ export function LiveCampaigns() {
     return Math.max(0, Math.min(1, dailyGoal.current / dailyGoal.target));
   }, [dailyGoal.current, dailyGoal.target]);
 
-  const fallbackQueue: Contact[] = [
-    { id: 'q1', name: 'John Doe', role: 'VP of Sales', company: 'TechCorp', phone: '+420 777 111 222', source: 'LinkedIn', location: 'Prague, CZ' },
-    { id: 'q2', name: 'Mia Novak', role: 'Head of RevOps', company: 'Cloudwise', phone: '+420 777 111 333', source: 'Inbound', location: 'Brno, CZ' },
-    { id: 'q3', name: 'Peter Lane', role: 'CRO', company: 'Launchly', phone: '+420 777 111 444', source: 'Outbound', location: 'Vienna, AT' },
-    { id: 'q4', name: 'Sara Holt', role: 'VP Growth', company: 'Nextframe', phone: '+420 777 111 555', source: 'Referral', location: 'Berlin, DE' },
-  ];
+  const fallbackQueue: Contact[] = [];
 
   const baseQueue = queueContacts.length ? queueContacts : fallbackQueue;
   const visibleQueue = baseQueue.filter((contact) => {
@@ -371,11 +366,11 @@ export function LiveCampaigns() {
             <div className="neo-panel-shadow bg-white p-4">
               <div className="font-mono text-xs font-bold uppercase tracking-wider opacity-70 mb-3">Quick Info</div>
               <div className="space-y-2 text-sm font-bold">
-                <div>📞 {activeContact.phone || '+420 777 000 000'}</div>
+                <div>📞 {activeContact.phone || '—'}</div>
                 <div>
                   ✉️ {`${firstNameFromContact(activeContact.name).toLowerCase()}@${activeContact.company.toLowerCase()}.com`}
                 </div>
-                <div>📍 {activeContact.location || 'Prague, CZ'}</div>
+                <div>📍 {activeContact.location || '—'}</div>
               </div>
             </div>
 

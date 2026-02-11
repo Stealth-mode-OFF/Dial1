@@ -170,7 +170,7 @@ export function DailyBriefing({ onStartSession, isLoading: initialLoading }: Dai
                         <Phone className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
                         <div>
                           <span className="text-slate-400">Opening:</span>
-                          <span className="text-slate-200 ml-2">"{c.name}, volám z Behavery. Vidím, že řešíte {c.company ? `${c.company}` : 'týmovou práci'}..."</span>
+                          <span className="text-slate-200 ml-2">"Dobrý den, {c.name}. Volám ohledně {c.company ? `${c.company}` : 'spolupráce'}..."</span>
                         </div>
                       </div>
                       <div className="flex items-start gap-2">

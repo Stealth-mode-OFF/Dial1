@@ -7,12 +7,14 @@ type AuthGateProps = {
 };
 
 const AUTH_EMAIL_KEY = 'dial1-auth-email';
+const FORCE_BYPASS_AUTH = import.meta.env.VITE_FORCE_BYPASS_AUTH === 'true';
 
 export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
   // Bypass auth when:
   // 1. Explicit E2E bypass flag is set, OR
   // 2. DEV mode AND Supabase is not configured (no .env)
   const bypassAuth =
+    FORCE_BYPASS_AUTH ||
     import.meta.env.VITE_E2E_BYPASS_AUTH === 'true' ||
     (import.meta.env.DEV && !supabaseClient);
   const [email, setEmail] = useState(() => {

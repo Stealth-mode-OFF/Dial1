@@ -21,7 +21,7 @@ export default defineConfig({
   ],
   webServer: {
     command:
-      'bash -lc "export VITE_E2E_BYPASS_AUTH=true; export VITE_E2E_DISABLE_EXTERNAL_NAV=true; npm run dev"',
+      'bash -lc "export VITE_E2E_BYPASS_AUTH=true; export VITE_E2E_DISABLE_EXTERNAL_NAV=true; export VITE_SUPABASE_URL=http://127.0.0.1:54321; export VITE_SUPABASE_ANON_KEY=public-anon-key; npm run dev"',
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,

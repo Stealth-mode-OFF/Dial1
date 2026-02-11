@@ -5,6 +5,7 @@ import { echoApi } from './utils/echoApi';
 import { isSupabaseConfigured } from './utils/supabase/info';
 import { SettingsWorkspace } from './pages/SettingsWorkspace';
 import { useBrief } from './hooks/useBrief';
+import { useBatchBriefs } from './hooks/useBatchBriefs';
 import { TranscriptInput, AnalysisResult } from './components/TranscriptAnalyzer';
 import type { TranscriptAnalysisResult } from './utils/echoApi';
 
@@ -298,7 +299,17 @@ function LeadSidebar({
 }
 
 // ============ SETTINGS OVERLAY ============
-function SettingsOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+function SettingsOverlay({
+  open,
+  onClose,
+  smsTemplate,
+  onSmsTemplateChange,
+}: {
+  open: boolean;
+  onClose: () => void;
+  smsTemplate: string;
+  onSmsTemplateChange: (value: string) => void;
+}) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -326,6 +337,16 @@ function SettingsOverlay({ open, onClose }: { open: boolean; onClose: () => void
         <div className="overlay-header">
           <h2>Nastavení</h2>
           <button onClick={onClose}>Esc</button>
+        </div>
+        <div className="settings-sms">
+          <label htmlFor="sms-template">📱 SMS šablona (nedovoláno)</label>
+          <textarea
+            id="sms-template"
+            className="settings-textarea"
+            value={smsTemplate}
+            onChange={(e) => onSmsTemplateChange(e.target.value)}
+            rows={3}
+          />
         </div>
         <SettingsWorkspace />
       </motion.div>
@@ -373,6 +394,7 @@ function DialerTranscriptSection({ contact, callDuration }: { contact: Contact; 
 // ============ MAIN APP ============
 export function DialerApp() {
   const { contacts: salesContacts, isLoading, pipedriveConfigured, refresh, settings } = useSales();
+  const { progress: batchProgress, preload: batchPreload, skip: skipPreload, briefsByContactId } = useBatchBriefs();
   
   const contacts: Contact[] = useMemo(() => {
     if (!salesContacts?.length) return [];
@@ -410,6 +432,13 @@ export function DialerApp() {
   const [notes, setNotes] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [autoDialCountdown, setAutoDialCountdown] = useState(0);
+  const [autoDialQueued, setAutoDialQueued] = useState(false);
+  const autoDialTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [smsTemplate, setSmsTemplate] = useState(() => (
+    localStorage.getItem('dial1.smsTemplate')
+      || 'Dobrý den, zkoušel/a jsem Vás zastihnout telefonicky. Rád/a bych s Vámi probral/a možnou spolupráci. Můžeme se spojit?'
+  ));
 
   // Script fields
   const [companySize, setCompanySize] = useState('');
@@ -477,6 +506,7 @@ export function DialerApp() {
 
   // After import/refresh: jump to first uncalled lead (only when not mid-call)
   const prevContactsLenRef = useRef(contacts.length);
+  const lastPreloadCountRef = useRef(0);
   useEffect(() => {
     if (phase !== 'ready') return;
     // Only trigger when contacts list actually changes (e.g. after import)
@@ -488,6 +518,19 @@ export function DialerApp() {
       setActiveIndex(firstUncalled);
     }
   }, [contacts, session.completedOutcomes, phase]);
+
+  useEffect(() => {
+    if (!contacts.length) return;
+    if (!isSupabaseConfigured) return;
+    if (!batchProgress.done) return;
+    if (contacts.length === lastPreloadCountRef.current) return;
+    lastPreloadCountRef.current = contacts.length;
+    batchPreload(contacts);
+  }, [contacts, batchProgress.done, batchPreload, isSupabaseConfigured]);
+
+  useEffect(() => {
+    try { localStorage.setItem('dial1.smsTemplate', smsTemplate); } catch {}
+  }, [smsTemplate]);
 
   // Persist
   useEffect(() => { saveSession({ ...session, currentIndex: activeIndex }); }, [session, activeIndex]);
@@ -526,14 +569,22 @@ export function DialerApp() {
       setWrapupOutcome(null);
       setPhase('ready');
       setCallDuration(0);
+      setAutoDialCountdown(0);
+      setAutoDialQueued(false);
+      if (autoDialTimerRef.current) clearInterval(autoDialTimerRef.current);
     }
   }, [contact?.id, session.domainByContact, session.notesByContact, clearBrief]);
+
+  useEffect(() => () => {
+    if (autoDialTimerRef.current) clearInterval(autoDialTimerRef.current);
+  }, []);
 
   // Email history (last 3)
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     if (!contact?.id) return;
     if (phase !== 'wrapup') return;
+    if (wrapupOutcome === 'no-answer') return;
     let cancelled = false;
     setEmailHistoryLoading(true);
     echoApi.email.history(contact.id)
@@ -550,12 +601,13 @@ export function DialerApp() {
         setEmailHistoryLoading(false);
       });
     return () => { cancelled = true; };
-  }, [contact?.id, isSupabaseConfigured, phase]);
+  }, [contact?.id, isSupabaseConfigured, phase, wrapupOutcome]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     if (!contact?.id) return;
     if (phase !== 'wrapup') return;
+    if (wrapupOutcome === 'no-answer') return;
     let cancelled = false;
     echoApi.emailSchedule.active({ contactId: contact.id })
       .then((res) => {
@@ -571,7 +623,7 @@ export function DialerApp() {
         setSequenceEnabled(false);
       });
     return () => { cancelled = true; };
-  }, [contact?.id, isSupabaseConfigured, phase]);
+  }, [contact?.id, isSupabaseConfigured, phase, wrapupOutcome]);
 
   // Generate AI brief + script (PREP)
   useEffect(() => {
@@ -609,6 +661,7 @@ export function DialerApp() {
   }, [contact, externalNavDisabled]);
 
   const endCall = useCallback((outcome: 'connected' | 'no-answer' | 'meeting') => {
+    if (!contact) return;
     const dur = callStart ? Math.floor((Date.now() - callStart) / 1000) : 0;
     setWrapupOutcome(outcome);
     // Mark lead with its outcome
@@ -620,15 +673,15 @@ export function DialerApp() {
         connected: outcome === 'connected' || outcome === 'meeting' ? s.stats.connected + 1 : s.stats.connected,
         meetings: outcome === 'meeting' ? s.stats.meetings + 1 : s.stats.meetings,
       },
-      notesByContact: { ...s.notesByContact, [contact!.id]: notes },
-      completedOutcomes: { ...s.completedOutcomes, [contact!.id]: outcome },
+      notesByContact: { ...s.notesByContact, [contact.id]: notes },
+      completedOutcomes: { ...s.completedOutcomes, [contact.id]: outcome },
     }));
     setCallStart(null);
     setCallDuration(dur);
     setPhase('wrapup');
 
     // Auto-log to Pipedrive as done activity (fire-and-forget)
-    if (isSupabaseConfigured && contact) {
+    if (isSupabaseConfigured) {
       echoApi.logCall({
         contactId: contact.id,
         contactName: contact.name,
@@ -638,12 +691,28 @@ export function DialerApp() {
         duration: dur,
       }).catch(err => console.error('Auto-log to Pipedrive failed:', err));
     }
-  }, [callStart, contact, notes]);
+
+    if (outcome === 'no-answer') {
+      if (autoDialTimerRef.current) clearInterval(autoDialTimerRef.current);
+      setAutoDialCountdown(3);
+      autoDialTimerRef.current = setInterval(() => {
+        setAutoDialCountdown((prev) => {
+          if (prev <= 1) {
+            if (autoDialTimerRef.current) clearInterval(autoDialTimerRef.current);
+            setAutoDialQueued(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+  }, [callStart, contact, notes, isSupabaseConfigured]);
 
   // Post-call AI analysis (WRAPUP)
   useEffect(() => {
     if (!contact) return;
     if (phase !== 'wrapup') return;
+    if (wrapupOutcome === 'no-answer') return;
     if (!isSupabaseConfigured) return;
 
     const questions = (aiScript?.qualification || []).slice(0, 3);
@@ -707,6 +776,101 @@ export function DialerApp() {
     nextContact();
   }, [contact, nextContact]);
 
+  const saveWrapupAndNext = useCallback(async () => {
+    if (!contact) return;
+    if (wrapupOutcome === 'no-answer') return;
+    if (!isSupabaseConfigured) {
+      setCrmResult({ ok: false, message: 'Supabase není nakonfigurovaný.' });
+      return;
+    }
+    setCrmSaving(true);
+    setCrmResult(null);
+    try {
+      let personId: number | undefined = undefined;
+      try {
+        const ctx = await echoApi.precall.context({
+          contact_id: contact.id,
+          include: [],
+          ttl_hours: 24,
+          timeline: { activities: 0, notes: 0, deals: 0 },
+        });
+        personId = ctx?.pipedrive?.person_id ?? undefined;
+      } catch {
+        personId = undefined;
+      }
+
+      if (!personId && !contact.orgId) {
+        throw new Error('Chybí vazba do Pipedrive (personId/orgId).');
+      }
+
+      const lines: string[] = [];
+      lines.push(`<b>📞 Hovor</b>`);
+      lines.push(`Klient: <b>${contact.name}</b> (${contact.title || '—'}) – <b>${contact.company}</b>`);
+      lines.push(`Výsledek: <b>${outcomeLabel(wrapupOutcome)}</b>`);
+      lines.push(`Délka: <b>${formatTime(callDuration)}</b>`);
+      const qa = aiQualAnswers
+        .filter(Boolean)
+        .slice(0, 3)
+        .map((a, idx) => `• Q${idx + 1}: ${a}`)
+        .join('<br>');
+      if (qa) lines.push(`<br><b>Kvalifikace:</b><br>${qa}`);
+      if (notes?.trim()) lines.push(`<br><b>Poznámky:</b><br>${notes.trim()}`);
+      const content = lines.join('<br>');
+
+      const res = await echoApi.addPipedriveNote({
+        personId,
+        orgId: contact.orgId,
+        content,
+      });
+
+      setCrmResult({ ok: Boolean(res?.success), message: res?.success ? 'Uloženo do Pipedrive.' : 'Nepodařilo se uložit do Pipedrive.' });
+    } catch (e) {
+      setCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Uložení do CRM selhalo' });
+    } finally {
+      setCrmSaving(false);
+    }
+
+    setTimeout(() => {
+      handleWrapupDone(wrapupOutcome === 'meeting');
+    }, 800);
+  }, [aiQualAnswers, callDuration, contact, handleWrapupDone, isSupabaseConfigured, notes, wrapupOutcome]);
+
+  const pauseAutoDial = useCallback(() => {
+    if (autoDialTimerRef.current) clearInterval(autoDialTimerRef.current);
+    setAutoDialCountdown(0);
+  }, []);
+
+  useEffect(() => {
+    if (!autoDialQueued) return;
+    setAutoDialQueued(false);
+    nextContact();
+    setTimeout(() => {
+      startCall();
+    }, 600);
+  }, [autoDialQueued, nextContact, startCall]);
+
+  const getSmsUrl = useCallback(() => {
+    if (!contact?.phone) return '';
+    const phone = contact.phone.replace(/[^\d+]/g, '');
+    if (!phone) return '';
+    return `sms:${phone}?body=${encodeURIComponent(smsTemplate)}`;
+  }, [contact?.phone, smsTemplate]);
+
+  const sendSms = useCallback(() => {
+    const url = getSmsUrl();
+    if (!url) return;
+    pauseAutoDial();
+    window.location.href = url;
+  }, [getSmsUrl, pauseAutoDial]);
+
+  const handleAutoDialNext = useCallback(() => {
+    pauseAutoDial();
+    nextContact();
+    setTimeout(() => {
+      startCall();
+    }, 600);
+  }, [pauseAutoDial, nextContact, startCall]);
+
   // Keyboard
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -714,173 +878,82 @@ export function DialerApp() {
       if (tag === 'input' || tag === 'textarea') return;
 
       if (e.key === 'c' && phase === 'ready') { e.preventDefault(); startCall(); }
+      if (phase === 'calling') {
+        if (e.key === '1') { e.preventDefault(); endCall('no-answer'); }
+        if (e.key === '2') { e.preventDefault(); endCall('connected'); }
+        if (e.key === '3') { e.preventDefault(); endCall('meeting'); }
+      }
+      if (phase === 'wrapup' && wrapupOutcome === 'no-answer') {
+        if (e.key === ' ') { e.preventDefault(); pauseAutoDial(); }
+        if (e.key.toLowerCase() === 's') { e.preventDefault(); sendSms(); }
+        if (e.key === 'Enter') { e.preventDefault(); handleAutoDialNext(); }
+      }
+      if (phase === 'wrapup' && wrapupOutcome !== 'no-answer') {
+        if (e.key === 'Enter') { e.preventDefault(); saveWrapupAndNext(); }
+      }
       if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(i => Math.min(i + 1, contacts.length - 1)); }
       if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(i => Math.max(i - 1, 0)); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [phase, startCall, contacts.length]);
+  }, [contacts.length, endCall, handleAutoDialNext, pauseAutoDial, phase, saveWrapupAndNext, sendSms, startCall, wrapupOutcome]);
+
+  const displayBrief = contact ? (briefsByContactId[contact.id] || brief) : null;
 
   // ============ RENDER: READY PHASE ============
   const renderReady = () => (
-    <div className="phase-ready">
-      <div className="contact-hero">
-        <div className="contact-avatar">{contact!.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
-        <div className="contact-info">
-          <h1>{contact!.name}</h1>
-          <p>{contact!.title} · {contact!.company}</p>
-          <a href={`tel:${contact!.phone}`} className="contact-phone">{contact!.phone}</a>
-        </div>
-      </div>
-
-      <div className="prep-ai" aria-live="polite">
-        <div className="prep-ai-header">
-          <h3>AI příprava</h3>
-          <button
-            className="prep-ai-btn"
-            onClick={() => {
-              if (!contact) return;
-              const domain = normalizeCompanyDomain(companyDomain);
-              if (!domain) return;
-              generateBrief(
-                { domain, personName: contact.name, role: contact.title || 'Neznámá role', notes: contact.notes || '' },
-                true,
-              );
-            }}
-            disabled={!isSupabaseConfigured || !normalizeCompanyDomain(companyDomain) || briefLoading}
-            title="Vynutit nové vygenerování"
-          >
-            {briefLoading ? '…' : '↻'}
-          </button>
-        </div>
-
-        <div className="prep-domain">
-          <label htmlFor="company-domain">Web firmy (doména)</label>
-          <div className="prep-domain-row">
-            <input
-              id="company-domain"
-              value={companyDomain}
-              onChange={(e) => setCompanyDomain(normalizeCompanyDomain(e.target.value))}
-              placeholder="např. skoda-auto.cz"
-              inputMode="url"
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-            <button
-              className="prep-domain-save"
-              onClick={() => {
-                if (!contact) return;
-                const v = normalizeCompanyDomain(companyDomain);
-                setSession((s) => ({ ...s, domainByContact: { ...(s.domainByContact || {}), [contact.id]: v } }));
-                setDomainSaved(Boolean(v));
-              }}
-              disabled={!normalizeCompanyDomain(companyDomain)}
-              title="Uložit doménu pro tento kontakt"
-            >
-              Uložit
-            </button>
-          </div>
-          <div className="prep-domain-hint">
-            {domainSaved ? 'Uloženo pro tento kontakt.' : 'Tip: když je e‑mail firemní, doména se doplní automaticky.'}
-          </div>
-        </div>
-
-        {!isSupabaseConfigured ? (
-          <div className="prep-ai-note">Nastav Supabase klíče v ⚙ Nastavení — AI příprava se pak spustí automaticky.</div>
-        ) : briefError ? (
-          <div className="prep-ai-error">
-            <div className="prep-ai-error-title">Přípravu se nepodařilo načíst</div>
-            <div className="prep-ai-error-msg">{briefError}</div>
-          </div>
-        ) : briefLoading ? (
-          <div className="prep-ai-skeleton">
-            <div className="sk-line wide" />
-            <div className="sk-line" />
-            <div className="sk-line" />
-            <div className="sk-line wide" />
-            <div className="sk-line" />
-          </div>
-        ) : brief ? (
-          <div className="prep-ai-content">
-            {/* ── Kontext: firma + osoba ── */}
-            <div className="prep-section">
-              <div className="prep-ctx-row">
-                <span className="prep-ctx-icon">🏢</span>
-                <div className="prep-ctx-body">
-                  <strong>{brief.company?.name || contact!.company}</strong>
-                  {brief.company?.industry ? <span className="prep-ctx-dot"> · {brief.company.industry}</span> : null}
-                  {brief.company?.size ? <span className="prep-ctx-dot"> · {brief.company.size}</span> : null}
-                  {brief.company?.summary ? <p className="prep-ctx-summary">{brief.company.summary}</p> : null}
-                  {brief.company?.recentNews ? <p className="prep-ctx-summary">📰 {brief.company.recentNews}</p> : null}
-                </div>
-              </div>
-              <div className="prep-ctx-row">
-                <span className="prep-ctx-icon">👤</span>
-                <div className="prep-ctx-body">
-                  <strong>{brief.person?.name || contact!.name}</strong>
-                  <span className="prep-ctx-dot"> · {brief.person?.role || contact!.title || 'role neznámá'}</span>
-                  {brief.person?.decisionPower && brief.person.decisionPower !== 'unknown' ? (
-                    <span className="prep-ctx-dot"> · {brief.person.decisionPower === 'decision-maker' ? '🔑 Rozhodovatel' : brief.person.decisionPower === 'influencer' ? '💡 Influencer' : '🏅 Champion'}</span>
-                  ) : null}
-                  {brief.person?.background ? <p className="prep-ctx-summary">{brief.person.background}</p> : null}
-                </div>
-              </div>
-              {/* Quick links */}
-              <div className="prep-links-row">
-                {brief.company?.website ? (
-                  <a href={brief.company.website.startsWith('http') ? brief.company.website : `https://${brief.company.website}`} target="_blank" rel="noopener noreferrer" className="prep-link">🌐 Web</a>
-                ) : companyDomain ? (
-                  <a href={`https://${companyDomain}`} target="_blank" rel="noopener noreferrer" className="prep-link">🌐 Web</a>
-                ) : null}
-                {brief.person?.linkedin ? (
-                  <a href={brief.person.linkedin} target="_blank" rel="noopener noreferrer" className="prep-link">💼 LinkedIn</a>
-                ) : null}
-                {contact!.email ? (
-                  <a href={`mailto:${contact!.email}`} className="prep-link">✉️ {contact!.email}</a>
-                ) : null}
-              </div>
-            </div>
-
-            {/* ── Signály (jen pokud existují) ── */}
-            {((brief.signals || []).length > 0 || (brief.landmines || []).length > 0) && (
-              <div className="prep-chips-row">
-                {(brief.signals || []).slice(0, 4).map((s, idx) => (
-                  <span key={`sig-${idx}`} className={`prep-chip prep-chip--${s.type}`}>
-                    {s.type === 'opportunity' ? '🟢' : s.type === 'risk' ? '🔴' : '⚪'} {s.text}
-                  </span>
-                ))}
-                {(brief.landmines || []).slice(0, 3).map((t, idx) => (
-                  <span key={`lm-${idx}`} className="prep-chip prep-chip--landmine">⚠️ {t}</span>
-                ))}
-              </div>
+    <div className="seq-ready">
+      <div className="seq-lead-card">
+        <div className="seq-lead-main">
+          <div className="seq-lead-avatar">{contact!.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
+          <div className="seq-lead-info">
+            <h2 className="seq-lead-name">{contact!.name}</h2>
+            <p className="seq-lead-role">{contact!.title || '—'} @ {contact!.company}</p>
+            {contact!.phone ? (
+              <a href={`tel:${contact!.phone}`} className="seq-lead-phone">{contact!.phone}</a>
+            ) : (
+              <span className="seq-lead-phone muted">Telefon chybí</span>
             )}
-
-            {/* ── Jen otevírací věta (cold call = jednoduchý) ── */}
-            {aiScript?.openingVariants?.[0]?.text ? (
-              <div className="prep-script">
-                <details className="prep-details" open>
-                  <summary className="prep-details-sum">📞 Jak začít hovor</summary>
-                  <div className="prep-details-body">
-                    <div className="prep-ai-quote">„{aiScript.openingVariants[0].text}"</div>
-                  </div>
-                </details>
-              </div>
-            ) : null}
           </div>
-        ) : (
-          <div className="prep-ai-note">Zadej doménu firmy — AI připraví scénář hovoru na míru.</div>
-        )}
+        </div>
+
+        <div className="seq-brief-compact" aria-live="polite">
+          {briefError ? (
+            <div className="seq-brief-error">{briefError}</div>
+          ) : displayBrief ? (
+            <>
+              {displayBrief.company?.summary ? (
+                <p className="seq-brief-summary">{displayBrief.company.summary}</p>
+              ) : null}
+              {(displayBrief.signals || []).length > 0 ? (
+                <div className="seq-brief-signals">
+                  {displayBrief.signals.slice(0, 3).map((s, i) => (
+                    <span key={`${s.type}-${i}`} className={`seq-signal seq-signal-${s.type}`}>{s.text}</span>
+                  ))}
+                </div>
+              ) : null}
+              {aiScript?.openingVariants?.[0]?.text ? (
+                <div className="seq-opening">
+                  <span className="seq-opening-label">💬 Opening:</span>
+                  <span className="seq-opening-text">{aiScript.openingVariants[0].text}</span>
+                </div>
+              ) : null}
+            </>
+          ) : briefLoading ? (
+            <div className="seq-brief-loading">⏳ Načítám brief...</div>
+          ) : (
+            <div className="seq-brief-loading">Brief není k dispozici.</div>
+          )}
+        </div>
       </div>
 
-      <button className="btn-call" onClick={startCall}>
-        <span className="btn-call-icon">●</span>
-        Zavolat
-        <kbd>C</kbd>
-      </button>
-
-      <div className="ready-actions">
-        <button onClick={nextContact}>Přeskočit →</button>
+      <div className="seq-ready-actions">
+        <button className="seq-call-btn" onClick={startCall}>
+          📞 Zavolat
+        </button>
+        <button className="seq-skip-btn" onClick={nextContact}>Přeskočit →</button>
       </div>
+      <p className="seq-hint">C = zavolat · → = přeskočit</p>
     </div>
   );
 
@@ -907,7 +980,7 @@ export function DialerApp() {
           <div className="script-ai-title">Skript hovoru</div>
           <div className="script-ai-block">
             <div className="script-ai-label">Otevírací věta</div>
-            <p className="script-ai-quote">„Dobrý den, tady Josef z Behavery. Řešíme lídrům, jako jste vy, aby jejich zaměstnanci byli více angažovaní…"</p>
+            <p className="script-ai-quote">Připravte si vlastní otevírací větu v Nastavení.</p>
           </div>
         </div>
 
@@ -916,7 +989,7 @@ export function DialerApp() {
         <div className="script-question">
           <span className="script-q-num">1</span>
           <div className="script-q-content">
-            <p>…Naše řešení je nejvhodnější pro firmy od 50 do 500 zaměstnanců, kolik je vás?</p>
+            <p>Kolik zaměstnanců máte?</p>
             <input
               value={aiQualAnswers[0] || ''}
               onChange={(e) =>
@@ -934,7 +1007,7 @@ export function DialerApp() {
         <div className="script-question">
           <span className="script-q-num">2</span>
           <div className="script-q-content">
-            <p>Zjišťujete pravidelně jaká je nálada ve vašich týmech?</p>
+            <p>Jaký problém aktuálně řešíte?</p>
             <input
               value={aiQualAnswers[1] || ''}
               onChange={(e) =>
@@ -952,7 +1025,7 @@ export function DialerApp() {
         <div className="script-question">
           <span className="script-q-num">3</span>
           <div className="script-q-content">
-            <p>Je třeba přizvat někoho dalšího pro případné rozhodnutí?</p>
+            <p>Kdo rozhoduje o nákupu?</p>
             <input
               value={aiQualAnswers[2] || ''}
               onChange={(e) =>
@@ -977,96 +1050,6 @@ export function DialerApp() {
           />
         </div>
 
-        {/* Pipedrive akce */}
-        <div className="script-actions" style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-          <button
-            className="btn-end btn-end-done"
-            style={{ flex: 1, minWidth: 140 }}
-            disabled={crmSaving}
-            onClick={async () => {
-              if (!contact) return;
-              setCrmSaving(true);
-              setCrmResult(null);
-              try {
-                let personId: number | undefined;
-                try {
-                  const ctx = await echoApi.precall.context({
-                    contact_id: contact.id,
-                    include: [],
-                    ttl_hours: 24,
-                    timeline: { activities: 0, notes: 0, deals: 0 },
-                  });
-                  personId = ctx?.pipedrive?.person_id ?? undefined;
-                } catch { personId = undefined; }
-
-                const lines: string[] = [];
-                lines.push(`<b>📞 Hovor</b> – Echo Pulse`);
-                lines.push(`Klient: <b>${contact.name}</b> (${contact.title || '—'}) – <b>${contact.company}</b>`);
-                lines.push(`Délka: <b>${formatTime(callDuration)}</b>`);
-                const qa = aiQualAnswers.filter(Boolean).slice(0, 3).map((a) => `• ${a}`).join(' ');
-                if (qa) lines.push(`Kvalifikace: ${qa}`);
-                if (notes?.trim()) lines.push(`Poznámky: ${notes.trim()}`);
-                const content = lines.join('<br>');
-
-                const res = await echoApi.addPipedriveNote({ personId, orgId: contact.orgId, content });
-                setCrmResult({ ok: Boolean(res?.success), message: res?.success ? '✅ Poznámka uložena.' : 'Nepodařilo se uložit.' });
-              } catch (e) {
-                setCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Uložení selhalo' });
-              } finally { setCrmSaving(false); }
-            }}
-          >
-            {crmSaving ? '⏳ Ukládám…' : '💾 Uložit poznámku do Pipedrive'}
-          </button>
-
-          <button
-            className="btn-end btn-end-done"
-            style={{ flex: 1, minWidth: 140, background: '#22c55e' }}
-            onClick={async () => {
-              if (!contact) return;
-              try {
-                await echoApi.logCall({
-                  contactId: contact.id,
-                  contactName: contact.name,
-                  companyName: contact.company,
-                  disposition: 'connected',
-                  notes: notes || 'Dovoláno',
-                  duration: callDuration,
-                });
-                setCrmResult({ ok: true, message: '✅ Logováno: Dovoláno' });
-              } catch (e) {
-                setCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Log selhal' });
-              }
-            }}
-          >
-            ✅ Dovolal se
-          </button>
-
-          <button
-            className="btn-end btn-end-skip"
-            style={{ flex: 1, minWidth: 140 }}
-            onClick={async () => {
-              if (!contact) return;
-              try {
-                await echoApi.logCall({
-                  contactId: contact.id,
-                  contactName: contact.name,
-                  companyName: contact.company,
-                  disposition: 'no-answer',
-                  notes: 'Nedovoláno',
-                  duration: callDuration,
-                });
-                setCrmResult({ ok: true, message: '📵 Logováno: Nedovoláno' });
-              } catch (e) {
-                setCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Log selhal' });
-              }
-            }}
-          >
-            📵 Nedovolal se
-          </button>
-        </div>
-        {crmResult ? (
-          <div className={`wrapup-crm-msg ${crmResult.ok ? 'ok' : 'err'}`} style={{ marginTop: 8 }}>{crmResult.message}</div>
-        ) : null}
       </div>
 
       {/* Floating whisper */}
@@ -1079,396 +1062,130 @@ export function DialerApp() {
   const SCHEDULER_URL = 'https://behavera.pipedrive.com/scheduler/GX27Q8iw/konzultace-jak-ziskat-jasna-data-o-svem-tymu-30-minutes';
 
   // ============ RENDER: WRAPUP PHASE ============
-  const renderWrapup = () => (
-    <div className="phase-wrapup">
-      {showScheduler ? (
-        <div className="scheduler-embed">
-          <div className="scheduler-header">
-            <h3>📅 Naplánuj demo</h3>
-            <button className="scheduler-close" onClick={() => setShowScheduler(false)}>✕ Zavřít</button>
+  const renderNoAnswerOverlay = () => {
+    if (!contact) return null;
+    const smsUrl = getSmsUrl();
+    const smsDisabled = !smsUrl;
+
+    return (
+      <div className="seq-overlay">
+        <div className="seq-overlay-card">
+          <div className="seq-overlay-icon">📵</div>
+          <h2 className="seq-overlay-title">Nedovoláno</h2>
+          <p className="seq-overlay-name">{contact.name} – {contact.company}</p>
+
+          <div className="seq-overlay-status">
+            <span className="seq-check">✅ Zalogováno do CRM</span>
+            <span className="seq-check">📅 Follow-up za 2 dny naplánován</span>
           </div>
-          <iframe
-            src={SCHEDULER_URL}
-            className="scheduler-iframe"
-            title="Pipedrive Scheduler"
-            allow="payment"
-          />
+
+          <div className="seq-overlay-actions">
+            <button className="seq-sms-btn" onClick={sendSms} disabled={smsDisabled}>
+              📱 Odeslat SMS
+            </button>
+          </div>
+
+          {autoDialCountdown > 0 ? (
+            <div className="seq-countdown">
+              <div className="seq-countdown-num">{autoDialCountdown}</div>
+              <p>Další hovor za {autoDialCountdown}s</p>
+              <button className="seq-pause-btn" onClick={pauseAutoDial}>⏸️ Pozastavit</button>
+            </div>
+          ) : (
+            <button className="seq-next-btn" onClick={handleAutoDialNext}>
+              📞 Zavolat dalšímu →
+            </button>
+          )}
         </div>
-      ) : (
-        <div className="wrapup-card">
-          <h2>Hovor ukončen</h2>
-          <p className="wrapup-contact">{contact!.name} · {contact!.company}</p>
-          <p className="wrapup-duration">{formatTime(callDuration)} min</p>
+      </div>
+    );
+  };
 
-          <div className="wrapup-summary">
-            {companySize && <div><strong>Velikost:</strong> {companySize}</div>}
-            {engagement && <div><strong>Engagement:</strong> {engagement}</div>}
-            {lateInfo && <div><strong>Pozdní info:</strong> {lateInfo}</div>}
-            {aiQualAnswers.filter(Boolean).length ? (
-              <div>
-                <strong>AI kvalifikace:</strong>
-                <ul className="wrapup-ai-answers">
-                  {aiQualAnswers.filter(Boolean).slice(0, 3).map((a, idx) => (
-                    <li key={`${a}-${idx}`}>{a}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {notes && <div><strong>Poznámky:</strong> {notes}</div>}
+  const renderConnectedWrapup = () => {
+    if (!contact) return null;
+    const questions = (aiScript?.qualification || [
+      { question: 'Kolik zaměstnanců máte?' },
+      { question: 'Jaký problém aktuálně řešíte?' },
+      { question: 'Kdo rozhoduje o nákupu?' },
+    ]).slice(0, 3);
+
+    return (
+      <div className="seq-wrapup">
+        {showScheduler ? (
+          <div className="scheduler-embed">
+            <div className="scheduler-header">
+              <h3>📅 Naplánuj demo</h3>
+              <button className="scheduler-close" onClick={() => setShowScheduler(false)}>✕ Zavřít</button>
+            </div>
+            <iframe
+              src={SCHEDULER_URL}
+              className="scheduler-iframe"
+              title="Pipedrive Scheduler"
+              allow="payment"
+            />
           </div>
-
-          <div className="wrapup-ai">
-            <div className="wrapup-ai-header">
-              <h3>AI hodnocení</h3>
-              <span className="wrapup-ai-pill">{wrapupOutcome ? outcomeLabel(wrapupOutcome) : '—'}</span>
+        ) : (
+          <div className="seq-wrapup-card">
+            <div className="seq-wrapup-header">
+              <span className="seq-wrapup-outcome">{wrapupOutcome === 'meeting' ? '📅 Demo domluveno' : '✅ Dovoláno'}</span>
+              <span className="seq-wrapup-contact">{contact.name} – {contact.company}</span>
+              <span className="seq-wrapup-time">⏱️ {formatTime(callDuration)}</span>
             </div>
 
-            {!isSupabaseConfigured ? (
-              <div className="wrapup-ai-note">AI není nakonfigurovaná.</div>
-            ) : analysisLoading ? (
-              <div className="wrapup-ai-note">⏳ Analyzuji hovor…</div>
-            ) : analysisError ? (
-              <div className="wrapup-ai-error">Nepodařilo se analyzovat: {analysisError}</div>
-            ) : callAnalysis ? (
-              <div className="wrapup-ai-content">
-                <div className="wrapup-ai-score">
-                  <span className="wrapup-ai-score-num">{Number(callAnalysis.score ?? 0)}</span>
-                  <span className="wrapup-ai-score-label">/ 100</span>
+            <div className="seq-qual">
+              <h3 className="seq-qual-title">Kvalifikace</h3>
+              {questions.map((q, i) => (
+                <div key={`${q.question}-${i}`} className="seq-qual-row">
+                  <label className="seq-qual-label">{q.question}</label>
+                  <input
+                    className="seq-qual-input"
+                    value={aiQualAnswers[i] || ''}
+                    onChange={(e) =>
+                      setAiQualAnswers((prev) => {
+                        const next = [...prev];
+                        next[i] = e.target.value;
+                        return next;
+                      })
+                    }
+                    placeholder="Odpověď..."
+                  />
                 </div>
-                {callAnalysis.summary ? <div className="wrapup-ai-summary">{callAnalysis.summary}</div> : null}
-                {Array.isArray(callAnalysis.strengths) && callAnalysis.strengths.length ? (
-                  <div className="wrapup-ai-list">
-                    <div className="wrapup-ai-list-title">Silné stránky</div>
-                    <ul>{callAnalysis.strengths.slice(0, 4).map((s: string, i: number) => <li key={`${s}-${i}`}>{s}</li>)}</ul>
-                  </div>
-                ) : null}
-                {Array.isArray(callAnalysis.weaknesses) && callAnalysis.weaknesses.length ? (
-                  <div className="wrapup-ai-list">
-                    <div className="wrapup-ai-list-title">Slabiny</div>
-                    <ul>{callAnalysis.weaknesses.slice(0, 4).map((s: string, i: number) => <li key={`${s}-${i}`}>{s}</li>)}</ul>
-                  </div>
-                ) : null}
-                {callAnalysis.coachingTip ? (
-                  <div className="wrapup-ai-tip">
-                    <strong>Tip:</strong> {callAnalysis.coachingTip}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="wrapup-ai-note">Doplň poznámky a AI zhodnotí hovor.</div>
-            )}
+              ))}
+            </div>
 
-            <div className="wrapup-email">
-              {!emailDraft && (
-                <button
-                  className="wrapup-email-btn"
-                  onClick={() => {
-                    if (!contact) return;
-                    const firstName = contact.name.split(' ')[0] || contact.name;
-                    const template = `Předmět: ${contact.company} – krátký dotaz\n\nDobrý den${firstName ? ` ${firstName}` : ''},\n\nzkoušel/a jsem Vás zastihnout telefonicky – omlouvám se, že se to nepodařilo.\n\nŘeším jednu věc s firmami jako ${contact.company} – jak udržet klíčové lidi a mít přehled o tom, co se v týmu skutečně děje (ne jen to, co řeknou na poradě).\n\nPomáháme s tím přes krátké pulse-checky, které manažerům ukážou reálná data za 2 minuty.\n\nMělo by smysl se na to podívat? Stačí krátký 15min call.\n\nDěkuji a přeji hezký den,\n${settings.smartBccAddress ? '' : '[Vaše jméno]'}`;
-                    setEmailDraft(template);
-                  }}
-                >
-                  ✉️ Připravit follow‑up e‑mail
+            <div className="seq-notes">
+              <label className="seq-notes-label">Poznámky</label>
+              <textarea
+                className="seq-notes-input"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                placeholder="Klíčové body z hovoru..."
+              />
+            </div>
+
+            <div className="seq-wrapup-actions">
+              <button className="seq-save-btn" disabled={crmSaving || !isSupabaseConfigured} onClick={saveWrapupAndNext}>
+                {crmSaving ? '⏳ Ukládám...' : '💾 Uložit + Další →'}
+              </button>
+              {wrapupOutcome === 'meeting' && (
+                <button className="seq-demo-btn" onClick={() => setShowScheduler(true)}>
+                  📅 Naplánovat demo
                 </button>
               )}
-
-              {emailDraft ? (
-                <div className="wrapup-email-editor">
-                  <div className="wrapup-email-actions">
-                    <button
-                      className="wrapup-email-copy"
-                      onClick={() => {
-                        navigator.clipboard.writeText(emailDraft);
-                        setEmailCopied(true);
-                        setTimeout(() => setEmailCopied(false), 1500);
-                      }}
-                    >
-                      {emailCopied ? 'Zkopírováno ✓' : '📋 Kopírovat'}
-                    </button>
-                    <button
-                      className="wrapup-email-copy"
-                      type="button"
-                      onClick={async () => {
-                        if (!contact) return;
-                        setEmailLogStatus(null);
-                        try {
-                          const lines = emailDraft.split('\n');
-                          const subjectLine = lines.find(l => l.startsWith('Předmět:'));
-                          const subject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${contact.company} – follow-up`;
-                          const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
-                          const body = bodyLines.join('\n').trim();
-
-                          const res = await echoApi.email.log({
-                            contactId: contact.id,
-                            contactName: contact.name,
-                            company: contact.company,
-                            emailType: 'cold',
-                            subject,
-                            body,
-                            recipientEmail: contact.email || undefined,
-                            source: 'manual',
-                          });
-                          if (!res?.ok) throw new Error(res?.error || 'Log selhal');
-                          setEmailLogStatus('Označeno jako odeslané ✓');
-                          // Refresh history
-                          try {
-                            const h = await echoApi.email.history(contact.id);
-                            setEmailHistory(Array.isArray(h?.emails) ? h.emails : []);
-                          } catch {
-                            // ignore
-                          }
-                        } catch {
-                          setEmailLogStatus('Nepodařilo se zalogovat e‑mail');
-                        }
-                      }}
-                    >
-                      ✅ Označit jako odeslané
-                    </button>
-                    {contact?.email && (
-                      <button
-                        className="wrapup-email-mailto"
-                        type="button"
-                        onClick={async () => {
-                          const lines = emailDraft.split('\n');
-                          const subjectLine = lines.find(l => l.startsWith('Předmět:'));
-                          const subject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${contact.company} – follow-up`;
-                          const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
-                          const body = bodyLines.join('\n').trim();
-                          const bcc = settings.smartBccAddress || '';
-                          const mailtoUrl = `mailto:${encodeURIComponent(contact.email!)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${bcc ? `&bcc=${encodeURIComponent(bcc)}` : ''}`;
-
-                          if (isSupabaseConfigured) {
-                            try {
-                              const status = await echoApi.gmail.getStatus();
-                              if (status?.configured) {
-                                const res = await echoApi.gmail.createDraft({
-                                  to: contact.email!,
-                                  subject,
-                                  body,
-                                  bcc: bcc || undefined,
-                                  log: {
-                                    contactId: contact.id,
-                                    contactName: contact.name,
-                                    company: contact.company,
-                                    emailType: 'cold',
-                                  },
-                                });
-                                if (res?.ok && res.gmailUrl) {
-                                  window.open(res.gmailUrl, '_blank', 'noopener,noreferrer');
-                                  try {
-                                    const h = await echoApi.email.history(contact.id);
-                                    setEmailHistory(Array.isArray(h?.emails) ? h.emails : []);
-                                  } catch {
-                                    // ignore
-                                  }
-                                  return;
-                                }
-                              }
-                            } catch {
-                              // Silent fallback to mailto:
-                            }
-                          }
-
-                          window.open(mailtoUrl, '_blank', 'noopener,noreferrer');
-                        }}
-                      >
-                        📧 Otevřít v e‑mailu
-                      </button>
-                    )}
-                  </div>
-                  <textarea
-                    value={emailDraft}
-                    onChange={(e) => setEmailDraft(e.target.value)}
-                    rows={8}
-                  />
-                  {!contact?.email && (
-                    <div className="wrapup-email-hint muted">Kontakt nemá e‑mail – zkopíruj text a pošli ručně.</div>
-                  )}
-                  {settings.smartBccAddress && (
-                    <div className="wrapup-email-hint muted">SmartBCC: {settings.smartBccAddress}</div>
-                  )}
-                  {emailLogStatus && (
-                    <div className="wrapup-email-hint muted">{emailLogStatus}</div>
-                  )}
-                  {isSupabaseConfigured && contact?.id ? (
-                    emailHistoryLoading ? (
-                      <div className="wrapup-email-hint muted">Poslední e‑maily: ⏳ Načítám…</div>
-                    ) : emailHistory.length ? (
-                      <div className="wrapup-email-hint muted">
-                        <div>Poslední e‑maily:</div>
-                        <ul className="wrapup-ai-answers">
-                          {emailHistory.slice(0, 3).map((e: any) => {
-                            const when = e?.sent_at ? new Date(String(e.sent_at)).toLocaleDateString('cs-CZ') : '—';
-                            const type = String(e?.email_type || '');
-                            const typeLabel =
-                              type === 'cold' ? 'cold' :
-                              type === 'demo-followup' ? 'po demo' :
-                              type === 'sequence-d1' ? 'D+1' :
-                              type === 'sequence-d3' ? 'D+3' : type;
-                            const subj = e?.subject ? String(e.subject) : '—';
-                            return <li key={String(e?.id || `${when}-${type}-${subj}`)}>{when} · {typeLabel} · {subj}</li>;
-                          })}
-                        </ul>
-                      </div>
-                    ) : (
-                      <div className="wrapup-email-hint muted">Poslední e‑maily: —</div>
-                    )
-                  ) : null}
-                </div>
-              ) : null}
             </div>
 
-            <div className="wrapup-crm">
-              <button
-                className="wrapup-crm-btn"
-                disabled={!isSupabaseConfigured || crmSaving}
-                onClick={async () => {
-                  if (!contact) return;
-                  setCrmSaving(true);
-                  setCrmResult(null);
-                  try {
-                    let personId: number | undefined = undefined;
-                    try {
-                      const ctx = await echoApi.precall.context({
-                        contact_id: contact.id,
-                        include: [],
-                        ttl_hours: 24,
-                        timeline: { activities: 0, notes: 0, deals: 0 },
-                      });
-                      personId = ctx?.pipedrive?.person_id ?? undefined;
-                    } catch {
-                      personId = undefined;
-                    }
-
-                    if (!personId && !contact.orgId) {
-                      throw new Error('Chybí vazba do Pipedrive (personId/orgId).');
-                    }
-
-                    const lines: string[] = [];
-                    lines.push(`<b>📞 Hovor</b> – Echo Pulse`);
-                    lines.push(`Klient: <b>${contact.name}</b> (${contact.title || '—'}) – <b>${contact.company}</b>`);
-                    lines.push(`Výsledek: <b>${outcomeLabel(wrapupOutcome)}</b>`);
-                    lines.push(`Délka: <b>${formatTime(callDuration)}</b>`);
-                    if (callAnalysis?.score !== undefined) lines.push(`AI skóre: <b>${Number(callAnalysis.score)}</b>/100`);
-                    if (callAnalysis?.summary) lines.push(`Shrnutí: ${String(callAnalysis.summary)}`);
-                    if (Array.isArray(callAnalysis?.strengths) && callAnalysis.strengths.length) {
-                      lines.push(`Silné stránky: ${callAnalysis.strengths.slice(0, 3).map((s: string) => `• ${s}`).join(' ')}`);
-                    }
-                    if (Array.isArray(callAnalysis?.weaknesses) && callAnalysis.weaknesses.length) {
-                      lines.push(`Slabiny: ${callAnalysis.weaknesses.slice(0, 3).map((s: string) => `• ${s}`).join(' ')}`);
-                    }
-                    if (callAnalysis?.coachingTip) lines.push(`Tip kouče: ${String(callAnalysis.coachingTip)}`);
-                    const qa = aiQualAnswers.filter(Boolean).slice(0, 3).map((a) => `• ${a}`).join(' ');
-                    if (qa) lines.push(`Kvalifikace: ${qa}`);
-                    if (notes?.trim()) lines.push(`Poznámky: ${notes.trim()}`);
-                    const content = lines.join('<br>');
-
-                    const res = await echoApi.addPipedriveNote({
-                      personId,
-                      orgId: contact.orgId,
-                      content,
-                    });
-
-                    setCrmResult({ ok: Boolean(res?.success), message: res?.success ? 'Uloženo do Pipedrive.' : 'Nepodařilo se uložit do Pipedrive.' });
-                  } catch (e) {
-                    setCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Uložení do CRM selhalo' });
-                  } finally {
-                    setCrmSaving(false);
-                  }
-                }}
-              >
-                {crmSaving ? '⏳ Ukládám do CRM…' : '💾 Uložit do CRM (Pipedrive)'}
-              </button>
-              {crmResult ? (
-                <div className={`wrapup-crm-msg ${crmResult.ok ? 'ok' : 'err'}`}>{crmResult.message}</div>
-              ) : null}
-            </div>
-
-            <div className="wrapup-email" style={{ marginTop: 12 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <input
-                  type="checkbox"
-                  checked={sequenceEnabled}
-                  disabled={!isSupabaseConfigured || sequenceBusy}
-                  onChange={async (e) => {
-                    if (!contact) return;
-                    const next = e.target.checked;
-                    setSequenceMsg(null);
-                    setSequenceBusy(true);
-                    try {
-                      if (!next) {
-                        await echoApi.emailSchedule.cancel({ contactId: contact.id });
-                        setSequenceEnabled(false);
-                        setSequenceSchedules([]);
-                        setSequenceMsg('Sekvence zrušena.');
-                        return;
-                      }
-
-                      if (!emailDraft.trim()) {
-                        setSequenceEnabled(false);
-                        setSequenceMsg('Nejdřív připrav follow‑up e‑mail (aby měl AI kontext).');
-                        return;
-                      }
-
-                      const lines = emailDraft.split('\n');
-                      const subjectLine = lines.find(l => l.startsWith('Předmět:'));
-                      const originalSubject = subjectLine ? subjectLine.replace('Předmět:', '').trim() : `${contact.company} – krátký dotaz`;
-                      const bodyLines = lines.filter(l => !l.startsWith('Předmět:'));
-                      const originalBody = bodyLines.join('\n').trim();
-
-                      const d1 = computeSequenceIso(1);
-                      const d3 = computeSequenceIso(3);
-                      const baseContext = {
-                        sequenceKind: 'cold',
-                        contactName: contact.name,
-                        company: contact.company,
-                        recipientEmail: contact.email || '',
-                        bcc: settings.smartBccAddress || '',
-                        originalEmail: { subject: originalSubject, body: originalBody },
-                      };
-
-                      const res = await echoApi.emailSchedule.create({
-                        contactId: contact.id,
-                        schedules: [
-                          { emailType: 'sequence-d1', scheduledFor: d1, context: baseContext },
-                          { emailType: 'sequence-d3', scheduledFor: d3, context: baseContext },
-                        ],
-                      });
-                      if (!res?.ok) throw new Error(res?.error || 'Nepodařilo se naplánovat sekvenci');
-                      setSequenceEnabled(true);
-                      setSequenceSchedules(Array.isArray(res?.schedules) ? res.schedules : []);
-                      setSequenceMsg('Sekvence naplánována ✓');
-                    } catch (err) {
-                      setSequenceEnabled(false);
-                      setSequenceMsg(err instanceof Error ? err.message : 'Nepodařilo se naplánovat sekvenci');
-                    } finally {
-                      setSequenceBusy(false);
-                    }
-                  }}
-                />
-                <span style={{ fontWeight: 700 }}>Naplánovat follow‑up sekvenci</span>
-              </label>
-              <div className="wrapup-email-hint muted">→ D+1: krátký bump ({formatSequenceWhen(computeSequenceIso(1))})</div>
-              <div className="wrapup-email-hint muted">→ D+3: finální follow‑up ({formatSequenceWhen(computeSequenceIso(3))})</div>
-              {sequenceMsg ? <div className="wrapup-email-hint muted">{sequenceMsg}</div> : null}
-            </div>
+            {crmResult ? (
+              <div className={`seq-crm-msg ${crmResult.ok ? 'ok' : 'err'}`}>{crmResult.message}</div>
+            ) : null}
           </div>
+        )}
+      </div>
+    );
+  };
 
-          <div className="wrapup-actions">
-            <button className="btn-wrapup btn-wrapup-next" onClick={() => handleWrapupDone(false)}>
-              Další kontakt →
-            </button>
-            <button className="btn-wrapup btn-wrapup-meeting" onClick={() => { setShowScheduler(true); handleWrapupDone(true); }}>
-              📅 Naplánovat demo
-            </button>
-          </div>
-
-          {/* Transcript Analysis Section */}
-          <DialerTranscriptSection contact={contact!} callDuration={callDuration} />
-        </div>
-      )}
-    </div>
+  const renderWrapup = () => (
+    wrapupOutcome === 'no-answer' ? renderNoAnswerOverlay() : renderConnectedWrapup()
   );
 
   // ============ RENDER: EMPTY STATE ============
@@ -1516,13 +1233,40 @@ export function DialerApp() {
         </div>
       </header>
 
-      {/* Progress bar */}
       {contacts.length > 0 && (
-        <div className="progress-bar-wrap">
-          <div
-            className="progress-bar-fill"
-            style={{ width: `${Math.round((Object.keys(session.completedOutcomes).length / contacts.length) * 100)}%` }}
-          />
+        <div className="seq-progress-bar">
+          <span className="seq-progress-label">
+            Lead {Math.min(Object.keys(session.completedOutcomes).length + 1, contacts.length)}/{contacts.length}
+          </span>
+          <div className="seq-progress-track">
+            <div
+              className="seq-progress-fill"
+              style={{ width: `${Math.round((Object.keys(session.completedOutcomes).length / contacts.length) * 100)}%` }}
+            />
+          </div>
+          <div className="seq-progress-stats">
+            <span>✅ {contacts.filter(c => session.completedOutcomes[c.id] === 'connected' || session.completedOutcomes[c.id] === 'meeting').length}</span>
+            <span>❌ {contacts.filter(c => session.completedOutcomes[c.id] === 'no-answer').length}</span>
+            <span>⏱️ {formatTime(session.stats.talkTime)}</span>
+          </div>
+        </div>
+      )}
+
+      {!batchProgress.done && (
+        <div className="seq-preload-overlay">
+          <div className="seq-preload-card">
+            <h3>⏳ Připravuji AI briefy</h3>
+            <p>{batchProgress.loaded}/{batchProgress.total} leadů</p>
+            <div className="seq-preload-track">
+              <div
+                className="seq-preload-fill"
+                style={{ width: `${Math.round((batchProgress.loaded / Math.max(1, batchProgress.total)) * 100)}%` }}
+              />
+            </div>
+            <button className="seq-preload-skip" onClick={skipPreload}>
+              Přeskočit, volat hned →
+            </button>
+          </div>
         </div>
       )}
 
@@ -1552,7 +1296,14 @@ export function DialerApp() {
       )}
 
       <AnimatePresence>
-        {showSettings && <SettingsOverlay open={showSettings} onClose={() => setShowSettings(false)} />}
+        {showSettings && (
+          <SettingsOverlay
+            open={showSettings}
+            onClose={() => setShowSettings(false)}
+            smsTemplate={smsTemplate}
+            onSmsTemplateChange={setSmsTemplate}
+          />
+        )}
       </AnimatePresence>
     </div>
   );

@@ -52,7 +52,7 @@ export function useBrief() {
       // Immediately fetch call script using brief
       const scriptReq: CallScriptRequest = {
         brief: briefResult,
-        goal: 'Book a 20-minute Echo Pulse demo',
+        goal: 'Pochopit potřeby klienta a dohodnout další krok',
       };
       const scriptResult = await echoApi.ai.callScript(scriptReq);
       setScript(scriptResult);

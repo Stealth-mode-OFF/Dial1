@@ -74,7 +74,7 @@ const generateDemoScript = async (lead: Lead): Promise<{ script: DemoScript | nu
     const result = await echoApi.ai.generate({
       contactName: lead.name,
       company: lead.company,
-      goal: 'Vést 20-min demo Echo Pulse. Pochopit potřeby, ukázat hodnotu, prodat pilotní spuštění.',
+      goal: 'Pochopit potřeby klienta, ukázat hodnotu a dohodnout další krok.',
       type: 'spin-script',
       contextData: {
         title: lead.title || '',
@@ -185,7 +185,7 @@ const generateWhispers = (phase: SPINPhase['id'], timeInPhase: number): WhisperS
     whispers.push({
       id: 'demo-start',
       type: 'tip',
-      content: '🖥️ Teď je čas na demo! Ukaž konkrétně, jak Echo Pulse řeší JEJICH problém.',
+      content: '🖥️ Teď je čas na demo! Ukaž konkrétně, jak vaše řešení řeší JEJICH problém.',
       priority: 'high',
       timestamp: now,
     });

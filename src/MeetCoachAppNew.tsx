@@ -66,15 +66,15 @@ const SPIN_PHASES: { id: SPINPhase; name: string; icon: string; color: string; d
   { id: 'need-payoff', name: 'Řešení', icon: '✨', color: '#10b981', duration: 300 },
 ];
 
-const DEMO_LEAD: Lead = {
-  id: 'demo-1',
-  name: 'Martin Novák',
-  company: 'TechCorp s.r.o.',
-  role: 'Sales Director',
-  email: 'martin@techcorp.cz',
-  industry: 'SaaS / Technology',
-  companySize: '50-200',
-  notes: 'Zavolal přes web, zajímá ho automatizace sales procesu',
+const EMPTY_LEAD: Lead = {
+  id: '',
+  name: '',
+  company: '',
+  role: '',
+  email: '',
+  industry: '',
+  companySize: '',
+  notes: '',
 };
 
 const WHISPER_TIPS: Record<SPINPhase, string[]> = {
@@ -182,7 +182,7 @@ const generateDemoScript = async (lead: Lead): Promise<ScriptBlock[]> => {
       type: 'spin-script',
       contactName: lead.name,
       company: lead.company,
-      goal: 'Vést 20min demo, pochopit potřeby a dohodnout pilotní spuštění',
+      goal: 'Pochopit potřeby klienta a dohodnout další krok',
       contextData: {
         contact_id: lead.id,
         role: lead.role,
@@ -209,28 +209,41 @@ const generateDemoScript = async (lead: Lead): Promise<ScriptBlock[]> => {
 
 /* ============ SUB-COMPONENTS ============ */
 
-// Lead Hero Card (PREP phase)
-const LeadHero: React.FC<{ lead: Lead; onStart: () => void; isLoading: boolean }> = ({ lead, onStart, isLoading }) => (
-  <div className="mc-hero">
-    <div className="mc-hero-avatar">{lead.name.charAt(0)}</div>
-    <div className="mc-hero-info">
-      <h1 className="mc-hero-name">{lead.name}</h1>
-      <p className="mc-hero-company">{lead.role} @ {lead.company}</p>
-      {lead.industry && <span className="mc-hero-tag">{lead.industry}</span>}
-      {lead.companySize && <span className="mc-hero-tag">{lead.companySize} zaměstnanců</span>}
-    </div>
-    {lead.notes && (
-      <div className="mc-hero-notes">
-        <span className="mc-hero-notes-label">📝 Poznámky</span>
-        <p>{lead.notes}</p>
+// Lead Hero Card (PREP phase) – editable when lead is empty
+const LeadHero: React.FC<{ lead: Lead; onStart: () => void; isLoading: boolean; onUpdate: (patch: Partial<Lead>) => void }> = ({ lead, onStart, isLoading, onUpdate }) => {
+  const isEmpty = !lead.name && !lead.company;
+  return (
+    <div className="mc-hero">
+      <div className="mc-hero-avatar">{lead.name ? lead.name.charAt(0) : '?'}</div>
+      <div className="mc-hero-info">
+        {isEmpty ? (
+          <>
+            <input className="mc-hero-input" placeholder="Jméno kontaktu" value={lead.name} onChange={e => onUpdate({ name: e.target.value })} />
+            <input className="mc-hero-input" placeholder="Společnost" value={lead.company} onChange={e => onUpdate({ company: e.target.value })} />
+            <input className="mc-hero-input" placeholder="Role (např. Sales Director)" value={lead.role} onChange={e => onUpdate({ role: e.target.value })} />
+          </>
+        ) : (
+          <>
+            <h1 className="mc-hero-name">{lead.name}</h1>
+            <p className="mc-hero-company">{lead.role} @ {lead.company}</p>
+            {lead.industry && <span className="mc-hero-tag">{lead.industry}</span>}
+            {lead.companySize && <span className="mc-hero-tag">{lead.companySize} zaměstnanců</span>}
+          </>
+        )}
       </div>
-    )}
-    <button className="mc-hero-btn" onClick={onStart} disabled={isLoading}>
-      {isLoading ? '⏳ Generuji skript...' : '▶️ Zahájit demo'}
-    </button>
-    <p className="mc-hero-hint">Stiskni Enter nebo klikni pro zahájení</p>
-  </div>
-);
+      {lead.notes && (
+        <div className="mc-hero-notes">
+          <span className="mc-hero-notes-label">📝 Poznámky</span>
+          <p>{lead.notes}</p>
+        </div>
+      )}
+      <button className="mc-hero-btn" onClick={onStart} disabled={isLoading || (!lead.name && !lead.company)}>
+        {isLoading ? '⏳ Generuji skript...' : '▶️ Zahájit demo'}
+      </button>
+      {isEmpty && <p className="mc-hero-hint">Vyplňte jméno a firmu pro zahájení</p>}
+    </div>
+  );
+};
 
 // SPIN Phase Indicator (LIVE phase header)
 const SPINIndicator: React.FC<{
@@ -996,7 +1009,7 @@ export const MeetCoachAppNew: React.FC = () => {
   const [appPhase, setAppPhase] = useState<AppPhase>('prep');
   
   // Lead & Script
-  const [lead] = useState<Lead>(DEMO_LEAD);
+  const [lead, setLead] = useState<Lead>(EMPTY_LEAD);
   const [script, setScript] = useState<ScriptBlock[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
@@ -1562,7 +1575,7 @@ export const MeetCoachAppNew: React.FC = () => {
       {/* PREP PHASE */}
       {appPhase === 'prep' && (
         <div className="mc-prep">
-          <LeadHero lead={lead} onStart={startDemo} isLoading={isLoading} />
+          <LeadHero lead={lead} onStart={startDemo} isLoading={isLoading} onUpdate={(patch) => setLead(prev => ({ ...prev, ...patch }))} />
           {/* Domain input for AI brief generation */}
           <div className="mc-prep-brief">
             <div className="mc-prep-domain">
@@ -1572,7 +1585,7 @@ export const MeetCoachAppNew: React.FC = () => {
                   id="meet-domain"
                   value={meetDomain}
                   onChange={(e) => setMeetDomain(e.target.value.trim().toLowerCase())}
-                  placeholder="např. techcorp.cz"
+                  placeholder="např. firma.cz"
                   inputMode="url"
                   autoCapitalize="none"
                   autoCorrect="off"

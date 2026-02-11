@@ -5979,6 +5979,32 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
           if (!pipedriveResult.synced && lastErr) {
             pipedriveResult.error = lastErr;
           }
+
+          if (disposition === "no-answer" && personId) {
+            const followUpDate = new Date();
+            followUpDate.setDate(followUpDate.getDate() + 2);
+            const dueDateStr = followUpDate.toISOString().split("T")[0];
+            const followUpName = contactName || resolved?.contact?.name || "Lead";
+            const followUpBody: Record<string, any> = {
+              subject: `2nd attempt – ${followUpName}`,
+              type: "call",
+              person_id: personId,
+              done: 0,
+              due_date: dueDateStr,
+              due_time: "09:00",
+              note: `<b>Automatický follow-up</b><br>Nedovoláno dne ${new Date().toLocaleDateString("cs-CZ")}. Naplánován 2. pokus.`,
+            };
+            if (dealId) followUpBody.deal_id = dealId;
+            if (orgId) followUpBody.org_id = orgId;
+
+            fetch(`https://api.pipedrive.com/v1/activities?api_token=${pipedriveKey}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Accept: "application/json" },
+                body: JSON.stringify(followUpBody),
+              },
+            ).catch(() => {});
+          }
         }
       } catch (pdErr) {
         console.error("Pipedrive Sync Error:", pdErr);
