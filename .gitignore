@@ -9,6 +9,9 @@ build
 supabase/.temp/
 test-results/
 playwright-report/
+src/test-results/
+src/playwright-report/
+src/node_modules/
 
 # Local debug artifacts
 dial1_repo_digest.txt
