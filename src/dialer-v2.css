@@ -1585,113 +1585,169 @@ body {
   cursor: not-allowed;
 }
 
-/* ============ DRAWER ============ */
-.drawer-backdrop {
+/* ============ LEAD SIDEBAR (hover slide-out) ============ */
+.sidebar-trigger {
   position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
-  z-index: 1000;
-}
-
-.drawer {
-  position: absolute;
   top: 0;
   left: 0;
-  width: 280px;
+  width: 18px;
   height: 100%;
+  z-index: 999;
+}
+
+.lead-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 260px;
+  height: 100vh;
   background: var(--surface);
   border-right: 3px solid var(--border);
+  box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+  z-index: 1000;
   display: flex;
   flex-direction: column;
+  transform: translateX(-262px);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px;
+.lead-sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar-header {
+  padding: 16px 14px 12px;
   border-bottom: 2px solid var(--border);
-  font-weight: 700;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
-.drawer-header button {
-  background: none;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
+.sidebar-title {
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--text);
 }
 
-.drawer-list {
+.sidebar-subtitle {
+  font-size: 12px;
+  color: var(--success);
+  font-weight: 600;
+}
+
+.sidebar-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 6px 8px;
 }
 
-.drawer-item {
+.sidebar-lead {
   width: 100%;
-  padding: 12px;
-  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 2px;
+  background: transparent;
   border: 2px solid transparent;
   border-radius: var(--radius);
   text-align: left;
   cursor: pointer;
-  margin-bottom: 4px;
-  transition: all 0.1s;
+  transition: all 0.12s ease;
+  font-family: inherit;
 }
 
-.drawer-item:hover {
+.sidebar-lead:hover {
   background: var(--neo-lavender);
-  border-color: var(--border);
+  border-color: var(--border-light);
 }
 
-.drawer-item.active {
+/* Active lead (currently selected) */
+.sidebar-lead.active {
   background: var(--primary);
   border-color: var(--border);
   color: white;
   box-shadow: var(--shadow-neo-sm);
 }
 
-.drawer-item-name {
-  display: block;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.drawer-item-company {
-  display: block;
-  font-size: 11px;
+/* Reached (dovoláno / connected / meeting) */
+.sidebar-lead.reached {
   opacity: 0.7;
-  margin-top: 2px;
 }
-
-/* Drawer: completed lead indicator */
-.drawer-item-status {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-  margin-right: 4px;
-  border: 2px solid var(--border-light);
-  color: var(--text-muted);
-}
-
-.drawer-item.done .drawer-item-status {
+.sidebar-lead.reached .sidebar-lead-indicator {
   background: var(--success);
   color: white;
   border-color: var(--success);
 }
-
-.drawer-item.done {
-  opacity: 0.6;
+.sidebar-lead.reached .sidebar-lead-name {
+  text-decoration: line-through;
+  opacity: 0.7;
 }
 
-.drawer-item.done.active {
+/* Missed (nedovoláno / no-answer) */
+.sidebar-lead.missed {
+  opacity: 0.7;
+}
+.sidebar-lead.missed .sidebar-lead-indicator {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+.sidebar-lead.missed .sidebar-lead-name {
+  opacity: 0.7;
+}
+
+/* Active overrides opacity */
+.sidebar-lead.active.reached,
+.sidebar-lead.active.missed {
   opacity: 1;
+}
+
+/* Indicator circle */
+.sidebar-lead-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  border: 2px solid var(--border-light);
+  color: var(--text-muted);
+  background: var(--surface);
+  transition: all 0.15s;
+}
+
+.sidebar-lead.active .sidebar-lead-indicator {
+  border-color: rgba(255,255,255,0.5);
+  color: white;
+  background: rgba(255,255,255,0.15);
+}
+
+.sidebar-lead-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-lead-name {
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-lead-company {
+  font-size: 10.5px;
+  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
 }
 
 /* ============ PROGRESS BAR ============ */

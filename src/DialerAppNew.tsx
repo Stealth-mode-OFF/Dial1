@@ -86,9 +86,11 @@ const inferDomainFromEmail = (email: string | undefined) => {
 // ============ STORAGE ============
 const STORAGE_KEY = 'dial1.v4';
 
+type CallOutcome = 'connected' | 'no-answer' | 'meeting';
+
 interface Session {
   stats: DailyStats;
-  completedIds: string[];
+  completedOutcomes: Record<string, CallOutcome>;
   notesByContact: Record<string, string>;
   domainByContact: Record<string, string>;
   currentIndex: number;
@@ -99,9 +101,16 @@ const loadSession = (): Session => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      // Migrate legacy completedIds (string[]) → completedOutcomes (Record)
+      let outcomes: Record<string, CallOutcome> = {};
+      if (parsed?.completedOutcomes && typeof parsed.completedOutcomes === 'object' && !Array.isArray(parsed.completedOutcomes)) {
+        outcomes = parsed.completedOutcomes;
+      } else if (Array.isArray(parsed?.completedIds)) {
+        parsed.completedIds.forEach((id: string) => { outcomes[id] = 'connected'; });
+      }
       return {
         stats: parsed?.stats || { calls: 0, connected: 0, meetings: 0, talkTime: 0 },
-        completedIds: Array.isArray(parsed?.completedIds) ? parsed.completedIds : [],
+        completedOutcomes: outcomes,
         notesByContact: parsed?.notesByContact && typeof parsed.notesByContact === 'object' ? parsed.notesByContact : {},
         domainByContact: parsed?.domainByContact && typeof parsed.domainByContact === 'object' ? parsed.domainByContact : {},
         currentIndex: Number.isFinite(parsed?.currentIndex) ? parsed.currentIndex : 0,
@@ -110,7 +119,7 @@ const loadSession = (): Session => {
   } catch {}
   return {
     stats: { calls: 0, connected: 0, meetings: 0, talkTime: 0 },
-    completedIds: [],
+    completedOutcomes: {},
     notesByContact: {},
     domainByContact: {},
     currentIndex: 0,
@@ -200,59 +209,91 @@ function FloatingWhisper() {
   );
 }
 
-// ============ QUEUE DRAWER ============
-function QueueDrawer({
+// ============ LEAD SIDEBAR (hover slide-out) ============
+function LeadSidebar({
   contacts,
   activeIndex,
-  completedIds,
+  completedOutcomes,
   onSelect,
-  onClose,
 }: {
   contacts: Contact[];
   activeIndex: number;
-  completedIds: string[];
+  completedOutcomes: Record<string, CallOutcome>;
   onSelect: (i: number) => void;
-  onClose: () => void;
 }) {
-  const completedSet = useMemo(() => new Set(completedIds), [completedIds]);
-  const doneCount = contacts.filter(c => completedSet.has(c.id)).length;
+  const [open, setOpen] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const activeItemRef = useRef<HTMLButtonElement>(null);
+
+  const doneCount = contacts.filter(c => c.id in completedOutcomes).length;
+  const connectedCount = contacts.filter(c => completedOutcomes[c.id] === 'connected' || completedOutcomes[c.id] === 'meeting').length;
+
+  // Scroll active item into view when sidebar opens
+  useEffect(() => {
+    if (open && activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [open, activeIndex]);
+
+  const handleMouseEnter = useCallback(() => {
+    clearTimeout(timeoutRef.current);
+    setOpen(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    timeoutRef.current = setTimeout(() => setOpen(false), 300);
+  }, []);
+
+  useEffect(() => () => clearTimeout(timeoutRef.current), []);
+
   return (
-    <motion.div
-      className="drawer-backdrop"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={onClose}
-    >
-      <motion.aside
-        className="drawer"
-        initial={{ x: -300 }}
-        animate={{ x: 0 }}
-        exit={{ x: -300 }}
-        onClick={e => e.stopPropagation()}
+    <>
+      {/* Invisible hover trigger zone on left edge */}
+      <div
+        className="sidebar-trigger"
+        onMouseEnter={handleMouseEnter}
+      />
+      {/* Sidebar panel */}
+      <div
+        ref={sidebarRef}
+        className={`lead-sidebar ${open ? 'open' : ''}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
-        <div className="drawer-header">
-          <span>Fronta — {doneCount}/{contacts.length} provoláno</span>
-          <button onClick={onClose}>×</button>
+        <div className="sidebar-header">
+          <span className="sidebar-title">Leadů {doneCount}/{contacts.length}</span>
+          <span className="sidebar-subtitle">{connectedCount} dovoláno</span>
         </div>
-        <div className="drawer-list">
+        <div className="sidebar-list">
           {contacts.map((c, i) => {
-            const done = completedSet.has(c.id);
+            const outcome = completedOutcomes[c.id];
+            const stateClass = outcome
+              ? (outcome === 'no-answer' ? 'missed' : 'reached')
+              : '';
             return (
               <button
                 key={c.id}
-                className={`drawer-item ${i === activeIndex ? 'active' : ''} ${done ? 'done' : ''}`}
-                onClick={() => { onSelect(i); onClose(); }}
+                ref={i === activeIndex ? activeItemRef : undefined}
+                className={`sidebar-lead ${i === activeIndex ? 'active' : ''} ${stateClass}`}
+                onClick={() => onSelect(i)}
               >
-                <span className="drawer-item-status">{done ? '✓' : '○'}</span>
-                <span className="drawer-item-name" style={done ? { textDecoration: 'line-through', opacity: 0.55 } : undefined}>{c.name}</span>
-                <span className="drawer-item-company">{c.company}</span>
+                <span className="sidebar-lead-indicator">
+                  {outcome
+                    ? (outcome === 'no-answer' ? '✗' : '✓')
+                    : (i === activeIndex ? '▸' : '○')
+                  }
+                </span>
+                <span className="sidebar-lead-info">
+                  <span className="sidebar-lead-name">{c.name}</span>
+                  <span className="sidebar-lead-company">{c.company}</span>
+                </span>
               </button>
             );
           })}
         </div>
-      </motion.aside>
-    </motion.div>
+      </div>
+    </>
   );
 }
 
@@ -353,12 +394,11 @@ export function DialerApp() {
   // Find the first uncalled lead on init (skip already completed)
   const [activeIndex, setActiveIndex] = useState(() => {
     const s = loadSession();
-    if (!s.completedIds.length) return s.currentIndex || 0;
+    if (!Object.keys(s.completedOutcomes).length) return s.currentIndex || 0;
     // If we have salesContacts available, find first uncalled
-    const completedSet = new Set(s.completedIds);
     if (salesContacts?.length) {
       const mapped = salesContacts.map(c => c.id);
-      const firstUncalled = mapped.findIndex(id => !completedSet.has(id));
+      const firstUncalled = mapped.findIndex(id => !(id in s.completedOutcomes));
       if (firstUncalled >= 0) return firstUncalled;
     }
     return s.currentIndex || 0;
@@ -368,7 +408,6 @@ export function DialerApp() {
   const [callDuration, setCallDuration] = useState(0);
   const [wrapupOutcome, setWrapupOutcome] = useState<'connected' | 'no-answer' | 'meeting' | null>(null);
   const [notes, setNotes] = useState('');
-  const [showQueue, setShowQueue] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [importing, setImporting] = useState(false);
 
@@ -444,12 +483,11 @@ export function DialerApp() {
     if (contacts.length === prevContactsLenRef.current) return;
     prevContactsLenRef.current = contacts.length;
     if (!contacts.length) return;
-    const completedSet = new Set(session.completedIds);
-    const firstUncalled = contacts.findIndex(c => !completedSet.has(c.id));
+    const firstUncalled = contacts.findIndex(c => !(c.id in session.completedOutcomes));
     if (firstUncalled >= 0) {
       setActiveIndex(firstUncalled);
     }
-  }, [contacts, session.completedIds, phase]);
+  }, [contacts, session.completedOutcomes, phase]);
 
   // Persist
   useEffect(() => { saveSession({ ...session, currentIndex: activeIndex }); }, [session, activeIndex]);
@@ -573,21 +611,18 @@ export function DialerApp() {
   const endCall = useCallback((outcome: 'connected' | 'no-answer' | 'meeting') => {
     const dur = callStart ? Math.floor((Date.now() - callStart) / 1000) : 0;
     setWrapupOutcome(outcome);
-    // Mark ALL outcomes as completed — every called lead is done
-    setSession(s => {
-      const alreadyDone = s.completedIds.includes(contact!.id);
-      return {
-        ...s,
-        stats: {
-          ...s.stats,
-          talkTime: s.stats.talkTime + dur,
-          connected: outcome === 'connected' || outcome === 'meeting' ? s.stats.connected + 1 : s.stats.connected,
-          meetings: outcome === 'meeting' ? s.stats.meetings + 1 : s.stats.meetings,
-        },
-        notesByContact: { ...s.notesByContact, [contact!.id]: notes },
-        completedIds: alreadyDone ? s.completedIds : [...s.completedIds, contact!.id],
-      };
-    });
+    // Mark lead with its outcome
+    setSession(s => ({
+      ...s,
+      stats: {
+        ...s.stats,
+        talkTime: s.stats.talkTime + dur,
+        connected: outcome === 'connected' || outcome === 'meeting' ? s.stats.connected + 1 : s.stats.connected,
+        meetings: outcome === 'meeting' ? s.stats.meetings + 1 : s.stats.meetings,
+      },
+      notesByContact: { ...s.notesByContact, [contact!.id]: notes },
+      completedOutcomes: { ...s.completedOutcomes, [contact!.id]: outcome },
+    }));
     setCallStart(null);
     setCallDuration(dur);
     setPhase('wrapup');
@@ -653,15 +688,14 @@ export function DialerApp() {
   // Advance to the next UNCALLED lead (skip completed ones)
   const nextContact = useCallback(() => {
     setActiveIndex(current => {
-      const completedSet = new Set(session.completedIds);
       // Look forward for the first uncalled lead
       for (let i = current + 1; i < contacts.length; i++) {
-        if (!completedSet.has(contacts[i].id)) return i;
+        if (!(contacts[i].id in session.completedOutcomes)) return i;
       }
       // If none found after current, just go to next (cap at end)
       return Math.min(current + 1, contacts.length - 1);
     });
-  }, [contacts, session.completedIds]);
+  }, [contacts, session.completedOutcomes]);
 
   const handleWrapupDone = useCallback((booked: boolean) => {
     if (booked && contact) {
@@ -679,7 +713,6 @@ export function DialerApp() {
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea') return;
 
-      if (e.key === 'q') { e.preventDefault(); setShowQueue(true); }
       if (e.key === 'c' && phase === 'ready') { e.preventDefault(); startCall(); }
       if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(i => Math.min(i + 1, contacts.length - 1)); }
       if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(i => Math.max(i - 1, 0)); }
@@ -847,7 +880,6 @@ export function DialerApp() {
 
       <div className="ready-actions">
         <button onClick={nextContact}>Přeskočit →</button>
-        <button onClick={() => setShowQueue(true)}>Fronta (Q)</button>
       </div>
     </div>
   );
@@ -1466,7 +1498,7 @@ export function DialerApp() {
         </div>
 
         <div className="header-v2-stats">
-          <span title="Provoláno dnes">{session.completedIds.length}/{contacts.length} leadů</span>
+          <span title="Provoláno dnes">{Object.keys(session.completedOutcomes).length}/{contacts.length} leadů</span>
           <span>{session.stats.calls} hovorů</span>
           <span>{session.stats.connected} spojeno</span>
           <span>{session.stats.meetings} dem</span>
@@ -1489,7 +1521,7 @@ export function DialerApp() {
         <div className="progress-bar-wrap">
           <div
             className="progress-bar-fill"
-            style={{ width: `${Math.round((session.completedIds.length / contacts.length) * 100)}%` }}
+            style={{ width: `${Math.round((Object.keys(session.completedOutcomes).length / contacts.length) * 100)}%` }}
           />
         </div>
       )}
@@ -1509,18 +1541,15 @@ export function DialerApp() {
         )}
       </main>
 
-      {/* Drawers & Overlays */}
-      <AnimatePresence>
-        {showQueue && (
-          <QueueDrawer
-            contacts={contacts}
-            activeIndex={activeIndex}
-            completedIds={session.completedIds}
-            onSelect={setActiveIndex}
-            onClose={() => setShowQueue(false)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Lead sidebar (hover on left edge) */}
+      {contacts.length > 0 && (
+        <LeadSidebar
+          contacts={contacts}
+          activeIndex={activeIndex}
+          completedOutcomes={session.completedOutcomes}
+          onSelect={setActiveIndex}
+        />
+      )}
 
       <AnimatePresence>
         {showSettings && <SettingsOverlay open={showSettings} onClose={() => setShowSettings(false)} />}
