@@ -1,9 +1,0 @@
-{
-    "python.testing.pytestArgs": [
-        "supabase"
-    ],
-    "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true,
-    "mcpFigma.autoStartWebSocket": true,
-    "mcpFigma.aiAssistant": "github-copilot"
-}
