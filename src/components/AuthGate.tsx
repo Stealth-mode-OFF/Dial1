@@ -6,6 +6,8 @@ type AuthGateProps = {
   onAuthenticated?: () => void;
 };
 
+const AUTH_EMAIL_KEY = 'dial1-auth-email';
+
 export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
   // Bypass auth when:
   // 1. Explicit E2E bypass flag is set, OR
@@ -13,7 +15,9 @@ export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
   const bypassAuth =
     import.meta.env.VITE_E2E_BYPASS_AUTH === 'true' ||
     (import.meta.env.DEV && !supabaseClient);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => {
+    try { return localStorage.getItem(AUTH_EMAIL_KEY) || ''; } catch { return ''; }
+  });
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -107,6 +111,8 @@ export function AuthGate({ children, onAuthenticated }: AuthGateProps) {
       if (error) {
         setError(explainError(error.message) || error.message);
       } else {
+        // Remember email for next login
+        try { localStorage.setItem(AUTH_EMAIL_KEY, email); } catch {}
         onAuthenticated?.();
         setMessage(null);
       }

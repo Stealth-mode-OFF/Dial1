@@ -16,10 +16,12 @@ const BattleCardsPage = lazy(() => import('./pages/BattleCardsPage').then(m => (
 type AppMode = 'dialer' | 'meetcoach' | 'dial' | 'meet' | 'analyze' | 'battlecards';
 
 // Section metadata for nav tabs
-const SECTIONS: { id: AppMode; label: string; hash: string }[] = [
+const LEFT_TABS: { id: AppMode; label: string; hash: string }[] = [
   { id: 'dialer',      label: 'Dialer',    hash: '#dialer' },
-  { id: 'meetcoach',   label: 'Meet',      hash: '#meet' },
   { id: 'battlecards', label: 'Karty',     hash: '#battlecards' },
+];
+const RIGHT_TABS: { id: AppMode; label: string; hash: string }[] = [
+  { id: 'meetcoach',   label: 'Meet',      hash: '#meet' },
   { id: 'analyze',     label: 'Anályza',   hash: '#analyze' },
 ];
 
@@ -43,23 +45,30 @@ function AppLoader() {
 
 // Unified top navigation
 function AppNav({ mode, onSwitch }: { mode: AppMode; onSwitch: (m: AppMode) => void }) {
+  const renderTab = (sec: { id: AppMode; label: string }) => (
+    <button
+      key={sec.id}
+      role="tab"
+      aria-selected={mode === sec.id}
+      className={`app-nav-tab${mode === sec.id ? ' app-nav-tab-active' : ''}`}
+      data-tab={sec.id}
+      onClick={() => onSwitch(sec.id)}
+    >
+      <span className="app-nav-tab-label">{sec.label}</span>
+    </button>
+  );
+
   return (
     <nav className="app-nav" role="navigation" aria-label="Hlavní navigace">
       <div className="app-nav-left">
         <span className="app-nav-logo" onClick={() => onSwitch('dialer')}>D1</span>
         <div className="app-nav-tabs" role="tablist">
-          {SECTIONS.map(sec => (
-            <button
-              key={sec.id}
-              role="tab"
-              aria-selected={mode === sec.id}
-              className={`app-nav-tab${mode === sec.id ? ' app-nav-tab-active' : ''}`}
-              data-tab={sec.id}
-              onClick={() => onSwitch(sec.id)}
-            >
-              <span className="app-nav-tab-label">{sec.label}</span>
-            </button>
-          ))}
+          {LEFT_TABS.map(renderTab)}
+        </div>
+      </div>
+      <div className="app-nav-right">
+        <div className="app-nav-tabs" role="tablist">
+          {RIGHT_TABS.map(renderTab)}
         </div>
       </div>
     </nav>

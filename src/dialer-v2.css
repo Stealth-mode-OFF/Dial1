@@ -77,6 +77,12 @@ body {
   gap: 16px;
 }
 
+.app-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .app-nav-logo {
   display: flex;
   align-items: center;
