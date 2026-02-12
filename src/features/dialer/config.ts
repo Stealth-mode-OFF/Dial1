@@ -8,6 +8,9 @@ import type { CallOutcome } from "./types";
 export const SCHEDULER_URL =
   "https://behavera.pipedrive.com/scheduler/GX27Q8iw/konzultace-jak-ziskat-jasna-data-o-svem-tymu-30-minutes";
 
+/** Pipedrive company subdomain — used to build person/deal URLs */
+export const PIPEDRIVE_DOMAIN = "behavera.pipedrive.com";
+
 /** Auto-dial countdown seconds after no-answer */
 export const AUTO_DIAL_SECONDS = 3;
 

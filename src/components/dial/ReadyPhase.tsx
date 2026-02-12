@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import type { Brief } from "../../types/contracts";
-import type { Contact, DailyStats } from "../../features/dialer/types";
+import type { Contact } from "../../features/dialer/types";
+import { PipedrivePopup } from "../../features/dialer/components/PipedrivePopup";
 
 // ─── Sales wisdom from Brian Tracy's "The Psychology of Selling" ───
 const SALES_WISDOM: { quote: string; tip: string }[] = [
@@ -65,16 +66,9 @@ interface ReadyPhaseProps {
   displayBrief: Brief | null;
   onCall: () => void;
   onSkip: () => void;
-  sessionStats?: DailyStats;
   queuePosition?: number;
   queueTotal?: number;
   completedCount?: number;
-}
-
-function formatSec(s: number) {
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
 export function ReadyPhase({
@@ -82,12 +76,12 @@ export function ReadyPhase({
   displayBrief,
   onCall,
   onSkip,
-  sessionStats,
   queuePosition,
   queueTotal,
   completedCount,
 }: ReadyPhaseProps) {
   const [scriptCollapsed, setScriptCollapsed] = useState(false);
+  const [showPipedrive, setShowPipedrive] = useState(false);
   const callBtnRef = useRef<HTMLButtonElement>(null);
 
   // Pick a random wisdom quote — stable per contact
@@ -110,49 +104,8 @@ export function ReadyPhase({
     return () => clearTimeout(t);
   }, [contact.id]);
 
-  // Progress
-  const done = completedCount ?? 0;
-  const total = queueTotal ?? 0;
-  const pct = total ? Math.round((done / total) * 100) : 0;
-  const stats = sessionStats;
-
   return (
     <div className="td" data-phase="ready">
-      {/* ━━━ TOP STATS BAR ━━━ */}
-      {stats && (
-        <div className="td-stats-bar">
-          <div className="td-stat">
-            <span className="td-stat-val">{stats.calls}</span>
-            <span className="td-stat-lbl">hovorů</span>
-          </div>
-          <div className="td-stat td-stat--green">
-            <span className="td-stat-val">{stats.connected}</span>
-            <span className="td-stat-lbl">spojeno</span>
-          </div>
-          <div className="td-stat td-stat--gold">
-            <span className="td-stat-val">{stats.meetings}</span>
-            <span className="td-stat-lbl">schůzek</span>
-          </div>
-          <div className="td-stat">
-            <span className="td-stat-val">{formatSec(stats.talkTime)}</span>
-            <span className="td-stat-lbl">na tel.</span>
-          </div>
-          {total > 0 && (
-            <div className="td-progress">
-              <div className="td-progress-track">
-                <div
-                  className="td-progress-fill"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span className="td-progress-txt">
-                {done}/{total}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ━━━ CENTERED SINGLE-COLUMN LAYOUT ━━━
            UX logic: eye enters → contact (WHO) → call (DO) → wisdom (FEEL)
            All vertically stacked, centered, no side-to-side scanning */}
@@ -173,20 +126,30 @@ export function ReadyPhase({
                 {contact.title || "—"} · {contact.company}
               </p>
             </div>
-            <span className={`td-priority td-priority--${contact.priority}`}>
-              {contact.priority === "high"
-                ? "🔥"
-                : contact.priority === "medium"
-                  ? "⚡"
-                  : "·"}
-            </span>
           </div>
-          {contact.phone && (
-            <a href={`tel:${contact.phone}`} className="td-phone">
-              📞 {contact.phone}
-            </a>
-          )}
+          <div className="td-contact-links">
+            {contact.phone && (
+              <a href={`tel:${contact.phone}`} className="td-phone">
+                📞 {contact.phone}
+              </a>
+            )}
+            <button
+              className="td-pipedrive-btn"
+              onClick={() => setShowPipedrive(true)}
+              title="Otevřít deal v Pipedrive"
+            >
+              🟢 Pipedrive
+            </button>
+          </div>
         </div>
+
+        {/* Pipedrive embedded popup */}
+        <PipedrivePopup
+          open={showPipedrive}
+          onClose={() => setShowPipedrive(false)}
+          contactId={contact.id}
+          contactName={contact.name}
+        />
 
         {/* Call & Skip — THE action, right under contact */}
         <div className="td-action-buttons">

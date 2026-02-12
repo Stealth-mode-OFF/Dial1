@@ -6,6 +6,7 @@ import {
   OPENING_SCRIPT,
   CALL_FOCUS_DELAY_MS,
 } from "../../features/dialer/config";
+import { BookDemoModal } from "../../features/dialer/components/BookDemoModal";
 
 interface CallingPhaseProps {
   contact: Contact;
@@ -47,6 +48,7 @@ export function CallingPhase({
   const [saving, setSaving] = useState<"none" | "no-answer" | "connected">(
     "none",
   );
+  const [showBookDemo, setShowBookDemo] = useState(false);
   const [saveResult, setSaveResult] = useState<{
     ok: boolean;
     msg: string;
@@ -152,6 +154,47 @@ export function CallingPhase({
           <span className="call-bar-company">{contact.company}</span>
         </div>
         <span className="call-timer" aria-live="polite">
+          <svg
+            className="call-timer-icon"
+            width="20"
+            height="24"
+            viewBox="0 0 20 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {/* Stopwatch button top */}
+            <rect x="8" y="0" width="4" height="4" rx="1" fill="white" />
+            {/* Circle body */}
+            <circle
+              cx="10"
+              cy="14"
+              r="9"
+              stroke="white"
+              strokeWidth="2"
+              fill="none"
+            />
+            {/* Minute hand */}
+            <line
+              x1="10"
+              y1="14"
+              x2="10"
+              y2="8"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            {/* Second hand tick */}
+            <line
+              x1="10"
+              y1="14"
+              x2="14"
+              y2="11"
+              stroke="white"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              opacity="0.7"
+            />
+          </svg>
           {formatTime(callDuration)}
         </span>
       </div>
@@ -209,6 +252,7 @@ export function CallingPhase({
                     </span>
                     {q.prompt}
                   </label>
+                  <p className="call-capture-hint">{q.script}</p>
                   <input
                     ref={idx === 0 ? firstInputRef : undefined}
                     data-qual-idx={idx}
@@ -258,6 +302,18 @@ export function CallingPhase({
                 {saving === "no-answer" ? "⏳ Ukládám…" : "❌ Nedovoláno"}
               </button>
 
+              {/* BOOK DEMO — celebration trigger + scheduler */}
+              <button
+                className="call-action-btn call-action-btn--demo"
+                disabled={saving !== "none"}
+                onClick={() => {
+                  onRecordCall("meeting");
+                  setShowBookDemo(true);
+                }}
+              >
+                📅 Book Demo
+              </button>
+
               {/* ULOŽIT DO PIPEDRIVE + DALŠÍ — logs "connected" activity + qual + notes + next */}
               <button
                 className="call-action-btn call-action-btn--save"
@@ -276,9 +332,20 @@ export function CallingPhase({
       {/* ━━━ KEYBOARD HINTS ━━━ */}
       <div className="call-shortcuts">
         <kbd>1</kbd> nedovoláno &nbsp;·&nbsp;
-        <kbd>2</kbd> uložit + další &nbsp;·&nbsp;
+        <kbd>2</kbd> book demo &nbsp;·&nbsp;
+        <kbd>3</kbd> uložit + další &nbsp;·&nbsp;
         <kbd>Tab</kbd> další pole
       </div>
+
+      {/* ━━━ BOOK DEMO CELEBRATION MODAL ━━━ */}
+      <BookDemoModal
+        open={showBookDemo}
+        onClose={() => {
+          setShowBookDemo(false);
+          handleAction("connected");
+        }}
+        contactName={contact.name}
+      />
     </div>
   );
 }

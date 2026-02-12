@@ -338,19 +338,35 @@ export function DialerApp() {
         </div>
       </header>
 
-      {/* ─── PROGRESS TICKS ─── */}
+      {/* ─── PROGRESS TICKS + STATS ─── */}
       {contacts.length > 0 && (
         <div className="seq-tick-bar">
-          {contacts.map((c, i) => {
-            const outcome = session.completedOutcomes[c.id];
-            const isCurrent = i === completedCount;
-            let cls = "seq-tick";
-            if (outcome === "connected" || outcome === "meeting")
-              cls += " seq-tick--ok";
-            else if (outcome === "no-answer") cls += " seq-tick--skip";
-            else if (isCurrent) cls += " seq-tick--active";
-            return <span key={c.id} className={cls} />;
-          })}
+          <div className="seq-tick-stats">
+            <span className="seq-tick-stat">
+              {session.stats.calls} <small>hovorů</small>
+            </span>
+            <span className="seq-tick-stat seq-tick-stat--green">
+              {session.stats.connected} <small>spojeno</small>
+            </span>
+            <span className="seq-tick-stat seq-tick-stat--gold">
+              {session.stats.meetings} <small>schůzek</small>
+            </span>
+          </div>
+          <div className="seq-tick-track">
+            {contacts.map((c, i) => {
+              const outcome = session.completedOutcomes[c.id];
+              const isCurrent = i === completedCount;
+              let cls = "seq-tick";
+              if (outcome === "meeting") cls += " seq-tick--meeting";
+              else if (outcome === "connected") cls += " seq-tick--ok";
+              else if (outcome === "no-answer") cls += " seq-tick--skip";
+              else if (isCurrent) cls += " seq-tick--active";
+              return <span key={c.id} className={cls} />;
+            })}
+          </div>
+          <span className="seq-tick-count">
+            {completedCount}/{contacts.length}
+          </span>
         </div>
       )}
 
@@ -392,7 +408,6 @@ export function DialerApp() {
           <ReadyPhase
             contact={contact}
             displayBrief={displayBrief}
-            sessionStats={session.stats}
             queuePosition={activeIndex + 1}
             queueTotal={contacts.length}
             completedCount={completedCount}
