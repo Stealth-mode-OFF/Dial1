@@ -1,15 +1,68 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { Brief } from "../../types/contracts";
 import type { Contact, DailyStats } from "../../features/dialer/types";
-import { QUAL_QUESTIONS, OPENING_SCRIPT } from "../../features/dialer/config";
+
+// ─── Sales wisdom from Brian Tracy's "The Psychology of Selling" ───
+const SALES_WISDOM: { quote: string; tip: string }[] = [
+  {
+    quote: "Lidé nekupují produkt. Kupují pocit, který jim ten produkt dá.",
+    tip: "Mluv o výsledcích, ne o funkcích.",
+  },
+  {
+    quote:
+      "80 % prodeje se uzavře až po pátém kontaktu. Většina prodejců to vzdá po prvním.",
+    tip: "Vytrvej — každý hovor je investice.",
+  },
+  {
+    quote:
+      "Nejdůležitější slovo v prodeji je PTEJ SE. Kdo se ptá, ten řídí konverzaci.",
+    tip: "Otevřené otázky > monology.",
+  },
+  {
+    quote: "Zákazník si kupuje důvěru dřív, než si koupí produkt.",
+    tip: "Buď upřímný, i když to znamená říct 'nevím'.",
+  },
+  {
+    quote: "Strach ze ztráty je 2,5× silnější motivátor než touha po zisku.",
+    tip: "Ukaž, co ztrácí tím, že nic nedělá.",
+  },
+  {
+    quote: "Tvůj přístup rozhoduje o 80 % úspěchu. Technika je jen 20 %.",
+    tip: "Než zvedneš telefon, nadechni se a usmej.",
+  },
+  {
+    quote: "Úspěšní prodejci mluví 30 % času a poslouchají 70 %.",
+    tip: "Po otázce — mlč. Nech klienta mluvit.",
+  },
+  {
+    quote:
+      "Každý 'ne' tě posouvá blíž k 'ano'. Je to matematika, ne osobní selhání.",
+    tip: "Sleduj poměr hovorů → schůzek, ne emoce.",
+  },
+  {
+    quote:
+      "Nejlepší čas na prodej je hned po úspěšném prodeji — tvoje energie je na vrcholu.",
+    tip: "Po spojeném hovoru zavolej hned dalšího.",
+  },
+  {
+    quote:
+      "Zákazník potřebuje pocítit, že mu rozumíš, dřív než pochopí, co prodáváš.",
+    tip: "Začni tím, co trápí JEHO, ne co umí tvůj produkt.",
+  },
+  {
+    quote: "Lidé nenávidí, když se jim prodává, ale milují nakupovat.",
+    tip: "Pomáhej jim rozhodovat se, netlač.",
+  },
+  {
+    quote:
+      "Jasnost je síla. Čím jednodušeji vysvětlíš hodnotu, tím rychleji se rozhodnou.",
+    tip: "Jeden hlavní benefit. Žádný feature-dump.",
+  },
+];
 
 interface ReadyPhaseProps {
   contact: Contact;
   displayBrief: Brief | null;
-  notes: string;
-  onNotesChange: (v: string) => void;
-  onSaveToPipedrive: (note: string) => Promise<void>;
-  pipedriveConfigured: boolean;
   onCall: () => void;
   onSkip: () => void;
   sessionStats?: DailyStats;
@@ -27,10 +80,6 @@ function formatSec(s: number) {
 export function ReadyPhase({
   contact,
   displayBrief,
-  notes,
-  onNotesChange,
-  onSaveToPipedrive,
-  pipedriveConfigured,
   onCall,
   onSkip,
   sessionStats,
@@ -38,14 +87,17 @@ export function ReadyPhase({
   queueTotal,
   completedCount,
 }: ReadyPhaseProps) {
-  const [saving, setSaving] = useState(false);
-  const [saveResult, setSaveResult] = useState<{
-    ok: boolean;
-    msg: string;
-  } | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [scriptCollapsed, setScriptCollapsed] = useState(false);
   const callBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Pick a random wisdom quote — stable per contact
+  const wisdom = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < contact.id.length; i++) {
+      hash = (hash * 31 + contact.id.charCodeAt(i)) | 0;
+    }
+    return SALES_WISDOM[Math.abs(hash) % SALES_WISDOM.length];
+  }, [contact.id]);
 
   // Auto-focus call button on mount — THE dominant action
   useEffect(() => {
@@ -57,44 +109,6 @@ export function ReadyPhase({
     );
     return () => clearTimeout(t);
   }, [contact.id]);
-
-  const setAnswer = (id: string, val: string) =>
-    setAnswers((prev) => ({ ...prev, [id]: val }));
-
-  const buildPipedriveNote = useCallback(() => {
-    const parts: string[] = [];
-    parts.push(`📞 Cold call – ${contact.name} (${contact.company})`);
-    parts.push("");
-    QUAL_QUESTIONS.forEach((q) => {
-      const a = answers[q.id]?.trim();
-      if (a) parts.push(`${q.icon} ${q.label}: ${a}`);
-    });
-    if (notes.trim()) {
-      parts.push("");
-      parts.push(`📝 Poznámky: ${notes.trim()}`);
-    }
-    return parts.join("\n");
-  }, [answers, notes, contact]);
-
-  const hasAnyContent =
-    Object.values(answers).some((a) => a.trim()) || notes.trim();
-
-  const handleSave = useCallback(async () => {
-    if (!hasAnyContent) return;
-    setSaving(true);
-    setSaveResult(null);
-    try {
-      await onSaveToPipedrive(buildPipedriveNote());
-      setSaveResult({ ok: true, msg: "✓ Uloženo" });
-    } catch (e) {
-      setSaveResult({
-        ok: false,
-        msg: e instanceof Error ? e.message : "Chyba",
-      });
-    } finally {
-      setSaving(false);
-    }
-  }, [hasAnyContent, buildPipedriveNote, onSaveToPipedrive]);
 
   // Progress
   const done = completedCount ?? 0;
@@ -139,133 +153,59 @@ export function ReadyPhase({
         </div>
       )}
 
-      {/* ━━━ MAIN THREE-ZONE LAYOUT ━━━ */}
-      <div className="td-grid-3col">
-        {/* ── LEFT: CONTEXT & CONFIDENCE (who am I calling?) ── */}
-        <div className="td-zone-left">
-          {/* Contact card — identity at a glance */}
-          <div className="td-contact">
-            <div className="td-contact-top">
-              <div className="td-avatar">
-                {contact.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")
-                  .slice(0, 2)}
-              </div>
-              <div className="td-contact-info">
-                <h2 className="td-name">{contact.name}</h2>
-                <p className="td-role">
-                  {contact.title || "—"} · {contact.company}
-                </p>
-              </div>
-              <span className={`td-priority td-priority--${contact.priority}`}>
-                {contact.priority === "high"
-                  ? "🔥"
-                  : contact.priority === "medium"
-                    ? "⚡"
-                    : "·"}
-              </span>
+      {/* ━━━ CENTERED SINGLE-COLUMN LAYOUT ━━━
+           UX logic: eye enters → contact (WHO) → call (DO) → wisdom (FEEL)
+           All vertically stacked, centered, no side-to-side scanning */}
+      <div className="td-ready-center">
+        {/* Contact card — hero, biggest element */}
+        <div className="td-contact">
+          <div className="td-contact-top">
+            <div className="td-avatar">
+              {contact.name
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .slice(0, 2)}
             </div>
-            {contact.phone && (
-              <a href={`tel:${contact.phone}`} className="td-phone">
-                📞 {contact.phone}
-              </a>
-            )}
-          </div>
-
-          {/* Notes — always visible, low visual weight */}
-          <div className="td-notes-card">
-            <label className="td-field-label">📋 Poznámky</label>
-            <textarea
-              className="td-textarea"
-              rows={3}
-              placeholder="Volné poznámky…"
-              value={notes}
-              onChange={(e) => onNotesChange(e.target.value)}
-            />
-            <div className="td-save-row">
-              <button
-                className="td-pipedrive-btn"
-                disabled={!pipedriveConfigured || saving || !hasAnyContent}
-                onClick={handleSave}
-              >
-                {saving ? "⏳" : "📌"} {saving ? "Ukládám…" : "Pipedrive"}
-              </button>
-              {saveResult && (
-                <span className={`td-save-msg ${saveResult.ok ? "ok" : "err"}`}>
-                  {saveResult.msg}
-                </span>
-              )}
+            <div className="td-contact-info">
+              <h2 className="td-name">{contact.name}</h2>
+              <p className="td-role">
+                {contact.title || "—"} · {contact.company}
+              </p>
             </div>
+            <span className={`td-priority td-priority--${contact.priority}`}>
+              {contact.priority === "high"
+                ? "🔥"
+                : contact.priority === "medium"
+                  ? "⚡"
+                  : "·"}
+            </span>
           </div>
+          {contact.phone && (
+            <a href={`tel:${contact.phone}`} className="td-phone">
+              📞 {contact.phone}
+            </a>
+          )}
         </div>
 
-        {/* ── CENTER: CURRENT ACTION (what do I do NOW?) ── */}
-        <div className="td-zone-center">
-          {/* BIG CALL BUTTON — THE dominant action */}
+        {/* Call & Skip — THE action, right under contact */}
+        <div className="td-action-buttons">
           <button ref={callBtnRef} className="td-call-btn" onClick={onCall}>
             <span className="td-call-icon">📞</span>
             <span>Zavolat</span>
             <kbd>C</kbd>
           </button>
-
-          {/* Skip — visually subordinate */}
           <button className="td-skip-btn" onClick={onSkip}>
             Přeskočit <span className="td-kbd">→</span>
           </button>
         </div>
 
-        {/* ── RIGHT: GUIDANCE & SCRIPT (what will I say?) ── */}
-        <div className="td-zone-right">
-          {/* Opening — collapsible */}
-          <div
-            className={`td-opening ${scriptCollapsed ? "td-opening--collapsed" : ""}`}
-          >
-            <button
-              className="td-opening-toggle"
-              onClick={() => setScriptCollapsed(!scriptCollapsed)}
-            >
-              <span className="td-toggle-arrow">
-                {scriptCollapsed ? "▶" : "▼"}
-              </span>
-              <span className="td-opening-label">OPENING</span>
-            </button>
-            {!scriptCollapsed && (
-              <p className="td-opening-text">{OPENING_SCRIPT}</p>
-            )}
-          </div>
-
-          {/* Unified qualification cards */}
-          <div className="td-qual">
-            <span className="td-qual-title">Kvalifikace</span>
-            {QUAL_QUESTIONS.map((q, i) => {
-              const filled = !!answers[q.id]?.trim();
-              return (
-                <div className={`td-q-card ${filled ? "td-q-card--done" : ""}`}>
-                  <div className="td-q-head">
-                    <span className="td-q-num">{filled ? "✓" : i + 1}</span>
-                    <span className="td-q-prompt">{q.script}</span>
-                  </div>
-                  {"followUp" in q && q.followUp && (
-                    <p className="td-q-hint">✓ {q.followUp}</p>
-                  )}
-                  {"followUpNo" in q && (
-                    <div className="td-q-hints-split">
-                      <p className="td-q-hint">{q.followUpNo}</p>
-                      <p className="td-q-hint">{q.followUpYes}</p>
-                    </div>
-                  )}
-                  <input
-                    type="text"
-                    className="td-q-input"
-                    placeholder={q.placeholder}
-                    value={answers[q.id] || ""}
-                    onChange={(e) => setAnswer(q.id, e.target.value)}
-                  />
-                </div>
-              );
-            })}
+        {/* Wisdom — subtle accent strip at bottom */}
+        <div className="td-wisdom-strip">
+          <span className="td-wisdom-strip-icon">💡</span>
+          <div className="td-wisdom-strip-text">
+            <span className="td-wisdom-strip-quote">{wisdom.quote}</span>
+            <span className="td-wisdom-strip-tip">→ {wisdom.tip}</span>
           </div>
         </div>
       </div>

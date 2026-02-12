@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { getWhisper } from '../whisper';
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { getWhisper } from "../whisper";
 
 export function FloatingWhisper() {
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [response, setResponse] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [minimized, setMinimized] = useState(false);
+  const [minimized, setMinimized] = useState(true);
 
   const handleSubmit = async () => {
     if (!input.trim() || loading) return;
@@ -45,20 +45,23 @@ export function FloatingWhisper() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
           placeholder="Co říká? (námitka)"
           autoFocus
         />
         <button onClick={handleSubmit} disabled={loading || !input.trim()}>
-          {loading ? '...' : '→'}
+          {loading ? "..." : "→"}
         </button>
       </div>
       {response && (
-        <motion.div className="whisper-float-response" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        <motion.div
+          className="whisper-float-response"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
           {response}
         </motion.div>
       )}
     </motion.div>
   );
 }
-

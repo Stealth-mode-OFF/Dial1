@@ -275,6 +275,13 @@ body {
   overflow: auto;
 }
 
+/* During call: no padding, stretch to fill */
+.dialer-v2[data-app-phase="calling"] .main-v2 {
+  padding: 0;
+  overflow: hidden;
+  align-items: stretch;
+}
+
 .loading {
   font-size: 16px;
   color: var(--text-muted);
@@ -1862,13 +1869,44 @@ body {
   text-align: center;
 }
 
-.seq-progress-bar {
+.seq-tick-bar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 16px;
+  gap: 3px;
+  padding: 6px 16px;
   background: var(--surface);
   border-bottom: 2px solid var(--border);
+}
+
+.seq-tick {
+  flex: 1;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--gray-200);
+  transition: background var(--transition);
+}
+
+.seq-tick--ok {
+  background: var(--success);
+}
+
+.seq-tick--skip {
+  background: var(--gray-400);
+}
+
+.seq-tick--active {
+  background: var(--primary);
+  animation: tick-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes tick-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .seq-progress-label {
@@ -2145,7 +2183,8 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0; /* allow flex children to shrink */
   position: relative;
 }
 
@@ -2399,7 +2438,7 @@ body {
 .whisper-float {
   position: fixed;
   bottom: 24px;
-  right: 24px;
+  left: 24px;
   width: 320px;
   background: var(--surface);
   border: 3px solid var(--border);
@@ -2468,7 +2507,7 @@ body {
 .whisper-fab {
   position: fixed;
   bottom: 24px;
-  right: 24px;
+  left: 24px;
   width: 56px;
   height: 56px;
   display: flex;
@@ -2945,7 +2984,7 @@ body {
   top: 0;
   left: 0;
   width: 18px;
-  height: 100%;
+  height: var(--nav-h, 44px);
   z-index: 999;
 }
 
@@ -3202,6 +3241,7 @@ body {
    The action zone (center) gets most vertical space
    and strongest visual weight. */
 
+/* Legacy 3-col grid — kept for backwards compat */
 .td-grid-3col {
   display: grid;
   grid-template-columns: 280px 1fr 320px;
@@ -3209,10 +3249,37 @@ body {
   align-items: start;
 }
 
+/* ─── NEW 2-COLUMN LAYOUT ───
+   LEFT: Contact + Call/Skip + Notes
+   RIGHT: Script + Qualification (centered) */
+.td-grid-2col {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
 .td-zone-left {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Action buttons directly under contact name */
+.td-action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.td-action-buttons .td-call-btn {
+  padding: 16px 20px;
+  font-size: 18px;
+}
+
+.td-action-buttons .td-skip-btn {
+  padding: 8px;
 }
 
 .td-zone-center {
@@ -3239,7 +3306,153 @@ body {
 .td-zone-right {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+}
+
+.td-zone-right--centered {
+  align-items: center;
+  max-width: 680px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ─── Section cards (Script, Qualification) ─── */
+.td-section-card {
+  width: 100%;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-neo-sm);
+  overflow: hidden;
+}
+
+.td-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid var(--border);
+}
+
+.td-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  padding: 0;
+}
+
+.td-section-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.td-section-body {
+  padding: 14px;
+}
+
+.td-script-transition {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* Qualification section */
+.td-section-card--qualification {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.td-section-card--qualification .td-section-header {
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.td-qual-progress {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+/* Qualification question textarea */
+.td-q-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: var(--font-body);
+  resize: vertical;
+  transition: border-color 0.15s;
+  margin-top: 6px;
+  min-height: 44px;
+}
+
+.td-q-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.td-q-card--done .td-q-textarea {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.04);
+}
+
+/* Save qualification row */
+.td-qual-save-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.td-qual-save-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #2563eb;
+  color: #fff;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--shadow-neo-sm);
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+
+.td-qual-save-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 #1a1a1a;
+}
+
+.td-qual-save-btn:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+
+.td-qual-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Fallback for smaller screens: stack */
@@ -3248,10 +3461,17 @@ body {
     grid-template-columns: 1fr;
     gap: 12px;
   }
+  .td-grid-2col {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
   .td-zone-center {
     order: -1; /* Call button first on mobile */
     padding: 16px 0;
     min-height: auto;
+  }
+  .td-zone-right--centered {
+    max-width: 100%;
   }
 }
 
@@ -3268,6 +3488,522 @@ body {
   gap: 0;
   flex: 1;
   overflow: hidden;
+}
+
+/* Unified single-column calling layout — centered */
+.call-content-unified {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  max-width: 680px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ─── CALL SPLIT LAYOUT ───
+   Left: Script (reference, dim, ~40%)
+   Right: Capture (answers, notes, save — bright, ~60%)
+   Script stays visible while you write answers. */
+
+.call-split {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  flex: 1;
+  min-height: 0; /* crucial for overflow inside grid children */
+  overflow: hidden;
+}
+
+/* LEFT: Script reference — prominent, read-only */
+.call-split-script {
+  padding: 20px 24px;
+  overflow-y: auto;
+  border-right: 2px dashed var(--border-light, #e5e5e5);
+  background: rgba(255, 255, 240, 0.5);
+}
+
+.call-script-head {
+  margin-bottom: 8px;
+}
+
+.call-script-title {
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.call-script-card {
+  background: var(--surface);
+  border: 2px solid var(--border-light, #e5e5e5);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-xs);
+}
+
+.call-script-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.call-script-text {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
+  margin: 0;
+  font-weight: 500;
+}
+
+.call-script-divider {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary, #3b82f6);
+  margin: 10px 0;
+  opacity: 0.7;
+}
+
+.call-script-prompt {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-light, #e5e5e5);
+  border-radius: var(--radius);
+}
+
+.call-script-prompt-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--neo-yellow, #fef08a);
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.call-script-prompt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.call-script-prompt-text {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.call-script-followup {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.call-script-followups {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* RIGHT: Data capture — bright, interactive */
+.call-split-capture {
+  padding: 16px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.call-capture-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.call-capture-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.call-capture-title {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.call-capture-progress {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.call-capture-done {
+  color: var(--success, #22c55e);
+}
+
+.call-capture-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.12s;
+}
+
+.call-capture-field--done {
+  border-color: var(--success, #22c55e);
+  background: rgba(34, 197, 94, 0.03);
+}
+
+.call-capture-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.call-capture-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--neo-yellow, #fef08a);
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.call-capture-num--done {
+  background: var(--success, #22c55e);
+  color: #fff;
+  border-color: var(--success, #22c55e);
+}
+
+.call-capture-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 2px solid var(--border-light, #e5e5e5);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: var(--font);
+  transition: border-color 0.12s;
+}
+
+.call-capture-input:focus {
+  outline: none;
+  border-color: var(--primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.call-capture-field--done .call-capture-input {
+  border-color: var(--success, #22c55e);
+  background: rgba(34, 197, 94, 0.04);
+}
+
+/* Save + Next button — the big CTA */
+.call-capture-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding-top: 8px;
+  margin-top: auto;
+}
+
+/* Feedback message above buttons */
+.call-feedback {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  border: 2px solid;
+}
+
+.call-feedback--ok {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #22c55e;
+}
+
+.call-feedback--err {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #ef4444;
+}
+
+/* Two action buttons side by side */
+.call-action-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 10px;
+}
+
+.call-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: var(--shadow-neo-sm);
+  transition: all 0.1s;
+  letter-spacing: 0.02em;
+}
+
+.call-action-btn:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-neo);
+}
+
+.call-action-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.call-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* NEDOVOLÁNO — muted, secondary */
+.call-action-btn--skip {
+  background: var(--surface, #fff);
+  color: var(--text);
+}
+
+.call-action-btn--skip:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+/* ULOŽIT DO PIPEDRIVE + DALŠÍ — primary, prominent */
+.call-action-btn--save {
+  background: #22c55e;
+  color: #fff;
+}
+
+.call-action-btn--save:hover:not(:disabled) {
+  background: #16a34a;
+}
+
+/* Keep old .call-save-btn for backwards compat */
+.call-save-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+  background: #2563eb;
+  color: #fff;
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: var(--shadow-neo-sm);
+  transition: all 0.1s;
+  letter-spacing: 0.02em;
+}
+
+.call-save-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-neo);
+}
+
+.call-save-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.call-save-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Responsive: stack on small screens */
+@media (max-width: 768px) {
+  .call-split {
+    grid-template-columns: 1fr;
+  }
+  .call-split-script {
+    border-right: none;
+    border-bottom: 2px dashed var(--border-light, #e5e5e5);
+    max-height: 200px;
+  }
+}
+
+/* Qual hint shown in ReadyPhase */
+.td-qual-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(37, 99, 235, 0.04);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.td-qual-hint-icon {
+  font-size: 18px;
+}
+
+/* ─── SALES WISDOM CARD (ReadyPhase) ───
+   Motivational quote from Psychology of Selling,
+   changes per contact to stay fresh. */
+
+.td-wisdom-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 28px 24px;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 3px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-neo);
+}
+
+.td-wisdom-quote {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.td-wisdom-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.td-wisdom-quote blockquote {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--text);
+  font-style: italic;
+}
+
+.td-wisdom-tip {
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.td-wisdom-tip-label {
+  font-weight: 900;
+  color: var(--primary, #3b82f6);
+}
+
+.td-wisdom-source {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  font-style: italic;
+}
+
+/* ─── READY PHASE: CENTERED SINGLE-COLUMN ───
+   UX: Vertical flow — Contact → CTA → Wisdom.
+   No side columns, no scanning. One focal point. */
+
+.td-ready-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 440px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.td-ready-center .td-contact {
+  width: 100%;
+}
+
+.td-ready-center .td-action-buttons {
+  width: 100%;
+}
+
+/* Wisdom strip — subtle horizontal bar below CTA */
+.td-wisdom-strip {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-neo-sm);
+  margin-top: 8px;
+}
+
+.td-wisdom-strip-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.td-wisdom-strip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.td-wisdom-strip-quote {
+  font-size: 13px;
+  font-weight: 600;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.td-wisdom-strip-tip {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary, #3b82f6);
+}
+
+.td-script-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
 }
 
 /* LEFT: Script zone — dimmer, reference material.

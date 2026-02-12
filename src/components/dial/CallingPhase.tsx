@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { formatTime } from "../../features/dialer/helpers";
 import type { CallOutcome, Contact } from "../../features/dialer/types";
 import {
@@ -14,7 +14,19 @@ interface CallingPhaseProps {
   notes: string;
   onAnswerChange: (index: number, value: string) => void;
   onNotesChange: (value: string) => void;
-  onEndCall: (outcome: CallOutcome) => void;
+  /** Full CRM save — logs call activity + note. Returns true on success. */
+  onLogCallAndNote: (
+    contact: Contact,
+    outcome: CallOutcome,
+    duration: number,
+    qualAnswers: string[],
+    notes: string,
+  ) => Promise<boolean>;
+  /** Move to next contact (called after successful save). */
+  onNextContact: () => void;
+  /** Record session stats for this call. */
+  onRecordCall: (outcome: CallOutcome) => void;
+  pipedriveConfigured?: boolean;
 }
 
 export function CallingPhase({
@@ -24,10 +36,21 @@ export function CallingPhase({
   notes,
   onAnswerChange,
   onNotesChange,
-  onEndCall,
+  onLogCallAndNote,
+  onNextContact,
+  onRecordCall,
+  pipedriveConfigured,
 }: CallingPhaseProps) {
   const firstInputRef = useRef<HTMLInputElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
+  const [scriptCollapsed, setScriptCollapsed] = useState(false);
+  const [saving, setSaving] = useState<"none" | "no-answer" | "connected">(
+    "none",
+  );
+  const [saveResult, setSaveResult] = useState<{
+    ok: boolean;
+    msg: string;
+  } | null>(null);
 
   useEffect(() => {
     const t = setTimeout(
@@ -44,7 +67,6 @@ export function CallingPhase({
     (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
       if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
         e.preventDefault();
-        // Move to next input or notes
         const next = document.querySelector<
           HTMLInputElement | HTMLTextAreaElement
         >(idx < 2 ? `[data-qual-idx="${idx + 1}"]` : ".call-notes-area");
@@ -54,109 +76,157 @@ export function CallingPhase({
     [],
   );
 
+  /**
+   * Handles both "Nedovoláno" and "Uložit + Další".
+   * 1. Calls logCallAndNote which logs activity + note to Pipedrive.
+   * 2. Only on TRUE success → shows ✓ and advances to next contact.
+   * 3. On failure → shows error, does NOT advance.
+   */
+  const handleAction = useCallback(
+    async (outcome: CallOutcome) => {
+      if (saving !== "none") return; // prevent double-click
+
+      const savingType = outcome === "no-answer" ? "no-answer" : "connected";
+      setSaving(savingType);
+      setSaveResult(null);
+
+      try {
+        // Record call in session stats
+        onRecordCall(outcome);
+
+        // Save to Pipedrive — returns true ONLY on success
+        const success = await onLogCallAndNote(
+          contact,
+          outcome,
+          callDuration,
+          aiQualAnswers,
+          notes,
+        );
+
+        if (success) {
+          setSaveResult({
+            ok: true,
+            msg:
+              outcome === "no-answer"
+                ? "✓ Nedovoláno zapsáno do Pipedrive"
+                : "✓ Dovoláno + poznámka uložena do Pipedrive",
+          });
+          // Advance to next contact after brief confirmation
+          setTimeout(() => onNextContact(), 600);
+        } else {
+          setSaveResult({
+            ok: false,
+            msg: "✗ Chyba při ukládání do Pipedrive — zkuste znovu",
+          });
+          setSaving("none");
+        }
+      } catch (e) {
+        setSaveResult({
+          ok: false,
+          msg:
+            "✗ " +
+            (e instanceof Error ? e.message : "Neznámá chyba při ukládání"),
+        });
+        setSaving("none");
+      }
+    },
+    [
+      saving,
+      contact,
+      callDuration,
+      aiQualAnswers,
+      notes,
+      onLogCallAndNote,
+      onNextContact,
+      onRecordCall,
+    ],
+  );
+
   return (
     <div className="phase-calling" data-phase="calling">
-      {/* ━━━ FIXED CALL BAR — always visible at top ━━━ */}
+      {/* ━━━ CALL BAR — status display ━━━ */}
       <div className="call-bar">
         <div className="call-bar-left">
           <span className="call-dot" aria-label="Hovor probíhá" />
           <span className="call-bar-name">{contact.name}</span>
           <span className="call-bar-company">{contact.company}</span>
         </div>
-
-        {/* Timer is the visual anchor — largest element */}
         <span className="call-timer" aria-live="polite">
           {formatTime(callDuration)}
         </span>
-
-        <div className="call-bar-actions">
-          <button
-            className="btn-end btn-end-skip"
-            onClick={() => onEndCall("no-answer")}
-            title="Klávesa 1"
-          >
-            <span className="btn-end-label">Nedovoláno</span>
-            <kbd>1</kbd>
-          </button>
-          <button
-            className="btn-end btn-end-done"
-            onClick={() => onEndCall("connected")}
-            title="Klávesa 2"
-          >
-            <span className="btn-end-label">Spojeno</span>
-            <kbd>2</kbd>
-          </button>
-          <button
-            className="btn-end btn-end-meeting"
-            onClick={() => onEndCall("meeting")}
-            title="Klávesa 3"
-          >
-            <span className="btn-end-label">📅 Demo</span>
-            <kbd>3</kbd>
-          </button>
-        </div>
       </div>
 
-      {/* ━━━ MAIN CONTENT — two-zone layout: script left, capture right ━━━ */}
-      <div className="call-content">
-        {/* LEFT: Script guidance — read-only, dim, reference material */}
-        <div className="call-script-zone">
-          <div className="script-ai">
-            <div className="script-ai-title">Skript hovoru</div>
-            <div className="script-ai-block">
-              <div className="script-ai-label">Otevírací věta</div>
-              <p className="script-ai-quote">{OPENING_SCRIPT}</p>
-            </div>
+      {/* ━━━ MAIN: Script (left) | Capture (right) ━━━ */}
+      <div className="call-split">
+        {/* LEFT — Script reference (read-only, dimmer) */}
+        <div className="call-split-script">
+          <div className="call-script-head">
+            <button
+              className="td-section-toggle"
+              onClick={() => setScriptCollapsed(!scriptCollapsed)}
+            >
+              <span className="td-toggle-arrow">
+                {scriptCollapsed ? "▶" : "▼"}
+              </span>
+              <span className="call-script-title">📝 Skript</span>
+            </button>
           </div>
 
-          <p className="script-transition">→ Přechod na dotazy</p>
-
-          {/* Script-side prompts — what to SAY (left brain) */}
-          {QUAL_QUESTIONS.map((q, idx) => (
-            <div key={idx} className="script-prompt-card">
-              <span className="script-prompt-num">{idx + 1}</span>
-              <span className="script-prompt-text">{q.script}</span>
+          {!scriptCollapsed && (
+            <div className="call-script-card">
+              <span className="call-script-label">Otevírací věta</span>
+              <p className="call-script-text">{OPENING_SCRIPT}</p>
             </div>
-          ))}
+          )}
         </div>
 
-        {/* RIGHT: Data capture — interactive, bright, where attention goes */}
-        <div className="call-capture-zone">
-          <div className="capture-header">
-            <span className="capture-title">Odpovědi</span>
-            <span className="capture-progress">
-              {filledCount}/3
-              {filledCount === 3 && <span className="capture-done"> ✓</span>}
-            </span>
+        {/* RIGHT — Data capture (bright, interactive) */}
+        <div className="call-split-capture">
+          {/* Qualification */}
+          <div className="call-capture-section">
+            <div className="call-capture-head">
+              <span className="call-capture-title">🎯 Kvalifikace</span>
+              <span className="call-capture-progress">
+                {filledCount}/{QUAL_QUESTIONS.length}
+                {filledCount === QUAL_QUESTIONS.length && (
+                  <span className="call-capture-done"> ✓</span>
+                )}
+              </span>
+            </div>
+
+            {QUAL_QUESTIONS.map((q, idx) => {
+              const filled = !!aiQualAnswers[idx]?.trim();
+              return (
+                <div
+                  key={idx}
+                  className={`call-capture-field ${filled ? "call-capture-field--done" : ""}`}
+                >
+                  <label className="call-capture-label">
+                    <span
+                      className={`call-capture-num ${filled ? "call-capture-num--done" : ""}`}
+                    >
+                      {filled ? "✓" : idx + 1}
+                    </span>
+                    {q.prompt}
+                  </label>
+                  <input
+                    ref={idx === 0 ? firstInputRef : undefined}
+                    data-qual-idx={idx}
+                    className="call-capture-input"
+                    value={aiQualAnswers[idx] || ""}
+                    onChange={(e) => onAnswerChange(idx, e.target.value)}
+                    onKeyDown={(e) => handleInputKeyDown(e, idx)}
+                    placeholder={q.placeholder}
+                    autoComplete="off"
+                  />
+                </div>
+              );
+            })}
           </div>
 
-          {QUAL_QUESTIONS.map((q, idx) => {
-            const filled = !!aiQualAnswers[idx]?.trim();
-            return (
-              <div
-                key={idx}
-                className={`capture-field ${filled ? "capture-field--done" : ""}`}
-              >
-                <label className="capture-label">
-                  <span className="capture-num">{idx + 1}</span>
-                  {q.prompt}
-                </label>
-                <input
-                  ref={idx === 0 ? firstInputRef : undefined}
-                  data-qual-idx={idx}
-                  className="capture-input"
-                  value={aiQualAnswers[idx] || ""}
-                  onChange={(e) => onAnswerChange(idx, e.target.value)}
-                  onKeyDown={(e) => handleInputKeyDown(e, idx)}
-                  placeholder={q.placeholder}
-                  autoComplete="off"
-                />
-              </div>
-            );
-          })}
-
-          <div className="capture-notes">
-            <label className="capture-label">📋 Poznámky</label>
+          {/* Notes */}
+          <div className="call-capture-section">
+            <label className="call-capture-title">📋 Poznámky</label>
             <textarea
               ref={notesRef}
               className="call-notes-area"
@@ -166,14 +236,47 @@ export function CallingPhase({
               rows={3}
             />
           </div>
+
+          {/* ━━━ TWO ACTION BUTTONS ━━━ */}
+          <div className="call-capture-actions">
+            {/* Feedback message — shown above buttons */}
+            {saveResult && (
+              <div
+                className={`call-feedback ${saveResult.ok ? "call-feedback--ok" : "call-feedback--err"}`}
+              >
+                {saveResult.msg}
+              </div>
+            )}
+
+            <div className="call-action-row">
+              {/* NEDOVOLÁNO — logs "no-answer" activity to Pipedrive + next */}
+              <button
+                className="call-action-btn call-action-btn--skip"
+                disabled={saving !== "none" || !pipedriveConfigured}
+                onClick={() => handleAction("no-answer")}
+              >
+                {saving === "no-answer" ? "⏳ Ukládám…" : "❌ Nedovoláno"}
+              </button>
+
+              {/* ULOŽIT DO PIPEDRIVE + DALŠÍ — logs "connected" activity + qual + notes + next */}
+              <button
+                className="call-action-btn call-action-btn--save"
+                disabled={saving !== "none" || !pipedriveConfigured}
+                onClick={() => handleAction("connected")}
+              >
+                {saving === "connected"
+                  ? "⏳ Ukládám…"
+                  : "✅ Uložit do Pipedrive + Další →"}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ━━━ BOTTOM KEYBOARD HINTS — always visible ━━━ */}
+      {/* ━━━ KEYBOARD HINTS ━━━ */}
       <div className="call-shortcuts">
         <kbd>1</kbd> nedovoláno &nbsp;·&nbsp;
-        <kbd>2</kbd> spojeno &nbsp;·&nbsp;
-        <kbd>3</kbd> demo &nbsp;·&nbsp;
+        <kbd>2</kbd> uložit + další &nbsp;·&nbsp;
         <kbd>Tab</kbd> další pole
       </div>
     </div>

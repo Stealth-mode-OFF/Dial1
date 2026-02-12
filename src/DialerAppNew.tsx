@@ -32,7 +32,6 @@ import { SettingsOverlay } from "./features/dialer/components/SettingsOverlay";
 import { CallingPhase } from "./components/dial/CallingPhase";
 import { EmptyState } from "./components/dial/EmptyState";
 import { ReadyPhase } from "./components/dial/ReadyPhase";
-import { WrapupConnectedCard } from "./components/dial/WrapupConnectedCard";
 import { WrapupNoAnswerOverlay } from "./components/dial/WrapupNoAnswerOverlay";
 
 // ─── Helpers ───────────────────────────────────────────────────
@@ -123,7 +122,12 @@ export function DialerApp() {
       stats: { ...s.stats, calls: s.stats.calls + 1 },
     }));
     if (!externalNavDisabled) {
-      window.location.href = `tel:${contact.phone.replace(/[^\d+]/g, "")}`;
+      // Open tel: link without navigating away from the app
+      const telLink = document.createElement("a");
+      telLink.href = `tel:${contact.phone.replace(/[^\d+]/g, "")}`;
+      telLink.target = "_blank";
+      telLink.rel = "noopener";
+      telLink.click();
     }
   }, [contact, externalNavDisabled, ds, setPhase]);
 
@@ -201,7 +205,11 @@ export function DialerApp() {
     setImporting(false);
   }, [refresh]);
 
-  const endCall = useCallback(
+  /**
+   * Record a call outcome in session stats (no CRM write — CallingPhase does that).
+   * Called by CallingPhase.onRecordCall before it saves to Pipedrive.
+   */
+  const recordCallForSession = useCallback(
     (outcome: CallOutcome) => {
       if (!contact) return;
       const dur = callStart ? Math.floor((Date.now() - callStart) / 1000) : 0;
@@ -209,40 +217,9 @@ export function DialerApp() {
       ds.recordCall(contact.id, outcome, dur, notes);
       setCallStart(null);
       setCallDuration(dur);
-      setPhase("wrapup");
-
-      // Auto-log to CRM in background
-      crm.logCallBackground(contact, outcome, dur, notes);
-
-      // Start auto-dial countdown for no-answer
-      if (outcome === "no-answer") autoDial.startCountdown();
     },
-    [callStart, contact, notes, ds, crm, autoDial, setPhase],
+    [callStart, contact, notes, ds],
   );
-
-  const saveWrapupAndNext = useCallback(async () => {
-    if (!contact) return;
-    await crm.logCallAndNote(
-      contact,
-      wrapupOutcome || "connected",
-      callDuration,
-      aiQualAnswers,
-      notes,
-    );
-    setTimeout(() => {
-      if (wrapupOutcome === "meeting") ds.recordMeetingBooked();
-      nextContact();
-    }, 800);
-  }, [
-    contact,
-    wrapupOutcome,
-    callDuration,
-    aiQualAnswers,
-    notes,
-    crm,
-    ds,
-    nextContact,
-  ]);
 
   const updateQualAnswer = useCallback((index: number, value: string) => {
     setAiQualAnswers((prev) => {
@@ -277,43 +254,14 @@ export function DialerApp() {
           (e.target as HTMLElement).blur();
           return;
         }
-        if (phase === "calling" && e.altKey) {
-          if (e.key === "1") {
-            e.preventDefault();
-            endCall("no-answer");
-            return;
-          }
-          if (e.key === "2") {
-            e.preventDefault();
-            endCall("connected");
-            return;
-          }
-          if (e.key === "3") {
-            e.preventDefault();
-            endCall("meeting");
-            return;
-          }
-        }
+        // Keyboard shortcuts in calling phase are now handled
+        // directly by CallingPhase component's action buttons
         return;
       }
 
       if (e.key === "c" && phase === "ready") {
         e.preventDefault();
         startCall();
-      }
-      if (phase === "calling") {
-        if (e.key === "1") {
-          e.preventDefault();
-          endCall("no-answer");
-        }
-        if (e.key === "2") {
-          e.preventDefault();
-          endCall("connected");
-        }
-        if (e.key === "3") {
-          e.preventDefault();
-          endCall("meeting");
-        }
       }
       if (phase === "wrapup" && wrapupOutcome === "no-answer") {
         if (e.key === " ") {
@@ -329,12 +277,7 @@ export function DialerApp() {
           autoDial.skipToNext();
         }
       }
-      if (phase === "wrapup" && wrapupOutcome !== "no-answer") {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          saveWrapupAndNext();
-        }
-      }
+      // Connected/meeting wrapup is now handled directly in CallingPhase
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setActiveIndex((i) => Math.min(i + 1, contacts.length - 1));
@@ -348,10 +291,8 @@ export function DialerApp() {
     return () => window.removeEventListener("keydown", handler);
   }, [
     contacts.length,
-    endCall,
     autoDial,
     phase,
-    saveWrapupAndNext,
     sendSms,
     startCall,
     wrapupOutcome,
@@ -397,42 +338,19 @@ export function DialerApp() {
         </div>
       </header>
 
-      {/* ─── PROGRESS BAR ─── */}
+      {/* ─── PROGRESS TICKS ─── */}
       {contacts.length > 0 && (
-        <div className="seq-progress-bar">
-          <span className="seq-progress-label">
-            Lead {Math.min(completedCount + 1, contacts.length)}/
-            {contacts.length}
-          </span>
-          <div className="seq-progress-track">
-            <div
-              className="seq-progress-fill"
-              style={{
-                width: `${Math.round((completedCount / contacts.length) * 100)}%`,
-              }}
-            />
-          </div>
-          <div className="seq-progress-stats">
-            <span>
-              ✅{" "}
-              {
-                contacts.filter(
-                  (c) =>
-                    session.completedOutcomes[c.id] === "connected" ||
-                    session.completedOutcomes[c.id] === "meeting",
-                ).length
-              }
-            </span>
-            <span>
-              ❌{" "}
-              {
-                contacts.filter(
-                  (c) => session.completedOutcomes[c.id] === "no-answer",
-                ).length
-              }
-            </span>
-            <span>⏱️ {formatTime(session.stats.talkTime)}</span>
-          </div>
+        <div className="seq-tick-bar">
+          {contacts.map((c, i) => {
+            const outcome = session.completedOutcomes[c.id];
+            const isCurrent = i === completedCount;
+            let cls = "seq-tick";
+            if (outcome === "connected" || outcome === "meeting")
+              cls += " seq-tick--ok";
+            else if (outcome === "no-answer") cls += " seq-tick--skip";
+            else if (isCurrent) cls += " seq-tick--active";
+            return <span key={c.id} className={cls} />;
+          })}
         </div>
       )}
 
@@ -474,16 +392,10 @@ export function DialerApp() {
           <ReadyPhase
             contact={contact}
             displayBrief={displayBrief}
-            notes={notes}
-            onNotesChange={setNotes}
-            pipedriveConfigured={pipedriveConfigured}
             sessionStats={session.stats}
             queuePosition={activeIndex + 1}
             queueTotal={contacts.length}
             completedCount={completedCount}
-            onSaveToPipedrive={(noteText) =>
-              crm.savePrecallNote(contact, noteText)
-            }
             onCall={startCall}
             onSkip={nextContact}
           />
@@ -496,9 +408,12 @@ export function DialerApp() {
               notes={notes}
               onAnswerChange={updateQualAnswer}
               onNotesChange={setNotes}
-              onEndCall={endCall}
-            />
-            <FloatingWhisper />
+              onLogCallAndNote={crm.logCallAndNote}
+              onNextContact={nextContact}
+              onRecordCall={recordCallForSession}
+              pipedriveConfigured={pipedriveConfigured}
+            />{" "}
+            <FloatingWhisper />{" "}
           </>
         ) : wrapupOutcome === "no-answer" ? (
           <WrapupNoAnswerOverlay
@@ -510,40 +425,12 @@ export function DialerApp() {
             onAutoDialNext={autoDial.skipToNext}
           />
         ) : (
+          // Connected/meeting wrapup is now handled directly in CallingPhase
+          // This fallback just advances to next contact
           <div className="seq-wrapup">
-            {showScheduler ? (
-              <div className="scheduler-embed">
-                <div className="scheduler-header">
-                  <h3>📅 Naplánuj demo</h3>
-                  <button
-                    className="scheduler-close"
-                    onClick={() => setShowScheduler(false)}
-                  >
-                    ✕ Zavřít
-                  </button>
-                </div>
-                <iframe
-                  src={SCHEDULER_URL}
-                  className="scheduler-iframe"
-                  title="Pipedrive Scheduler"
-                  allow="payment"
-                />
-              </div>
-            ) : (
-              <WrapupConnectedCard
-                contact={contact}
-                wrapupOutcome={wrapupOutcome || "connected"}
-                callDuration={callDuration}
-                aiQualAnswers={aiQualAnswers}
-                notes={notes}
-                crmSaving={crm.saving}
-                crmResult={crm.result}
-                onAnswerChange={updateQualAnswer}
-                onNotesChange={setNotes}
-                onSave={saveWrapupAndNext}
-                onShowScheduler={() => setShowScheduler(true)}
-              />
-            )}
+            <div style={{ padding: 32, textAlign: "center" }}>
+              Přechod na dalšího leada…
+            </div>
           </div>
         )}
       </main>
