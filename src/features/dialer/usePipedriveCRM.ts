@@ -88,7 +88,10 @@ export function usePipedriveCRM() {
           lastMsg = `✓ Aktivita #${pd.activity_id || ""} uložena do Pipedrive.`;
           setResult({ ok: true, message: lastMsg });
         } else if (pd?.error === "not_configured") {
-          const r = { ok: false, message: "Pipedrive API klíč není nastaven v Nastavení." };
+          const r = {
+            ok: false,
+            message: "Pipedrive API klíč není nastaven v Nastavení.",
+          };
           setResult(r);
           return r;
         } else if (pd?.error) {
@@ -96,7 +99,10 @@ export function usePipedriveCRM() {
           setResult(r);
           return r;
         } else {
-          const r = { ok: false, message: "Pipedrive sync selhal — žádná odpověď ze serveru." };
+          const r = {
+            ok: false,
+            message: "Pipedrive sync selhal — žádná odpověď ze serveru.",
+          };
           setResult(r);
           return r;
         }
@@ -154,7 +160,8 @@ export function usePipedriveCRM() {
               message:
                 "✓ Aktivita uložena (poznámka přeskočena — kontakt nemá Pipedrive ID).",
             });
-            lastMsg = "✓ Aktivita uložena (poznámka přeskočena — kontakt nemá Pipedrive ID).";
+            lastMsg =
+              "✓ Aktivita uložena (poznámka přeskočena — kontakt nemá Pipedrive ID).";
           }
         }
 
@@ -165,7 +172,10 @@ export function usePipedriveCRM() {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Neznámá chyba";
         console.error("logCallAndNote failed:", e);
-        const r = { ok: false, message: `Uložení do Pipedrive selhalo: ${msg}` };
+        const r = {
+          ok: false,
+          message: `Uložení do Pipedrive selhalo: ${msg}`,
+        };
         setResult(r);
         return r;
       } finally {
