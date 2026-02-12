@@ -206,7 +206,17 @@ export function DialerApp() {
         disposition: outcome,
         notes: notes || (outcome === 'no-answer' ? 'Nedovoláno' : outcome === 'meeting' ? 'Demo domluveno' : 'Dovoláno'),
         duration: dur,
-      }).catch((err) => console.error('Auto-log to Pipedrive failed:', err));
+      }).then((res) => {
+        const pd = res?.pipedrive;
+        if (pd?.synced) {
+          setCrmResult({ ok: true, message: 'Aktivita uložena do Pipedrive.' });
+        } else if (pd?.error && pd.error !== 'not_configured') {
+          setCrmResult({ ok: false, message: `Pipedrive: ${pd.error}` });
+        }
+      }).catch((err) => {
+        console.error('Auto-log to Pipedrive failed:', err);
+        setCrmResult({ ok: false, message: err?.message || 'Pipedrive log selhalo' });
+      });
     }
 
     if (outcome === 'no-answer') {
@@ -246,7 +256,6 @@ export function DialerApp() {
 
   const saveWrapupAndNext = useCallback(async () => {
     if (!contact) return;
-    if (wrapupOutcome === 'no-answer') return;
     if (!isSupabaseConfigured) {
       setCrmResult({ ok: false, message: 'Supabase není nakonfigurovaný.' });
       return;
@@ -254,44 +263,66 @@ export function DialerApp() {
     setCrmSaving(true);
     setCrmResult(null);
     try {
-      let personId: number | undefined = undefined;
-      try {
-        const ctx = await echoApi.precall.context({
-          contact_id: contact.id,
-          include: [],
-          ttl_hours: 24,
-          timeline: { activities: 0, notes: 0, deals: 0 },
-        });
-        personId = ctx?.pipedrive?.person_id ?? undefined;
-      } catch {
-        personId = undefined;
-      }
-
-      if (!personId && !contact.orgId) {
-        throw new Error('Chybí vazba do Pipedrive (personId/orgId).');
-      }
-
-      const lines: string[] = [];
-      lines.push('<b>📞 Hovor</b>');
-      lines.push(`Klient: <b>${contact.name}</b> (${contact.title || '—'}) – <b>${contact.company}</b>`);
-      lines.push(`Výsledek: <b>${outcomeLabel(wrapupOutcome)}</b>`);
-      lines.push(`Délka: <b>${formatTime(callDuration)}</b>`);
-      const qa = aiQualAnswers
-        .filter(Boolean)
-        .slice(0, 3)
-        .map((a, idx) => `• Q${idx + 1}: ${a}`)
-        .join('<br>');
-      if (qa) lines.push(`<br><b>Kvalifikace:</b><br>${qa}`);
-      if (notes?.trim()) lines.push(`<br><b>Poznámky:</b><br>${notes.trim()}`);
-      const content = lines.join('<br>');
-
-      const res = await echoApi.addPipedriveNote({
-        personId,
-        orgId: contact.orgId,
-        content,
+      // 1) Log call activity to Pipedrive (creates activity with retry)
+      const logRes = await echoApi.logCall({
+        contactId: contact.id,
+        contactName: contact.name,
+        companyName: contact.company,
+        disposition: wrapupOutcome || 'connected',
+        notes: notes || (wrapupOutcome === 'no-answer' ? 'Nedovoláno' : wrapupOutcome === 'meeting' ? 'Demo domluveno' : 'Dovoláno'),
+        duration: callDuration,
       });
 
-      setCrmResult({ ok: Boolean(res?.success), message: res?.success ? 'Uloženo do Pipedrive.' : 'Nepodařilo se uložit do Pipedrive.' });
+      const pd = logRes?.pipedrive;
+      if (pd?.synced) {
+        setCrmResult({ ok: true, message: 'Aktivita uložena do Pipedrive.' });
+      } else if (pd?.error && pd.error !== 'not_configured') {
+        setCrmResult({ ok: false, message: `Pipedrive: ${pd.error}` });
+      } else if (pd?.error === 'not_configured') {
+        setCrmResult({ ok: false, message: 'Pipedrive API klíč není nastaven.' });
+      }
+
+      // 2) Also add detailed note for connected/meeting calls
+      if (wrapupOutcome && wrapupOutcome !== 'no-answer') {
+        const lines: string[] = [];
+        lines.push('<b>📞 Hovor</b>');
+        lines.push(`Klient: <b>${contact.name}</b> (${contact.title || '—'}) – <b>${contact.company}</b>`);
+        lines.push(`Výsledek: <b>${outcomeLabel(wrapupOutcome)}</b>`);
+        lines.push(`Délka: <b>${formatTime(callDuration)}</b>`);
+        const qa = aiQualAnswers
+          .filter(Boolean)
+          .slice(0, 3)
+          .map((a, idx) => `• Q${idx + 1}: ${a}`)
+          .join('<br>');
+        if (qa) lines.push(`<br><b>Kvalifikace:</b><br>${qa}`);
+        if (notes?.trim()) lines.push(`<br><b>Poznámky:</b><br>${notes.trim()}`);
+        const content = lines.join('<br>');
+
+        let personId: number | undefined = undefined;
+        try {
+          const ctx = await echoApi.precall.context({
+            contact_id: contact.id,
+            include: [],
+            ttl_hours: 24,
+            timeline: { activities: 0, notes: 0, deals: 0 },
+          });
+          personId = ctx?.pipedrive?.person_id ?? undefined;
+        } catch {
+          personId = undefined;
+        }
+
+        if (personId || contact.orgId) {
+          await echoApi.addPipedriveNote({
+            personId,
+            orgId: contact.orgId,
+            content,
+          }).catch((e) => console.warn('Pipedrive note failed (activity was logged):', e));
+        }
+      }
+
+      if (!crmResult?.ok && pd?.synced) {
+        setCrmResult({ ok: true, message: 'Uloženo do Pipedrive.' });
+      }
     } catch (e) {
       setCrmResult({ ok: false, message: e instanceof Error ? e.message : 'Uložení do CRM selhalo' });
     } finally {
@@ -453,6 +484,32 @@ export function DialerApp() {
             briefLoading={briefLoading}
             briefError={briefError}
             openingText={openingText}
+            notes={notes}
+            onNotesChange={setNotes}
+            pipedriveConfigured={pipedriveConfigured}
+            sessionStats={session.stats}
+            queuePosition={activeIndex + 1}
+            queueTotal={contacts.length}
+            completedCount={Object.keys(session.completedOutcomes).length}
+            onSaveToPipedrive={async (noteText: string) => {
+              if (!isSupabaseConfigured || !contact) throw new Error('Backend není připojen');
+              let personId: number | undefined;
+              try {
+                const ctx = await echoApi.precall.context({
+                  contact_id: contact.id,
+                  include: [],
+                  ttl_hours: 24,
+                  timeline: { activities: 0, notes: 0, deals: 0 },
+                });
+                personId = ctx?.pipedrive?.person_id ?? undefined;
+              } catch { /* ignore */ }
+              if (!personId && !contact.orgId) throw new Error('Kontakt nemá propojení s Pipedrive');
+              await echoApi.addPipedriveNote({
+                personId,
+                orgId: contact.orgId,
+                content: `<b>Poznámka (pre-call):</b><br>${noteText.replace(/\n/g, '<br>')}`,
+              });
+            }}
             onCall={startCall}
             onSkip={nextContact}
           />
