@@ -6,6 +6,7 @@ import { useState, useCallback } from "react";
 import { echoApi } from "../../utils/echoApi";
 import { isSupabaseConfigured } from "../../utils/supabase/info";
 import { formatTime, outcomeLabel } from "./helpers";
+import { QUAL_QUESTIONS } from "./config";
 import type { CallOutcome, Contact } from "./types";
 import type { CallLogResult } from "../../utils/echoApi";
 
@@ -82,6 +83,7 @@ export function usePipedriveCRM() {
                 ? "Demo domluveno"
                 : "Dovoláno"),
           duration,
+          qualAnswers,
         });
 
         const pd = logRes?.pipedrive;
@@ -114,9 +116,14 @@ export function usePipedriveCRM() {
           setResult({ ok: false, message: lastMsg });
         }
 
-        // 2) Add detailed note for connected/meeting calls
-        //    ALWAYS attempt note writing — even if activity logging failed
-        if (outcome !== "no-answer") {
+        // 2) Add detailed note to Pipedrive
+        //    Write whenever ANY field has content — even for no-answer
+        const hasQualContent = qualAnswers.some((a) => a.trim());
+        const hasNotesContent = !!notes?.trim();
+        const shouldWriteNote =
+          outcome !== "no-answer" || hasQualContent || hasNotesContent;
+
+        if (shouldWriteNote) {
           const lines: string[] = [
             "<b>📞 Hovor</b>",
             `Klient: <b>${contact.name}</b> (${contact.title || "—"}) – <b>${contact.company}</b>`,
@@ -124,14 +131,22 @@ export function usePipedriveCRM() {
             `Délka: <b>${formatTime(duration)}</b>`,
           ];
 
-          const qa = qualAnswers
-            .filter(Boolean)
-            .slice(0, 3)
-            .map((a, idx) => `• Q${idx + 1}: ${a}`)
-            .join("<br>");
-          if (qa) lines.push(`<br><b>Kvalifikace:</b><br>${qa}`);
-          if (notes?.trim())
-            lines.push(`<br><b>Poznámky:</b><br>${notes.trim()}`);
+          // Include each qualification Q+A with the actual question text
+          const qaLines = qualAnswers
+            .map((a, idx) => {
+              const q = QUAL_QUESTIONS[idx];
+              const answer = a.trim();
+              if (!answer) return null;
+              const label = q?.prompt || `Otázka ${idx + 1}`;
+              return `• <b>${label}</b>: ${answer}`;
+            })
+            .filter(Boolean);
+          if (qaLines.length > 0)
+            lines.push(
+              `<br><b>🎯 Kvalifikace (${qaLines.length}/${QUAL_QUESTIONS.length}):</b><br>${qaLines.join("<br>")}`,
+            );
+          if (hasNotesContent)
+            lines.push(`<br><b>📋 Poznámky:</b><br>${notes!.trim()}`);
 
           const personId = await resolvePipedrivePersonId(
             contact.id,

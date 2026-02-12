@@ -7212,6 +7212,7 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
       disposition,
       notes,
       duration,
+      qualAnswers,
     } = body;
 
     const logId = crypto.randomUUID();
@@ -7421,29 +7422,35 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
           }
 
           const safeNotes = typeof notes === "string" ? notes.trim() : "";
-          const aiNote = await Promise.race([
-            generateCallNoteForPipedrive({
-              language: "cs",
-              disposition:
-                typeof disposition === "string" ? disposition : "call",
-              durationSec: duration,
-              notes: safeNotes,
-              openaiApiKey: await getOpenAiApiKeyForUser(userId),
-              contact: {
-                name: resolved?.contact?.name || contactName || null,
-                title: resolved?.contact?.title || null,
-                company: resolved?.contact?.company || companyName || null,
-              },
-            }),
-            sleep(2500).then(() => null),
-          ]);
 
-          const noteText = (
-            aiNote ||
-            safeNotes ||
-            `Logged via Echo. Disposition: ${disposition}`
-          ).toString();
-          const htmlNote = formatActivityNoteHtml(noteText);
+          // Build activity note directly from user-entered field values
+          const qualArray: string[] = Array.isArray(qualAnswers)
+            ? qualAnswers
+            : [];
+          const qualQuestions = [
+            "Kolik zaměstnanců máte?",
+            "Zjišťujete pravidelně náladu v týmech?",
+            "Kdo rozhoduje o nákupu?",
+          ];
+          const noteLines: string[] = [];
+          qualArray.forEach((answer: unknown, idx: number) => {
+            const a = typeof answer === "string" ? answer.trim() : "";
+            if (a) {
+              const q = qualQuestions[idx] || `Otázka ${idx + 1}`;
+              noteLines.push(`<b>${q}</b>`);
+              noteLines.push(a);
+              noteLines.push("");
+            }
+          });
+          if (safeNotes) {
+            noteLines.push("<b>📋 Poznámky</b>");
+            noteLines.push(safeNotes);
+          }
+          const noteText =
+            noteLines.length > 0
+              ? noteLines.join("<br>")
+              : `Logged via Echo. Disposition: ${disposition}`;
+          const htmlNote = noteText;
 
           const activityBody: any = {
             subject,

@@ -92,6 +92,7 @@ export type CallLogPayload = {
   disposition: string;
   notes?: string;
   duration?: number;
+  qualAnswers?: string[];
 };
 
 export type CallLogResult = {
