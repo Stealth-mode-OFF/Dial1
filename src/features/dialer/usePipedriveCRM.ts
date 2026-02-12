@@ -41,7 +41,7 @@ export function usePipedriveCRM() {
 
   /**
    * Log a call activity + optional detailed note to Pipedrive.
-   * Returns true if successful.
+   * Returns true ONLY if the Pipedrive activity was successfully synced.
    */
   const logCallAndNote = useCallback(
     async (
@@ -77,15 +77,32 @@ export function usePipedriveCRM() {
         });
 
         const pd = logRes?.pipedrive;
+
+        // Track whether Pipedrive sync actually succeeded
+        let activityOk = false;
+
         if (pd?.synced) {
-          setResult({ ok: true, message: "Aktivita uložena do Pipedrive." });
-        } else if (pd?.error && pd.error !== "not_configured") {
-          setResult({ ok: false, message: `Pipedrive: ${pd.error}` });
+          activityOk = true;
+          setResult({
+            ok: true,
+            message: `✓ Aktivita #${pd.activity_id || ""} uložena do Pipedrive.`,
+          });
         } else if (pd?.error === "not_configured") {
           setResult({
             ok: false,
-            message: "Pipedrive API klíč není nastaven.",
+            message: "Pipedrive API klíč není nastaven v Nastavení.",
           });
+          return false;
+        } else if (pd?.error) {
+          setResult({ ok: false, message: `Pipedrive chyba: ${pd.error}` });
+          return false;
+        } else {
+          // No pipedrive object at all or synced is false without error
+          setResult({
+            ok: false,
+            message: "Pipedrive sync selhal — žádná odpověď ze serveru.",
+          });
+          return false;
         }
 
         // 2) Add detailed note for connected/meeting calls
@@ -109,27 +126,46 @@ export function usePipedriveCRM() {
           const personId = await resolvePipedrivePersonId(contact.id);
 
           if (personId || contact.orgId) {
-            await echoApi
-              .addPipedriveNote({
+            try {
+              await echoApi.addPipedriveNote({
                 personId,
                 orgId: contact.orgId,
                 content: lines.join("<br>"),
-              })
-              .catch((e) =>
-                console.warn("Pipedrive note failed (activity was logged):", e),
+              });
+              setResult({
+                ok: true,
+                message: "✓ Aktivita + poznámka uloženy do Pipedrive.",
+              });
+            } catch (noteErr) {
+              console.warn(
+                "Pipedrive note failed (activity was logged):",
+                noteErr,
               );
+              // Activity was saved, just note failed — still consider partial success
+              setResult({
+                ok: true,
+                message: "✓ Aktivita uložena, ale poznámka se nepodařila.",
+              });
+            }
+          } else {
+            console.warn(
+              `Kontakt ${contact.id} nemá person_id ani org_id — poznámka přeskočena`,
+            );
+            setResult({
+              ok: true,
+              message:
+                "✓ Aktivita uložena (poznámka přeskočena — kontakt nemá Pipedrive ID).",
+            });
           }
         }
 
-        if (!result?.ok && pd?.synced) {
-          setResult({ ok: true, message: "Uloženo do Pipedrive." });
-        }
-
-        return true;
+        return activityOk;
       } catch (e) {
+        const msg = e instanceof Error ? e.message : "Neznámá chyba";
+        console.error("logCallAndNote failed:", e);
         setResult({
           ok: false,
-          message: e instanceof Error ? e.message : "Uložení do CRM selhalo",
+          message: `Uložení do Pipedrive selhalo: ${msg}`,
         });
         return false;
       } finally {
