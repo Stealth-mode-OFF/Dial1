@@ -7271,6 +7271,8 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
       attempted: boolean;
       synced: boolean;
       activity_id?: number;
+      person_id?: number;
+      org_id?: number;
       error?: string;
     } = {
       attempted: false,
@@ -7379,6 +7381,9 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
         if (!personId) {
           pipedriveResult.error = "Pipedrive person_id unresolved";
         } else {
+          // Expose resolved IDs so the frontend can use them for note writing
+          pipedriveResult.person_id = personId;
+          if (orgId) pipedriveResult.org_id = orgId;
           // Link to an open deal if present (best-effort)
           try {
             const dealsJson: any = await pipedriveJson(
@@ -7533,9 +7538,17 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
         ? {
             synced: pipedriveResult.synced,
             activity_id: pipedriveResult.activity_id || null,
+            person_id: pipedriveResult.person_id || null,
+            org_id: pipedriveResult.org_id || null,
             error: pipedriveResult.error || null,
           }
-        : { synced: false, activity_id: null, error: "not_configured" },
+        : {
+            synced: false,
+            activity_id: null,
+            person_id: null,
+            org_id: null,
+            error: "not_configured",
+          },
     });
   } catch (error) {
     console.error("Error logging call:", error);

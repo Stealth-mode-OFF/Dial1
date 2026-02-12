@@ -7,6 +7,7 @@ import { echoApi } from "../../utils/echoApi";
 import { isSupabaseConfigured } from "../../utils/supabase/info";
 import { formatTime, outcomeLabel } from "./helpers";
 import type { CallOutcome, Contact } from "./types";
+import type { CallLogResult } from "../../utils/echoApi";
 
 export interface CrmResult {
   ok: boolean;
@@ -15,11 +16,17 @@ export interface CrmResult {
 
 /**
  * Resolves Pipedrive person_id for a contact.
- * Returns undefined if not found.
+ * First tries the fast path (passed from call-log response), then falls back to precall/context.
  */
 async function resolvePipedrivePersonId(
   contactId: string,
+  hintPersonId?: number | null,
 ): Promise<number | undefined> {
+  // Fast path: use the person_id already resolved by call-logs endpoint
+  if (hintPersonId && Number.isFinite(hintPersonId) && hintPersonId > 0) {
+    return hintPersonId;
+  }
+  // Slow fallback: precall/context (only if hint was unavailable)
   try {
     const ctx = await echoApi.precall.context({
       contact_id: contactId,
@@ -83,6 +90,10 @@ export function usePipedriveCRM() {
         let activityOk = false;
         let lastMsg = "";
 
+        // Extract person_id/org_id from call-log response for note writing
+        const resolvedPersonId = pd?.person_id ?? null;
+        const resolvedOrgId = pd?.org_id ?? null;
+
         if (pd?.synced) {
           activityOk = true;
           lastMsg = `✓ Aktivita #${pd.activity_id || ""} uložena do Pipedrive.`;
@@ -95,19 +106,16 @@ export function usePipedriveCRM() {
           setResult(r);
           return r;
         } else if (pd?.error) {
-          const r = { ok: false, message: `Pipedrive chyba: ${pd.error}` };
-          setResult(r);
-          return r;
+          // Activity failed but we still try to write the note below
+          lastMsg = `⚠ Aktivita: ${pd.error}`;
+          setResult({ ok: false, message: lastMsg });
         } else {
-          const r = {
-            ok: false,
-            message: "Pipedrive sync selhal — žádná odpověď ze serveru.",
-          };
-          setResult(r);
-          return r;
+          lastMsg = "Pipedrive sync selhal — žádná odpověď ze serveru.";
+          setResult({ ok: false, message: lastMsg });
         }
 
         // 2) Add detailed note for connected/meeting calls
+        //    ALWAYS attempt note writing — even if activity logging failed
         if (outcome !== "no-answer") {
           const lines: string[] = [
             "<b>📞 Hovor</b>",
@@ -125,13 +133,17 @@ export function usePipedriveCRM() {
           if (notes?.trim())
             lines.push(`<br><b>Poznámky:</b><br>${notes.trim()}`);
 
-          const personId = await resolvePipedrivePersonId(contact.id);
+          const personId = await resolvePipedrivePersonId(
+            contact.id,
+            resolvedPersonId,
+          );
+          const effectiveOrgId = contact.orgId || resolvedOrgId || undefined;
 
-          if (personId || contact.orgId) {
+          if (personId || effectiveOrgId) {
             try {
               await echoApi.addPipedriveNote({
                 personId,
-                orgId: contact.orgId,
+                orgId: effectiveOrgId,
                 content: lines.join("<br>"),
               });
               setResult({
@@ -155,19 +167,20 @@ export function usePipedriveCRM() {
             console.warn(
               `Kontakt ${contact.id} nemá person_id ani org_id — poznámka přeskočena`,
             );
+            const noteSkipMsg = activityOk
+              ? "✓ Aktivita uložena (poznámka přeskočena — kontakt nemá Pipedrive ID)."
+              : "✗ Aktivita i poznámka selhaly — kontakt nemá Pipedrive ID.";
             setResult({
-              ok: true,
-              message:
-                "✓ Aktivita uložena (poznámka přeskočena — kontakt nemá Pipedrive ID).",
+              ok: activityOk,
+              message: noteSkipMsg,
             });
-            lastMsg =
-              "✓ Aktivita uložena (poznámka přeskočena — kontakt nemá Pipedrive ID).";
+            lastMsg = noteSkipMsg;
           }
         }
 
         const finalResult: CrmResult = activityOk
           ? { ok: true, message: lastMsg || "✓ Uloženo do Pipedrive." }
-          : { ok: false, message: "Pipedrive sync selhal." };
+          : { ok: false, message: lastMsg || "Pipedrive sync selhal." };
         return finalResult;
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Neznámá chyba";
