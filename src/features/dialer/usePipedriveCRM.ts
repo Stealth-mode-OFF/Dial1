@@ -1,0 +1,211 @@
+// ═══════════════════════════════════════════════════════════════
+// usePipedriveCRM — all Pipedrive writing in one place
+// ═══════════════════════════════════════════════════════════════
+
+import { useState, useCallback } from "react";
+import { echoApi } from "../../utils/echoApi";
+import { isSupabaseConfigured } from "../../utils/supabase/info";
+import { formatTime, outcomeLabel } from "./helpers";
+import type { CallOutcome, Contact } from "./types";
+
+export interface CrmResult {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Resolves Pipedrive person_id for a contact.
+ * Returns undefined if not found.
+ */
+async function resolvePipedrivePersonId(
+  contactId: string,
+): Promise<number | undefined> {
+  try {
+    const ctx = await echoApi.precall.context({
+      contact_id: contactId,
+      include: [],
+      ttl_hours: 24,
+      timeline: { activities: 0, notes: 0, deals: 0 },
+    });
+    return ctx?.pipedrive?.person_id ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function usePipedriveCRM() {
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<CrmResult | null>(null);
+
+  const resetResult = useCallback(() => setResult(null), []);
+
+  /**
+   * Log a call activity + optional detailed note to Pipedrive.
+   * Returns true if successful.
+   */
+  const logCallAndNote = useCallback(
+    async (
+      contact: Contact,
+      outcome: CallOutcome,
+      duration: number,
+      qualAnswers: string[],
+      notes: string,
+    ): Promise<boolean> => {
+      if (!isSupabaseConfigured) {
+        setResult({ ok: false, message: "Supabase není nakonfigurovaný." });
+        return false;
+      }
+
+      setSaving(true);
+      setResult(null);
+
+      try {
+        // 1) Log call activity
+        const logRes = await echoApi.logCall({
+          contactId: contact.id,
+          contactName: contact.name,
+          companyName: contact.company,
+          disposition: outcome,
+          notes:
+            notes ||
+            (outcome === "no-answer"
+              ? "Nedovoláno"
+              : outcome === "meeting"
+                ? "Demo domluveno"
+                : "Dovoláno"),
+          duration,
+        });
+
+        const pd = logRes?.pipedrive;
+        if (pd?.synced) {
+          setResult({ ok: true, message: "Aktivita uložena do Pipedrive." });
+        } else if (pd?.error && pd.error !== "not_configured") {
+          setResult({ ok: false, message: `Pipedrive: ${pd.error}` });
+        } else if (pd?.error === "not_configured") {
+          setResult({
+            ok: false,
+            message: "Pipedrive API klíč není nastaven.",
+          });
+        }
+
+        // 2) Add detailed note for connected/meeting calls
+        if (outcome !== "no-answer") {
+          const lines: string[] = [
+            "<b>📞 Hovor</b>",
+            `Klient: <b>${contact.name}</b> (${contact.title || "—"}) – <b>${contact.company}</b>`,
+            `Výsledek: <b>${outcomeLabel(outcome)}</b>`,
+            `Délka: <b>${formatTime(duration)}</b>`,
+          ];
+
+          const qa = qualAnswers
+            .filter(Boolean)
+            .slice(0, 3)
+            .map((a, idx) => `• Q${idx + 1}: ${a}`)
+            .join("<br>");
+          if (qa) lines.push(`<br><b>Kvalifikace:</b><br>${qa}`);
+          if (notes?.trim())
+            lines.push(`<br><b>Poznámky:</b><br>${notes.trim()}`);
+
+          const personId = await resolvePipedrivePersonId(contact.id);
+
+          if (personId || contact.orgId) {
+            await echoApi
+              .addPipedriveNote({
+                personId,
+                orgId: contact.orgId,
+                content: lines.join("<br>"),
+              })
+              .catch((e) =>
+                console.warn("Pipedrive note failed (activity was logged):", e),
+              );
+          }
+        }
+
+        if (!result?.ok && pd?.synced) {
+          setResult({ ok: true, message: "Uloženo do Pipedrive." });
+        }
+
+        return true;
+      } catch (e) {
+        setResult({
+          ok: false,
+          message: e instanceof Error ? e.message : "Uložení do CRM selhalo",
+        });
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [],
+  );
+
+  /**
+   * Fire-and-forget log for no-answer (called automatically on endCall).
+   */
+  const logCallBackground = useCallback(
+    (
+      contact: Contact,
+      outcome: CallOutcome,
+      duration: number,
+      notes: string,
+    ) => {
+      if (!isSupabaseConfigured) return;
+      echoApi
+        .logCall({
+          contactId: contact.id,
+          contactName: contact.name,
+          companyName: contact.company,
+          disposition: outcome,
+          notes: notes || (outcome === "no-answer" ? "Nedovoláno" : "Dovoláno"),
+          duration,
+        })
+        .then((res) => {
+          const pd = res?.pipedrive;
+          if (pd?.synced) {
+            setResult({ ok: true, message: "Aktivita uložena do Pipedrive." });
+          } else if (pd?.error && pd.error !== "not_configured") {
+            setResult({ ok: false, message: `Pipedrive: ${pd.error}` });
+          }
+        })
+        .catch((err) => {
+          console.error("Auto-log to Pipedrive failed:", err);
+          setResult({
+            ok: false,
+            message: err?.message || "Pipedrive log selhalo",
+          });
+        });
+    },
+    [],
+  );
+
+  /**
+   * Save a pre-call note to Pipedrive.
+   */
+  const savePrecallNote = useCallback(
+    async (contact: Contact, noteText: string) => {
+      if (!isSupabaseConfigured) throw new Error("Backend není připojen");
+
+      const personId = await resolvePipedrivePersonId(contact.id);
+
+      if (!personId && !contact.orgId) {
+        throw new Error("Kontakt nemá propojení s Pipedrive");
+      }
+
+      await echoApi.addPipedriveNote({
+        personId,
+        orgId: contact.orgId,
+        content: `<b>Poznámka (pre-call):</b><br>${noteText.replace(/\n/g, "<br>")}`,
+      });
+    },
+    [],
+  );
+
+  return {
+    saving,
+    result,
+    resetResult,
+    logCallAndNote,
+    logCallBackground,
+    savePrecallNote,
+  };
+}

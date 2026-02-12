@@ -25,8 +25,8 @@
   --shadow-neo-sm: 2px 2px 0 #1a1a1a;
 
   /* Typography */
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'SF Mono', 'Fira Code', monospace;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", monospace;
 
   /* Radius */
   --radius: 8px;
@@ -36,7 +36,11 @@
   --nav-h: 44px;
 }
 
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
@@ -337,7 +341,7 @@ body {
   border-radius: var(--radius);
   font-size: 14px;
   font-weight: 700;
-  font-feature-settings: 'tnum';
+  font-feature-settings: "tnum";
   text-decoration: none;
   color: var(--text);
   box-shadow: var(--shadow-neo-sm);
@@ -377,7 +381,7 @@ body {
 
 .btn-call kbd {
   padding: 4px 8px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 12px;
@@ -662,10 +666,19 @@ body {
   text-overflow: ellipsis;
 }
 
-.prep-chip--opportunity { background: var(--success-light); }
-.prep-chip--risk { background: var(--danger-light); }
-.prep-chip--neutral { background: var(--gray-100); }
-.prep-chip--landmine { background: #fff7ed; color: var(--amber-600); }
+.prep-chip--opportunity {
+  background: var(--success-light);
+}
+.prep-chip--risk {
+  background: var(--danger-light);
+}
+.prep-chip--neutral {
+  background: var(--gray-100);
+}
+.prep-chip--landmine {
+  background: #fff7ed;
+  color: var(--amber-600);
+}
 
 /* ── Script details (accordion) ── */
 .prep-script {
@@ -697,10 +710,12 @@ body {
   list-style: none;
 }
 
-.prep-details-sum::-webkit-details-marker { display: none; }
+.prep-details-sum::-webkit-details-marker {
+  display: none;
+}
 
 .prep-details-sum::before {
-  content: '▸';
+  content: "▸";
   font-size: 11px;
   color: var(--text-muted);
   transition: transform 0.15s;
@@ -808,14 +823,32 @@ body {
 }
 
 @keyframes td-fadein {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes td-pulse-ring {
-  0% { box-shadow: var(--shadow-neo), 0 0 0 0 rgba(34,197,94,0.35); }
-  70% { box-shadow: var(--shadow-neo), 0 0 0 10px rgba(34,197,94,0); }
-  100% { box-shadow: var(--shadow-neo), 0 0 0 0 rgba(34,197,94,0); }
+  0% {
+    box-shadow:
+      var(--shadow-neo),
+      0 0 0 0 rgba(34, 197, 94, 0.35);
+  }
+  70% {
+    box-shadow:
+      var(--shadow-neo),
+      0 0 0 10px rgba(34, 197, 94, 0);
+  }
+  100% {
+    box-shadow:
+      var(--shadow-neo),
+      0 0 0 0 rgba(34, 197, 94, 0);
+  }
 }
 
 .td-pulse {
@@ -846,7 +879,7 @@ body {
   font-size: 18px;
   font-weight: 900;
   color: #fff;
-  font-feature-settings: 'tnum';
+  font-feature-settings: "tnum";
   line-height: 1.1;
 }
 
@@ -858,8 +891,12 @@ body {
   letter-spacing: 0.08em;
 }
 
-.td-stat--green .td-stat-val { color: #4ade80; }
-.td-stat--gold .td-stat-val { color: #fbbf24; }
+.td-stat--green .td-stat-val {
+  color: #4ade80;
+}
+.td-stat--gold .td-stat-val {
+  color: #fbbf24;
+}
 
 .td-progress {
   flex: 1;
@@ -889,7 +926,7 @@ body {
   font-size: 11px;
   font-weight: 800;
   color: #888;
-  font-feature-settings: 'tnum';
+  font-feature-settings: "tnum";
   white-space: nowrap;
 }
 
@@ -977,7 +1014,7 @@ body {
   border-radius: var(--radius);
   font-size: 13px;
   font-weight: 700;
-  font-feature-settings: 'tnum';
+  font-feature-settings: "tnum";
   text-decoration: none;
   color: var(--text);
   box-shadow: var(--shadow-neo-sm);
@@ -1027,7 +1064,7 @@ body {
 
 .td-call-btn kbd {
   padding: 2px 8px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -1111,13 +1148,15 @@ body {
   font-size: 13px;
   background: var(--bg);
   color: var(--text);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .td-input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 
 .td-input::placeholder {
@@ -1142,7 +1181,7 @@ body {
 .td-textarea:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 
 .td-save-row {
@@ -1179,8 +1218,12 @@ body {
   font-size: 12px;
   font-weight: 700;
 }
-.td-save-msg.ok { color: var(--success); }
-.td-save-msg.err { color: var(--danger); }
+.td-save-msg.ok {
+  color: var(--success);
+}
+.td-save-msg.err {
+  color: var(--danger);
+}
 
 /* ─── RIGHT: SCRIPT ─── */
 .td-right {
@@ -1259,7 +1302,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .td-q-card--done {
@@ -1325,13 +1370,15 @@ body {
   font-size: 13px;
   background: var(--bg);
   color: var(--text);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .td-q-input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 
 .td-q-input::placeholder {
@@ -1428,7 +1475,9 @@ body {
   color: var(--text);
   box-shadow: var(--shadow-neo-sm);
   white-space: nowrap;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .seq-lead-phone:hover {
@@ -1475,8 +1524,8 @@ body {
 .seq-script-opening {
   margin-bottom: 10px;
   padding: 8px 10px;
-  background: rgba(255,255,255,0.5);
-  border: 1.5px solid rgba(26,26,26,0.12);
+  background: rgba(255, 255, 255, 0.5);
+  border: 1.5px solid rgba(26, 26, 26, 0.12);
   border-radius: var(--radius-sm);
 }
 
@@ -1491,8 +1540,8 @@ body {
 }
 
 .seq-q-block {
-  background: rgba(255,255,255,0.55);
-  border: 1.5px solid rgba(26,26,26,0.15);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1.5px solid rgba(26, 26, 26, 0.15);
   border-radius: var(--radius-sm);
   padding: 6px 10px;
   display: flex;
@@ -1550,7 +1599,7 @@ body {
 .seq-q-answer:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
 .seq-q-answer::placeholder {
@@ -1608,7 +1657,7 @@ body {
 .seq-notes-input:focus {
   outline: none;
   border-color: var(--neo-blue);
-  box-shadow: 0 0 0 2px rgba(0,102,255,.12);
+  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.12);
 }
 
 .seq-notes-actions {
@@ -1646,8 +1695,12 @@ body {
   font-size: 12px;
   font-weight: 600;
 }
-.seq-save-result.ok { color: var(--success); }
-.seq-save-result.err { color: var(--danger); }
+.seq-save-result.ok {
+  color: var(--success);
+}
+.seq-save-result.err {
+  color: var(--danger);
+}
 
 /* ── Legacy brief styles (kept for CallingPhase) ── */
 .seq-brief-section {
@@ -1702,19 +1755,25 @@ body {
   border-left: 3px solid var(--success);
   background: var(--green-50);
 }
-.seq-signal-opportunity .seq-signal-icon { color: var(--success); }
+.seq-signal-opportunity .seq-signal-icon {
+  color: var(--success);
+}
 
 .seq-signal-risk {
   border-left: 3px solid var(--danger);
   background: var(--red-50);
 }
-.seq-signal-risk .seq-signal-icon { color: var(--danger); }
+.seq-signal-risk .seq-signal-icon {
+  color: var(--danger);
+}
 
 .seq-signal-neutral {
   border-left: 3px solid var(--gray-400);
   background: var(--surface);
 }
-.seq-signal-neutral .seq-signal-icon { color: var(--gray-500); }
+.seq-signal-neutral .seq-signal-icon {
+  color: var(--gray-500);
+}
 
 .seq-opening-card {
   background: var(--neo-yellow);
@@ -2059,8 +2118,12 @@ body {
   font-weight: 700;
 }
 
-.seq-crm-msg.ok { color: var(--success); }
-.seq-crm-msg.err { color: var(--danger); }
+.seq-crm-msg.ok {
+  color: var(--success);
+}
+.seq-crm-msg.err {
+  color: var(--danger);
+}
 
 .settings-sms {
   display: flex;
@@ -2115,14 +2178,19 @@ body {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .call-timer {
   font-size: 24px;
   font-weight: 800;
-  font-feature-settings: 'tnum';
+  font-feature-settings: "tnum";
 }
 
 .call-bar-actions {
@@ -2448,7 +2516,7 @@ body {
   margin: 0 0 24px;
   font-size: 32px;
   font-weight: 800;
-  font-feature-settings: 'tnum';
+  font-feature-settings: "tnum";
   color: var(--success);
 }
 
@@ -2562,7 +2630,7 @@ body {
 .wrapup-ai-score-num {
   font-size: 36px;
   font-weight: 900;
-  font-feature-settings: 'tnum';
+  font-feature-settings: "tnum";
   color: var(--success);
 }
 
@@ -2889,7 +2957,7 @@ body {
   height: 100vh;
   background: var(--surface);
   border-right: 3px solid var(--border);
-  box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -3007,9 +3075,9 @@ body {
 }
 
 .sidebar-lead.active .sidebar-lead-indicator {
-  border-color: rgba(255,255,255,0.5);
+  border-color: rgba(255, 255, 255, 0.5);
   color: white;
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .sidebar-lead-info {
@@ -3054,7 +3122,7 @@ body {
 .overlay-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   z-index: 2000;
   display: flex;
@@ -3108,4 +3176,837 @@ body {
     right: 16px;
     width: auto;
   }
+}
+
+/* ============================================================
+   ADHD UX IMPROVEMENTS — Phase-Based Visual States
+   Principle: One dominant action per state.
+   Reduce cognitive load without reducing information.
+   ============================================================ */
+
+/* ─── PHASE-AWARE BODY TINTING ─── 
+   Why: Instant peripheral visual signal of which state you're in.
+   ADHD brain doesn't have to "read" the state — it FEELS it. */
+
+.dialer-v2[data-app-phase="calling"] {
+  background: #f0fdf4; /* very subtle green tint = active call */
+}
+
+.dialer-v2[data-app-phase="wrapup"] {
+  background: #fefce8; /* subtle warm tint = wrapping up */
+}
+
+/* ─── THREE-ZONE GRID (Ready Phase) ───
+   Why: LEFT=context, CENTER=action, RIGHT=guidance.
+   Prevents "where do I look" paralysis.
+   The action zone (center) gets most vertical space
+   and strongest visual weight. */
+
+.td-grid-3col {
+  display: grid;
+  grid-template-columns: 280px 1fr 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.td-zone-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.td-zone-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 16px;
+  min-height: 200px;
+}
+
+.td-zone-center .td-call-btn {
+  max-width: 320px;
+  /* Larger than before — THE thing you see */
+  padding: 20px 24px;
+  font-size: 20px;
+}
+
+.td-zone-center .td-skip-btn {
+  max-width: 320px;
+}
+
+.td-zone-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Fallback for smaller screens: stack */
+@media (max-width: 960px) {
+  .td-grid-3col {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .td-zone-center {
+    order: -1; /* Call button first on mobile */
+    padding: 16px 0;
+    min-height: auto;
+  }
+}
+
+/* ─── CALLING PHASE: TWO-ZONE CONTENT ───
+   Why: During a call, brain is split between
+   LISTENING (script = passive reference) and
+   CAPTURING (answers = active input).
+   Separating these into distinct visual zones
+   eliminates attention jumping. */
+
+.call-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* LEFT: Script zone — dimmer, reference material.
+   Why: Script is READ, not WRITTEN. Lower visual weight
+   signals "glance here when needed" not "focus here." */
+.call-script-zone {
+  padding: 20px 24px;
+  overflow-y: auto;
+  border-right: 2px dashed var(--border);
+  background: rgba(0, 0, 0, 0.015);
+}
+
+/* RIGHT: Capture zone — brighter, input-focused.
+   Why: This is where BDR types. Bright = "you are here."
+   Sequential numbered fields guide the hand. */
+.call-capture-zone {
+  padding: 20px 24px;
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.capture-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--border);
+}
+
+.capture-title {
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.capture-progress {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-muted);
+  font-feature-settings: "tnum";
+}
+
+.capture-done {
+  color: var(--success);
+}
+
+.capture-field {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+/* Completed field — visual reward.
+   Why: ADHD needs completion signals.
+   Green left border = "this one's done, move on." */
+.capture-field--done {
+  border-left: 4px solid var(--success);
+  background: #f0fdf4;
+}
+
+.capture-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.capture-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.capture-field--done .capture-num {
+  background: var(--success);
+}
+
+.capture-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: var(--font);
+  font-weight: 600;
+  transition: border-color 0.15s;
+}
+
+/* Strong focus ring — WHERE YOUR CURSOR IS.
+   Why: ADHD loses track of cursor position.
+   Bold blue ring = unambiguous "type here." */
+.capture-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.capture-notes {
+  margin-top: 8px;
+}
+
+.call-notes-area {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: var(--font);
+  resize: vertical;
+}
+
+.call-notes-area:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Script-side prompt cards — read-only visual */
+.script-prompt-card {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  opacity: 0.85;
+}
+
+.script-prompt-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.script-prompt-text {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* ─── CALLING PHASE KEYBOARD HINTS BAR ───
+   Why: Persistent reminder of available shortcuts.
+   ADHD forgets shortcuts — keeping them visible
+   eliminates "how do I…" micro-pauses. */
+.call-shortcuts {
+  padding: 8px 24px;
+  background: #1a1a1a;
+  color: #888;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.call-shortcuts kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #ccc;
+  margin: 0 2px;
+}
+
+/* ─── CALL BAR IMPROVEMENTS ───
+   Why: The call bar is the #1 visual anchor during calls.
+   Name + company context. Bigger timer.
+   Keyboard hints on end-call buttons. */
+.call-bar-name {
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.call-bar-company {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-left: 4px;
+}
+
+.btn-end kbd {
+  display: inline-block;
+  padding: 0 5px;
+  margin-left: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: baseline;
+}
+
+.btn-end-label {
+  vertical-align: baseline;
+}
+
+@media (max-width: 800px) {
+  .call-content {
+    grid-template-columns: 1fr;
+  }
+  .call-script-zone {
+    border-right: none;
+    border-bottom: 2px dashed var(--border);
+    max-height: 180px;
+  }
+}
+
+/* ─── WRAPUP CONNECTED IMPROVEMENTS ───
+   Why: After a successful call, capture data fast.
+   Clear outcome banner at top.
+   Sequential qualification with completion tracking.
+   Auto-focused first empty field.
+   Single dominant "Save + Next" CTA. */
+
+.wrapup-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-neo-sm);
+}
+
+.wrapup-banner--connected {
+  background: var(--neo-mint);
+}
+
+.wrapup-banner--meeting {
+  background: var(--neo-yellow);
+}
+
+.wrapup-banner-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.wrapup-banner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wrapup-banner-outcome {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.wrapup-banner-contact {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.wrapup-qual {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wrapup-qual-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wrapup-qual-title {
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.wrapup-qual-progress {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-muted);
+  font-feature-settings: "tnum";
+}
+
+.wrapup-qual-progress--done {
+  color: var(--success);
+}
+
+.wrapup-qual-row {
+  padding: 8px 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+/* Completed row — green left bar = done.
+   Why: Sequential completion gives ADHD momentum. */
+.wrapup-qual-row--done {
+  border-left: 4px solid var(--success);
+  background: #f0fdf4;
+}
+
+.wrapup-qual-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.wrapup-qual-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.wrapup-qual-num--done {
+  background: var(--success);
+}
+
+.wrapup-qual-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wrapup-qual-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: var(--font);
+  font-weight: 600;
+}
+
+.wrapup-qual-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.wrapup-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wrapup-notes-label {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wrapup-notes-area {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: var(--font);
+  resize: vertical;
+}
+
+.wrapup-notes-area:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Single dominant CTA — "Save + Next" 
+   Why: After wrapup, ONE action matters.
+   Big, green, keyboard-shortcutted.
+   Everything else is secondary. */
+.wrapup-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wrapup-save-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: #22c55e;
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: var(--shadow-neo);
+  transition: all 0.1s;
+}
+
+.wrapup-save-btn:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 #1a1a1a;
+  background: #16a34a;
+}
+
+.wrapup-save-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 #1a1a1a;
+}
+
+.wrapup-save-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.wrapup-save-btn kbd {
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.wrapup-scheduler-btn {
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-neo-sm);
+  transition: all 0.1s;
+}
+
+.wrapup-scheduler-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-neo);
+}
+
+.wrapup-crm-feedback {
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wrapup-crm-feedback.ok {
+  background: var(--neo-mint);
+  color: #166534;
+}
+
+.wrapup-crm-feedback.err {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.wrapup-shortcuts {
+  text-align: center;
+  padding: 6px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.wrapup-shortcuts kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  background: var(--bg);
+  border: 1.5px solid #ccc;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 0 1px;
+}
+
+/* ─── NO-ANSWER OVERLAY IMPROVEMENTS ───
+   Why: After no-answer, the BDR's brain resets.
+   Show confirmation (CRM logged) as comfort.
+   Auto-countdown gives momentum without decision.
+   Clear keyboard hint for override. */
+
+.noanswer-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.noanswer-icon {
+  font-size: 36px;
+}
+
+.noanswer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.noanswer-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.noanswer-contact {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.noanswer-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-top: 2px dashed var(--border);
+  border-bottom: 2px dashed var(--border);
+}
+
+.noanswer-check {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.noanswer-actions {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.noanswer-sms-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: var(--shadow-neo-sm);
+  transition: all 0.1s;
+}
+
+.noanswer-sms-btn kbd {
+  padding: 1px 5px;
+  background: var(--bg);
+  border: 1.5px solid #ccc;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.noanswer-sms-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-neo);
+}
+
+.noanswer-sms-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Countdown ring — visual timer.
+   Why: Radial progress is ambient — doesn't demand reading.
+   ADHD brain processes it peripherally. */
+.noanswer-countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0 4px;
+}
+
+.noanswer-countdown-ring {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+.noanswer-countdown-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.noanswer-countdown-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 900;
+  font-feature-settings: "tnum";
+}
+
+.noanswer-countdown-text {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.noanswer-pause-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-neo-sm);
+}
+
+.noanswer-pause-btn kbd {
+  padding: 1px 5px;
+  background: var(--bg);
+  border: 1.5px solid #ccc;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.noanswer-next-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  background: #22c55e;
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: var(--shadow-neo);
+  transition: all 0.1s;
+  margin-top: 8px;
+}
+
+.noanswer-next-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 #1a1a1a;
+  background: #16a34a;
+}
+
+.noanswer-next-btn kbd {
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* ─── GLOBAL FOCUS IMPROVEMENTS ───
+   Why: ADHD users need extremely clear focus indicators.
+   Default browser focus rings are too subtle.
+   Bold blue ring + slight scale = "I am HERE." */
+
+.td-q-input:focus,
+.td-textarea:focus,
+.td-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* ─── PHASE TRANSITION ANIMATION ───
+   Why: Smooth but FAST transition between phases
+   gives the brain a moment to recalibrate.
+   Too abrupt = disorienting. Too slow = losing momentum. */
+
+.phase-calling,
+.seq-wrapup-card,
+.seq-overlay-card,
+.td {
+  animation: phase-enter 0.2s ease-out;
+}
+
+@keyframes phase-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── COMPLETION SIGNAL ON QUALIFICATION NUMBERS ───
+   Why: The td-q-num in ReadyPhase turns green with checkmark
+   when the answer is filled. Visual reward for ADHD momentum. */
+.td-q-card--done .td-q-num {
+  background: var(--success);
+  border-color: var(--success);
 }
