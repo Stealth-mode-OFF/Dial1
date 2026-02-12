@@ -41,7 +41,7 @@ export function usePipedriveCRM() {
 
   /**
    * Log a call activity + optional detailed note to Pipedrive.
-   * Returns true ONLY if the Pipedrive activity was successfully synced.
+   * Returns { ok: true/false, message } with detailed feedback.
    */
   const logCallAndNote = useCallback(
     async (
@@ -50,10 +50,11 @@ export function usePipedriveCRM() {
       duration: number,
       qualAnswers: string[],
       notes: string,
-    ): Promise<boolean> => {
+    ): Promise<CrmResult> => {
       if (!isSupabaseConfigured) {
-        setResult({ ok: false, message: "Supabase není nakonfigurovaný." });
-        return false;
+        const r = { ok: false, message: "Supabase není nakonfigurovaný." };
+        setResult(r);
+        return r;
       }
 
       setSaving(true);
@@ -80,29 +81,24 @@ export function usePipedriveCRM() {
 
         // Track whether Pipedrive sync actually succeeded
         let activityOk = false;
+        let lastMsg = "";
 
         if (pd?.synced) {
           activityOk = true;
-          setResult({
-            ok: true,
-            message: `✓ Aktivita #${pd.activity_id || ""} uložena do Pipedrive.`,
-          });
+          lastMsg = `✓ Aktivita #${pd.activity_id || ""} uložena do Pipedrive.`;
+          setResult({ ok: true, message: lastMsg });
         } else if (pd?.error === "not_configured") {
-          setResult({
-            ok: false,
-            message: "Pipedrive API klíč není nastaven v Nastavení.",
-          });
-          return false;
+          const r = { ok: false, message: "Pipedrive API klíč není nastaven v Nastavení." };
+          setResult(r);
+          return r;
         } else if (pd?.error) {
-          setResult({ ok: false, message: `Pipedrive chyba: ${pd.error}` });
-          return false;
+          const r = { ok: false, message: `Pipedrive chyba: ${pd.error}` };
+          setResult(r);
+          return r;
         } else {
-          // No pipedrive object at all or synced is false without error
-          setResult({
-            ok: false,
-            message: "Pipedrive sync selhal — žádná odpověď ze serveru.",
-          });
-          return false;
+          const r = { ok: false, message: "Pipedrive sync selhal — žádná odpověď ze serveru." };
+          setResult(r);
+          return r;
         }
 
         // 2) Add detailed note for connected/meeting calls
@@ -136,6 +132,7 @@ export function usePipedriveCRM() {
                 ok: true,
                 message: "✓ Aktivita + poznámka uloženy do Pipedrive.",
               });
+              lastMsg = "✓ Aktivita + poznámka uloženy do Pipedrive.";
             } catch (noteErr) {
               console.warn(
                 "Pipedrive note failed (activity was logged):",
@@ -146,6 +143,7 @@ export function usePipedriveCRM() {
                 ok: true,
                 message: "✓ Aktivita uložena, ale poznámka se nepodařila.",
               });
+              lastMsg = "✓ Aktivita uložena, ale poznámka se nepodařila.";
             }
           } else {
             console.warn(
@@ -156,18 +154,20 @@ export function usePipedriveCRM() {
               message:
                 "✓ Aktivita uložena (poznámka přeskočena — kontakt nemá Pipedrive ID).",
             });
+            lastMsg = "✓ Aktivita uložena (poznámka přeskočena — kontakt nemá Pipedrive ID).";
           }
         }
 
-        return activityOk;
+        const finalResult: CrmResult = activityOk
+          ? { ok: true, message: lastMsg || "✓ Uloženo do Pipedrive." }
+          : { ok: false, message: "Pipedrive sync selhal." };
+        return finalResult;
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Neznámá chyba";
         console.error("logCallAndNote failed:", e);
-        setResult({
-          ok: false,
-          message: `Uložení do Pipedrive selhalo: ${msg}`,
-        });
-        return false;
+        const r = { ok: false, message: `Uložení do Pipedrive selhalo: ${msg}` };
+        setResult(r);
+        return r;
       } finally {
         setSaving(false);
       }

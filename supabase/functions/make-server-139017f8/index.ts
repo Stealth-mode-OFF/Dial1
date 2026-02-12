@@ -11,14 +11,15 @@ const app = new Hono();
 const FUNCTION_VERSION = "2026-02-10-email-phase2-gmail-v1";
 
 // Enable logger
-app.use('*', logger(console.log));
+app.use("*", logger(console.log));
 
 const allowedOriginPatterns = (Deno.env.get("ECHO_ALLOWED_ORIGINS") || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const isOriginAllowed = (origin: string | undefined | null) => {
   if (!origin) return false;
@@ -49,7 +50,13 @@ app.use(
       // SECURITY: never return "*" here; allow only explicit origins.
       return isOriginAllowed(origin) ? origin : "";
     },
-    allowHeaders: ["Content-Type", "Authorization", "apikey", "X-Echo-User", "X-Correlation-Id"],
+    allowHeaders: [
+      "Content-Type",
+      "Authorization",
+      "apikey",
+      "X-Echo-User",
+      "X-Correlation-Id",
+    ],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
@@ -62,10 +69,12 @@ const BASE_PATH = "";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SUPABASE_SERVICE_ROLE_KEY =
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const userKey = (userId: string, key: string) => `user:${userId}:${key}`;
-const userPrefix = (userId: string, prefix: string) => `user:${userId}:${prefix}`;
+const userPrefix = (userId: string, prefix: string) =>
+  `user:${userId}:${prefix}`;
 
 const getAuthUserId = async (authHeader: string | null) => {
   if (!authHeader || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
@@ -141,7 +150,13 @@ const requireAdmin = (c: any) => {
   if (!admin) {
     return {
       admin: null,
-      error: c.json({ error: "Supabase DB client not configured. Set SUPABASE_URL + (SUPABASE_SERVICE_ROLE_KEY recommended)." }, 500),
+      error: c.json(
+        {
+          error:
+            "Supabase DB client not configured. Set SUPABASE_URL + (SUPABASE_SERVICE_ROLE_KEY recommended).",
+        },
+        500,
+      ),
     };
   }
   return { admin, error: null };
@@ -150,9 +165,17 @@ const requireAdmin = (c: any) => {
 const parseJsonStrict = async (res: Response) => {
   const text = await res.text();
   try {
-    return { ok: true as const, value: text ? JSON.parse(text) : null, raw: text };
+    return {
+      ok: true as const,
+      value: text ? JSON.parse(text) : null,
+      raw: text,
+    };
   } catch (e) {
-    return { ok: false as const, error: e instanceof Error ? e.message : String(e), raw: text };
+    return {
+      ok: false as const,
+      error: e instanceof Error ? e.message : String(e),
+      raw: text,
+    };
   }
 };
 
@@ -184,7 +207,8 @@ const rateLimit = (key: string, max: number, windowMs: number) => {
     return { ok: true as const, remaining: Math.max(0, max - 1) };
   }
 
-  if (existing.count >= max) return { ok: false as const, retryAfterMs: existing.resetAt - now };
+  if (existing.count >= max)
+    return { ok: false as const, retryAfterMs: existing.resetAt - now };
   existing.count += 1;
   return { ok: true as const, remaining: Math.max(0, max - existing.count) };
 };
@@ -214,7 +238,10 @@ const formatActivityNoteHtml = (noteText: string) => {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/\n/g, "<br>")
-    .replace(/(Result:|Outcome:|AI Summary:|Summary:|Score:|Strengths:|Next step:|Next Step:)/g, "<b>$1</b>");
+    .replace(
+      /(Result:|Outcome:|AI Summary:|Summary:|Score:|Strengths:|Next step:|Next Step:)/g,
+      "<b>$1</b>",
+    );
 };
 
 const generateCallNoteForPipedrive = async (params: {
@@ -222,10 +249,16 @@ const generateCallNoteForPipedrive = async (params: {
   disposition: string;
   durationSec?: unknown;
   notes?: unknown;
-  contact?: { name?: string | null; title?: string | null; company?: string | null };
+  contact?: {
+    name?: string | null;
+    title?: string | null;
+    company?: string | null;
+  };
   openaiApiKey?: string | null;
 }) => {
-  const apiKey = (params.openaiApiKey || Deno.env.get("OPENAI_API_KEY") || "").toString().trim();
+  const apiKey = (params.openaiApiKey || Deno.env.get("OPENAI_API_KEY") || "")
+    .toString()
+    .trim();
   if (!apiKey) return null;
 
   const openai = new OpenAI({ apiKey });
@@ -263,9 +296,14 @@ const generateCallNoteForPipedrive = async (params: {
   const content = completion.choices?.[0]?.message?.content || "{}";
   try {
     const parsed = JSON.parse(content);
-    const outcome = (parsed?.outcome || params.disposition || "call").toString().trim();
+    const outcome = (parsed?.outcome || params.disposition || "call")
+      .toString()
+      .trim();
     const keyPoints: string[] = Array.isArray(parsed?.key_points)
-      ? parsed.key_points.map((x: any) => String(x)).filter(Boolean).slice(0, 3)
+      ? parsed.key_points
+          .map((x: any) => String(x))
+          .filter(Boolean)
+          .slice(0, 3)
       : [];
     const nextStep = (parsed?.next_step || "").toString().trim();
 
@@ -377,7 +415,9 @@ const parseRobotsForUserAgent = (robotsTxt: string, agent: string) => {
   }
 
   const agentLc = agent.toLowerCase();
-  const matchingGroups = groups.filter((g) => g.agents.some((a) => a === "*" || agentLc.includes(a)));
+  const matchingGroups = groups.filter((g) =>
+    g.agents.some((a) => a === "*" || agentLc.includes(a)),
+  );
   const rules = matchingGroups.flatMap((g) => g.rules);
   return rules;
 };
@@ -390,7 +430,11 @@ const isPathAllowedByRobots = (path: string, rules: RobotsRule[]) => {
     if (!v) continue;
     if (!path.startsWith(v)) continue;
     const len = v.length;
-    if (!best || len > best.len || (len === best.len && r.type === "allow" && best.type === "disallow")) {
+    if (
+      !best ||
+      len > best.len ||
+      (len === best.len && r.type === "allow" && best.type === "disallow")
+    ) {
       best = { type: r.type, len };
     }
   }
@@ -421,7 +465,8 @@ const getOpenAiKey = async (userId: string) => {
 };
 
 const getOpenAiApiKeyForUser = async (userId: string) => {
-  const key = (await getOpenAiKey(userId)) || Deno.env.get("OPENAI_API_KEY") || "";
+  const key =
+    (await getOpenAiKey(userId)) || Deno.env.get("OPENAI_API_KEY") || "";
   const trimmed = key.toString().trim();
   return trimmed ? trimmed : null;
 };
@@ -436,7 +481,11 @@ const testOpenAiApiKey = async (apiKey: string) => {
   });
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    const msg = json?.error?.message || json?.error || json?.message || `OpenAI request failed (${res.status})`;
+    const msg =
+      json?.error?.message ||
+      json?.error ||
+      json?.message ||
+      `OpenAI request failed (${res.status})`;
     throw new Error(msg);
   }
   const data = Array.isArray(json?.data) ? json.data : [];
@@ -458,8 +507,10 @@ type GmailOauthStateKv = {
   createdAt: number;
 };
 
-const googleClientId = () => (Deno.env.get("GOOGLE_CLIENT_ID") || "").toString().trim();
-const googleClientSecret = () => (Deno.env.get("GOOGLE_CLIENT_SECRET") || "").toString().trim();
+const googleClientId = () =>
+  (Deno.env.get("GOOGLE_CLIENT_ID") || "").toString().trim();
+const googleClientSecret = () =>
+  (Deno.env.get("GOOGLE_CLIENT_SECRET") || "").toString().trim();
 const googleRedirectUri = () => {
   if (!SUPABASE_URL) return "";
   return `${SUPABASE_URL.replace(/\/+$/, "")}/functions/v1/make-server-139017f8/gmail/callback`;
@@ -475,7 +526,9 @@ const isRedirectAllowed = (value: string) => {
   }
 };
 
-const getGmailIntegration = async (userId: string): Promise<GmailIntegrationKv | null> => {
+const getGmailIntegration = async (
+  userId: string,
+): Promise<GmailIntegrationKv | null> => {
   try {
     const data = await kv.get(userKey(userId, "integration:gmail"));
     if (!data || typeof data !== "object") return null;
@@ -486,8 +539,14 @@ const getGmailIntegration = async (userId: string): Promise<GmailIntegrationKv |
   }
 };
 
-const setGmailIntegration = async (userId: string, value: GmailIntegrationKv) => {
-  await kv.set(userKey(userId, "integration:gmail"), { ...value, updatedAt: Date.now() });
+const setGmailIntegration = async (
+  userId: string,
+  value: GmailIntegrationKv,
+) => {
+  await kv.set(userKey(userId, "integration:gmail"), {
+    ...value,
+    updatedAt: Date.now(),
+  });
 };
 
 const clearGmailIntegration = async (userId: string) => {
@@ -512,12 +571,19 @@ const encodeHeaderUtf8Base64 = (value: string) => {
   return `=?UTF-8?B?${b64}=?=`;
 };
 
-const buildRfc2822Message = (input: { to: string; subject: string; body: string; bcc?: string }) => {
+const buildRfc2822Message = (input: {
+  to: string;
+  subject: string;
+  body: string;
+  bcc?: string;
+}) => {
   const lines: string[] = [];
   lines.push(`To: ${input.to}`);
   if (input.bcc && input.bcc.trim()) lines.push(`Bcc: ${input.bcc.trim()}`);
   const subject = input.subject || "";
-  const subjectHeader = /[^\x00-\x7F]/.test(subject) ? encodeHeaderUtf8Base64(subject) : subject;
+  const subjectHeader = /[^\x00-\x7F]/.test(subject)
+    ? encodeHeaderUtf8Base64(subject)
+    : subject;
   lines.push(`Subject: ${subjectHeader}`);
   lines.push(`Date: ${new Date().toUTCString()}`);
   lines.push("MIME-Version: 1.0");
@@ -531,7 +597,8 @@ const buildRfc2822Message = (input: { to: string; subject: string; body: string;
 const refreshGmailAccessToken = async (refreshToken: string) => {
   const clientId = googleClientId();
   const clientSecret = googleClientSecret();
-  if (!clientId || !clientSecret) throw new Error("Google OAuth není nakonfigurovaný");
+  if (!clientId || !clientSecret)
+    throw new Error("Google OAuth není nakonfigurovaný");
 
   const body = new URLSearchParams();
   body.set("client_id", clientId);
@@ -546,7 +613,11 @@ const refreshGmailAccessToken = async (refreshToken: string) => {
   });
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    const msg = json?.error_description || json?.error || json?.message || `Refresh token selhal (${res.status})`;
+    const msg =
+      json?.error_description ||
+      json?.error ||
+      json?.message ||
+      `Refresh token selhal (${res.status})`;
     throw new Error(msg);
   }
   const accessToken = json?.access_token ? String(json.access_token) : "";
@@ -557,15 +628,20 @@ const refreshGmailAccessToken = async (refreshToken: string) => {
   return { accessToken, expiryMs: Date.now() + expiresIn * 1000 };
 };
 
-const getValidGmailAccessToken = async (userId: string): Promise<{ accessToken: string; integration: GmailIntegrationKv } | null> => {
+const getValidGmailAccessToken = async (
+  userId: string,
+): Promise<{ accessToken: string; integration: GmailIntegrationKv } | null> => {
   const integration = await getGmailIntegration(userId);
   const accessToken = integration?.gmail_access_token?.toString().trim() || "";
-  const refreshToken = integration?.gmail_refresh_token?.toString().trim() || "";
+  const refreshToken =
+    integration?.gmail_refresh_token?.toString().trim() || "";
   const expiryMs = Number(integration?.gmail_token_expiry || 0);
 
   const now = Date.now();
-  const isValid = accessToken && Number.isFinite(expiryMs) && expiryMs > now + 30_000;
-  if (isValid) return { accessToken, integration: integration as GmailIntegrationKv };
+  const isValid =
+    accessToken && Number.isFinite(expiryMs) && expiryMs > now + 30_000;
+  if (isValid)
+    return { accessToken, integration: integration as GmailIntegrationKv };
 
   if (!refreshToken) return null;
   const refreshed = await refreshGmailAccessToken(refreshToken);
@@ -717,32 +793,66 @@ TARGET AUDIENCE & PAIN POINTS:
 
 // "Red lines" pulled from the frontend battlecards (dont_say) – used to keep scripting honest.
 const BATTLECARD_DONT_SAY_BY_KEY: Record<string, string[]> = {
-  price: ["To se vám vrátí určitě.", "To je vlastně levné, když si to spočítáte."],
+  price: [
+    "To se vám vrátí určitě.",
+    "To je vlastně levné, když si to spočítáte.",
+  ],
   roi: ["ROI vám garantuju.", "Všichni naši klienti mají skvělé ROI."],
-  not_now: ["To je chyba, to musíte řešit hned.", "Když to neuděláte teď, dopadnete špatně."],
-  send_email: ["Jasně, pošlu a ozvěte se.", "Tak já vám to pošlu a pak si zavoláme."],
-  already_solution: ["To vaše řešení je špatně.", "My jsme lepší než všichni ostatní."],
+  not_now: [
+    "To je chyba, to musíte řešit hned.",
+    "Když to neuděláte teď, dopadnete špatně.",
+  ],
+  send_email: [
+    "Jasně, pošlu a ozvěte se.",
+    "Tak já vám to pošlu a pak si zavoláme.",
+  ],
+  already_solution: [
+    "To vaše řešení je špatně.",
+    "My jsme lepší než všichni ostatní.",
+  ],
   gdpr: ["GDPR je v pohodě, to se řešit nemusí.", "Tohle podepisují všichni."],
 };
 
-const inferLikelyBattlecardKeys = (params: { industry?: string; role?: string; notes?: string }) => {
-  const hay = `${params.industry || ""} ${params.role || ""} ${params.notes || ""}`.toLowerCase();
+const inferLikelyBattlecardKeys = (params: {
+  industry?: string;
+  role?: string;
+  notes?: string;
+}) => {
+  const hay =
+    `${params.industry || ""} ${params.role || ""} ${params.notes || ""}`.toLowerCase();
   const keys = new Set<string>();
 
   // Common Czech deflections appear across segments
   keys.add("send_email");
   keys.add("roi");
 
-  if (hay.includes("ceo") || hay.includes("cfo") || hay.includes("owner") || hay.includes("ředit") || hay.includes("director")) {
+  if (
+    hay.includes("ceo") ||
+    hay.includes("cfo") ||
+    hay.includes("owner") ||
+    hay.includes("ředit") ||
+    hay.includes("director")
+  ) {
     keys.add("price");
     keys.add("not_now");
   }
 
-  if (hay.includes("it") || hay.includes("tech") || hay.includes("saas") || hay.includes("security") || hay.includes("gdpr")) {
+  if (
+    hay.includes("it") ||
+    hay.includes("tech") ||
+    hay.includes("saas") ||
+    hay.includes("security") ||
+    hay.includes("gdpr")
+  ) {
     keys.add("gdpr");
   }
 
-  if (hay.includes("finance") || hay.includes("bank") || hay.includes("legal") || hay.includes("compliance")) {
+  if (
+    hay.includes("finance") ||
+    hay.includes("bank") ||
+    hay.includes("legal") ||
+    hay.includes("compliance")
+  ) {
     keys.add("gdpr");
   }
 
@@ -750,14 +860,24 @@ const inferLikelyBattlecardKeys = (params: { industry?: string; role?: string; n
     keys.add("already_solution");
   }
 
-  if (hay.includes("výro") || hay.includes("manufact") || hay.includes("logist") || hay.includes("shift") || hay.includes("směn")) {
+  if (
+    hay.includes("výro") ||
+    hay.includes("manufact") ||
+    hay.includes("logist") ||
+    hay.includes("shift") ||
+    hay.includes("směn")
+  ) {
     keys.add("price");
   }
 
   return Array.from(keys);
 };
 
-const buildRedLines = (params: { industry?: string; role?: string; notes?: string }) => {
+const buildRedLines = (params: {
+  industry?: string;
+  role?: string;
+  notes?: string;
+}) => {
   const keys = inferLikelyBattlecardKeys(params);
   const lines: string[] = [];
   for (const key of keys) {
@@ -809,7 +929,9 @@ const resolveContactForUser = async (
       .select(CONTACT_SELECT_FIELDS)
       .eq("external_id", rawContactId)
       .limit(1);
-    const contactExternal = Array.isArray(contactByExternal) ? contactByExternal[0] : null;
+    const contactExternal = Array.isArray(contactByExternal)
+      ? contactByExternal[0]
+      : null;
     if (contactExternal) {
       contact = contactExternal;
       contactId = contactExternal.id;
@@ -818,12 +940,16 @@ const resolveContactForUser = async (
 
   if (!contact) {
     const personId = Number(rawContactId);
-    const pipedriveKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+    const pipedriveKey =
+      (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
     if (Number.isFinite(personId) && pipedriveKey) {
       try {
-        const res = await fetch(`https://api.pipedrive.com/v1/persons/${personId}?api_token=${pipedriveKey}`, {
-          headers: { Accept: "application/json" },
-        });
+        const res = await fetch(
+          `https://api.pipedrive.com/v1/persons/${personId}?api_token=${pipedriveKey}`,
+          {
+            headers: { Accept: "application/json" },
+          },
+        );
         const personJson = await res.json().catch(() => null);
         const person = personJson?.data;
         if (res.ok && person) {
@@ -854,12 +980,97 @@ const resolveContactForUser = async (
     }
   }
 
+  // 4th fallback: Pipedrive lead UUID → fetch lead → get person → upsert
+  if (!contact && rawContactId.length > 8 && rawContactId.includes("-")) {
+    const pipedriveKey =
+      (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+    if (pipedriveKey) {
+      try {
+        const leadRes = await fetch(
+          `https://api.pipedrive.com/v1/leads/${encodeURIComponent(rawContactId)}?api_token=${pipedriveKey}`,
+          { headers: { Accept: "application/json" } },
+        );
+        const leadJson = await leadRes.json().catch(() => null);
+        const lead = leadJson?.data;
+        if (leadRes.ok && lead) {
+          const personIdRaw =
+            lead.person_id?.value ?? lead.person_id ?? lead.person?.id ?? null;
+          const personIdNum = Number(personIdRaw);
+          if (Number.isFinite(personIdNum) && personIdNum > 0) {
+            // Fetch the person details for a proper upsert
+            const personRes = await fetch(
+              `https://api.pipedrive.com/v1/persons/${personIdNum}?api_token=${pipedriveKey}`,
+              { headers: { Accept: "application/json" } },
+            );
+            const personJson = await personRes.json().catch(() => null);
+            const person = personJson?.data;
+            if (personRes.ok && person) {
+              const upsertPayload = {
+                name: person.name || lead.title || "Unnamed contact",
+                title: person.title || null,
+                company: person.org_name || null,
+                phone: person.phone?.[0]?.value || null,
+                email: person.email?.[0]?.value || null,
+                status: person.active_flag ? "active" : null,
+                source: "pipedrive",
+                external_id: rawContactId,
+                last_touch: person.update_time || null,
+              };
+              const { data: upserted, error: upsertError } = await admin
+                .from("contacts")
+                .upsert(upsertPayload, { onConflict: "source,external_id" })
+                .select(CONTACT_SELECT_FIELDS)
+                .single();
+              if (!upsertError && upserted) {
+                contact = upserted;
+                contactId = upserted.id;
+                console.log(
+                  "Resolved Pipedrive lead UUID to contact:",
+                  contactId,
+                  "person_id:",
+                  personIdNum,
+                );
+              }
+            }
+          } else {
+            // Lead has no person — upsert with lead info only
+            const orgIdRaw =
+              lead.organization_id?.value ?? lead.organization_id ?? null;
+            const upsertPayload = {
+              name: lead.title || "Unnamed lead",
+              title: null,
+              company: null,
+              phone: null,
+              email: null,
+              status: "active",
+              source: "pipedrive",
+              external_id: rawContactId,
+              last_touch: null,
+            };
+            const { data: upserted, error: upsertError } = await admin
+              .from("contacts")
+              .upsert(upsertPayload, { onConflict: "source,external_id" })
+              .select(CONTACT_SELECT_FIELDS)
+              .single();
+            if (!upsertError && upserted) {
+              contact = upserted;
+              contactId = upserted.id;
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to resolve Pipedrive lead UUID:", e);
+      }
+    }
+  }
+
   if (!contact) return null;
   return { contactId, contact };
 };
 
 const getPipedriveApiKeyForUser = async (userId: string) => {
-  const key = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY") || "";
+  const key =
+    (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY") || "";
   const trimmed = key.toString().trim();
   return trimmed ? trimmed : null;
 };
@@ -867,7 +1078,10 @@ const getPipedriveApiKeyForUser = async (userId: string) => {
 const stripHtml = (input: unknown) => {
   const raw = typeof input === "string" ? input : "";
   if (!raw) return "";
-  return raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return raw
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 };
 
 const pipedriveJson = async <T = any>(apiKey: string, path: string) => {
@@ -875,7 +1089,10 @@ const pipedriveJson = async <T = any>(apiKey: string, path: string) => {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    const msg = json?.error || json?.message || `Pipedrive request failed (${res.status})`;
+    const msg =
+      json?.error ||
+      json?.message ||
+      `Pipedrive request failed (${res.status})`;
     throw new Error(msg);
   }
   return json as T;
@@ -890,29 +1107,58 @@ const resolvePipedrivePersonAndDeal = async (params: {
   const { admin, userId, rawContactId, resolved } = params;
   const apiKey = await getPipedriveApiKeyForUser(userId);
   if (!apiKey) {
-    return { configured: false as const, apiKey: null, personId: null, orgId: null, dealId: null, leadId: null };
+    return {
+      configured: false as const,
+      apiKey: null,
+      personId: null,
+      orgId: null,
+      dealId: null,
+      leadId: null,
+    };
   }
 
   const directPersonId = Number(rawContactId);
   if (Number.isFinite(directPersonId) && !Number.isNaN(directPersonId)) {
-    return { configured: true as const, apiKey, personId: directPersonId, orgId: null, dealId: null, leadId: null };
+    return {
+      configured: true as const,
+      apiKey,
+      personId: directPersonId,
+      orgId: null,
+      dealId: null,
+      leadId: null,
+    };
   }
 
-  const source = (resolved.contact.source || "").toString().trim().toLowerCase();
+  const source = (resolved.contact.source || "")
+    .toString()
+    .trim()
+    .toLowerCase();
   const externalId = (resolved.contact.external_id || "").toString().trim();
 
   if (source === "pipedrive_person" && externalId) {
     const personId = Number(externalId);
     if (Number.isFinite(personId) && !Number.isNaN(personId)) {
-      return { configured: true as const, apiKey, personId, orgId: null, dealId: null, leadId: null };
+      return {
+        configured: true as const,
+        apiKey,
+        personId,
+        orgId: null,
+        dealId: null,
+        leadId: null,
+      };
     }
   }
 
   const leadMatch = rawContactId.match(/^(lead:|lead-|lead_)?(\d+)$/i);
-  const candidateLeadId = leadMatch?.[2] || (source === "pipedrive" && externalId ? externalId : null);
+  const candidateLeadId =
+    leadMatch?.[2] ||
+    (source === "pipedrive" && externalId ? externalId : null);
 
   const fetchLead = async (leadId: string) => {
-    const leadJson: any = await pipedriveJson(apiKey, `leads/${encodeURIComponent(leadId)}`);
+    const leadJson: any = await pipedriveJson(
+      apiKey,
+      `leads/${encodeURIComponent(leadId)}`,
+    );
     const lead = leadJson?.data || {};
     const personIdRaw =
       lead.person_id?.value ??
@@ -930,8 +1176,12 @@ const resolvePipedrivePersonAndDeal = async (params: {
     const orgId = orgIdRaw ? Number(orgIdRaw) : null;
     return {
       leadId,
-      personId: Number.isFinite(personId) && !Number.isNaN(personId) ? personId : null,
-      orgId: orgId !== null && Number.isFinite(orgId) && !Number.isNaN(orgId) ? orgId : null,
+      personId:
+        Number.isFinite(personId) && !Number.isNaN(personId) ? personId : null,
+      orgId:
+        orgId !== null && Number.isFinite(orgId) && !Number.isNaN(orgId)
+          ? orgId
+          : null,
     };
   };
 
@@ -962,7 +1212,14 @@ const resolvePipedrivePersonAndDeal = async (params: {
       const item = searchJson?.data?.items?.[0]?.item;
       const personId = Number(item?.id);
       if (Number.isFinite(personId) && !Number.isNaN(personId)) {
-        return { configured: true as const, apiKey, personId, orgId: null, dealId: null, leadId: null };
+        return {
+          configured: true as const,
+          apiKey,
+          personId,
+          orgId: null,
+          dealId: null,
+          leadId: null,
+        };
       }
     } catch (e) {
       console.error("Pipedrive person email search failed (non-blocking):", e);
@@ -970,7 +1227,14 @@ const resolvePipedrivePersonAndDeal = async (params: {
   }
 
   // We have a key, but couldn't resolve a person.
-  return { configured: true as const, apiKey, personId: null, orgId: null, dealId: null, leadId: candidateLeadId };
+  return {
+    configured: true as const,
+    apiKey,
+    personId: null,
+    orgId: null,
+    dealId: null,
+    leadId: candidateLeadId,
+  };
 };
 
 const fetchPipedriveTimeline = async (params: {
@@ -980,9 +1244,18 @@ const fetchPipedriveTimeline = async (params: {
 }) => {
   const { apiKey, personId, limits } = params;
   const [activitiesJson, notesJson, dealsJson] = await Promise.all([
-    pipedriveJson<any>(apiKey, `activities?person_id=${encodeURIComponent(String(personId))}&limit=${limits.activities}`),
-    pipedriveJson<any>(apiKey, `notes?person_id=${encodeURIComponent(String(personId))}&limit=${limits.notes}&sort=add_time%20DESC`),
-    pipedriveJson<any>(apiKey, `persons/${encodeURIComponent(String(personId))}/deals?status=open&limit=${limits.deals}`),
+    pipedriveJson<any>(
+      apiKey,
+      `activities?person_id=${encodeURIComponent(String(personId))}&limit=${limits.activities}`,
+    ),
+    pipedriveJson<any>(
+      apiKey,
+      `notes?person_id=${encodeURIComponent(String(personId))}&limit=${limits.notes}&sort=add_time%20DESC`,
+    ),
+    pipedriveJson<any>(
+      apiKey,
+      `persons/${encodeURIComponent(String(personId))}/deals?status=open&limit=${limits.deals}`,
+    ),
   ]);
 
   const activities = (activitiesJson?.data || []).map((a: any) => ({
@@ -1035,7 +1308,11 @@ const isOlderThanHours = (date: Date | null, hours: number) => {
   return Date.now() - date.getTime() > hours * 60 * 60 * 1000;
 };
 
-const getLatestPackForContact = async (admin: any, userId: string, contactId: string) => {
+const getLatestPackForContact = async (
+  admin: any,
+  userId: string,
+  contactId: string,
+) => {
   const { data, error } = await admin
     .from("sales_packs")
     .select(
@@ -1057,7 +1334,9 @@ const generatePrecallBrief = async (params: {
   language: string;
   openaiApiKey?: string | null;
 }) => {
-  const apiKey = (params.openaiApiKey || Deno.env.get("OPENAI_API_KEY") || "").toString().trim();
+  const apiKey = (params.openaiApiKey || Deno.env.get("OPENAI_API_KEY") || "")
+    .toString()
+    .trim();
   if (!apiKey) return null;
 
   const openai = new OpenAI({ apiKey });
@@ -1068,13 +1347,15 @@ const generatePrecallBrief = async (params: {
     source_url: f?.source_url || "",
   }));
   const timeline = params.timeline || { activities: [], notes: [], deals: [] };
-  const topActivities = (timeline.activities || []).slice(0, 6).map((a: any) => ({
-    type: a.type,
-    subject: a.subject,
-    done: a.done,
-    due_date: a.due_date,
-    add_time: a.add_time,
-  }));
+  const topActivities = (timeline.activities || [])
+    .slice(0, 6)
+    .map((a: any) => ({
+      type: a.type,
+      subject: a.subject,
+      done: a.done,
+      due_date: a.due_date,
+      add_time: a.add_time,
+    }));
   const topNotes = (timeline.notes || []).slice(0, 5).map((n: any) => ({
     add_time: n.add_time,
     content: (n.content || "").toString().slice(0, 500),
@@ -1088,8 +1369,7 @@ const generatePrecallBrief = async (params: {
 
   const system = `You are an expert B2B SDR pre-call assistant. Output ONLY a JSON object. Language: ${language}.`;
   const user = {
-    task:
-      "Create pre-call context for a cold call. Keep it concise, actionable, and evidence-gated. If evidence is weak, produce validation questions instead of claims.",
+    task: "Create pre-call context for a cold call. Keep it concise, actionable, and evidence-gated. If evidence is weak, produce validation questions instead of claims.",
     schema: {
       brief: "string (2-4 short sentences)",
       why_now: "string (1 short sentence)",
@@ -1131,9 +1411,17 @@ const generatePrecallBrief = async (params: {
       brief: (parsed?.brief || "").toString(),
       why_now: (parsed?.why_now || "").toString(),
       opener: (parsed?.opener || "").toString(),
-      risks: Array.isArray(parsed?.risks) ? parsed.risks.map((x: any) => String(x)).filter(Boolean).slice(0, 6) : [],
+      risks: Array.isArray(parsed?.risks)
+        ? parsed.risks
+            .map((x: any) => String(x))
+            .filter(Boolean)
+            .slice(0, 6)
+        : [],
       questions: Array.isArray(parsed?.questions)
-        ? parsed.questions.map((x: any) => String(x)).filter(Boolean).slice(0, 6)
+        ? parsed.questions
+            .map((x: any) => String(x))
+            .filter(Boolean)
+            .slice(0, 6)
         : [],
       generated_at: now,
       model: "gpt-4o-mini",
@@ -1153,15 +1441,34 @@ const ingestCompanySiteAllowlistInternal = async (params: {
   const { admin, userId, correlationId, contactId, baseUrl } = params;
 
   const base = new URL(normalizeBaseUrl(baseUrl));
-  const allowPaths = ["/", "/about", "/team", "/kontakt", "/contact", "/kariera", "/careers", "/blog", "/press", "/news", "/company"];
+  const allowPaths = [
+    "/",
+    "/about",
+    "/team",
+    "/kontakt",
+    "/contact",
+    "/kariera",
+    "/careers",
+    "/blog",
+    "/press",
+    "/news",
+    "/company",
+  ];
   const ua = "EchoEvidenceBot/1.0";
 
   const robotsUrl = `${base.origin}/robots.txt`;
-  const robotsRes = await fetch(robotsUrl, { headers: { "User-Agent": ua }, redirect: "follow" });
+  const robotsRes = await fetch(robotsUrl, {
+    headers: { "User-Agent": ua },
+    redirect: "follow",
+  });
   const robotsTxt = robotsRes.ok ? await robotsRes.text() : "";
   const rules = robotsTxt ? parseRobotsForUserAgent(robotsTxt, ua) : [];
 
-  const documents: Array<{ document_id: string; source_url: string; http_status: number | null }> = [];
+  const documents: Array<{
+    document_id: string;
+    source_url: string;
+    http_status: number | null;
+  }> = [];
   const skipped: Array<{ url: string; reason: string }> = [];
 
   for (const p of allowPaths.slice(0, 8)) {
@@ -1173,7 +1480,10 @@ const ingestCompanySiteAllowlistInternal = async (params: {
 
     try {
       const res = await fetch(url.toString(), {
-        headers: { "User-Agent": ua, Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1" },
+        headers: {
+          "User-Agent": ua,
+          Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
+        },
         redirect: "follow",
       });
 
@@ -1181,7 +1491,9 @@ const ingestCompanySiteAllowlistInternal = async (params: {
       const canonicalUrl = res.url || url.toString();
       const contentType = res.headers.get("content-type");
       const raw = await res.text();
-      const contentText = contentType?.includes("text/html") ? htmlToText(raw) : raw.trim();
+      const contentText = contentType?.includes("text/html")
+        ? htmlToText(raw)
+        : raw.trim();
       const langMatch = contentType?.includes("text/html")
         ? raw.match(/<html[^>]*\blang\s*=\s*["']([^"']+)["']/i)
         : null;
@@ -1204,7 +1516,12 @@ const ingestCompanySiteAllowlistInternal = async (params: {
           fetched_at: new Date().toISOString(),
           content_text: contentText,
           content_sha256: contentSha256,
-          robots_policy: { robots_url: robotsUrl, ok: robotsRes.ok, rules, allowed: true },
+          robots_policy: {
+            robots_url: robotsUrl,
+            ok: robotsRes.ok,
+            rules,
+            allowed: true,
+          },
           request_meta: { user_agent: ua, seed: "allowlist" },
           contact_id: contactId,
         })
@@ -1214,21 +1531,35 @@ const ingestCompanySiteAllowlistInternal = async (params: {
       if (insertError) {
         skipped.push({ url: url.toString(), reason: insertError.message });
       } else {
-        documents.push({ document_id: data.id, source_url: url.toString(), http_status: data.http_status });
+        documents.push({
+          document_id: data.id,
+          source_url: url.toString(),
+          http_status: data.http_status,
+        });
       }
     } catch (e) {
-      skipped.push({ url: url.toString(), reason: e instanceof Error ? e.message : String(e) });
+      skipped.push({
+        url: url.toString(),
+        reason: e instanceof Error ? e.message : String(e),
+      });
     }
 
     await sleep(1100);
   }
 
-  await auditEvent(admin, userId, correlationId, "ingest", "company_site_allowlist_ingested", {
-    contact_id: contactId,
-    base_url: base.toString(),
-    document_count: documents.length,
-    skipped_count: skipped.length,
-  });
+  await auditEvent(
+    admin,
+    userId,
+    correlationId,
+    "ingest",
+    "company_site_allowlist_ingested",
+    {
+      contact_id: contactId,
+      base_url: base.toString(),
+      document_count: documents.length,
+      skipped_count: skipped.length,
+    },
+  );
 
   return { documents, skipped, base_url: base.toString() };
 };
@@ -1259,8 +1590,14 @@ const autoApproveLowRiskClaims = async (params: {
     const text = claim.toLowerCase();
     if (/\d/.test(text)) return false;
     if (/(kč|czk|eur|usd|€|\$)/i.test(text)) return false;
-    if (/(zam[eě]stn|employees|headcount|fte|milion|miliard|obrat|revenue|tržb|profit)/i.test(text)) return false;
-    if (/(nej|top|best|revolu|garant|unik[áa]t|number one)/i.test(text)) return false;
+    if (
+      /(zam[eě]stn|employees|headcount|fte|milion|miliard|obrat|revenue|tržb|profit)/i.test(
+        text,
+      )
+    )
+      return false;
+    if (/(nej|top|best|revolu|garant|unik[áa]t|number one)/i.test(text))
+      return false;
 
     // Approve only "what they do / offer" type statements.
     const positiveSignals = [
@@ -1280,7 +1617,10 @@ const autoApproveLowRiskClaims = async (params: {
   };
 
   const toApprove = (data || [])
-    .map((row: any) => ({ evidence_id: row.evidence_id as string, claim: row.claim as string }))
+    .map((row: any) => ({
+      evidence_id: row.evidence_id as string,
+      claim: row.claim as string,
+    }))
     .filter((row) => row.evidence_id && row.claim && isLowRisk(row.claim))
     .slice(0, 12);
 
@@ -1299,19 +1639,36 @@ const autoApproveLowRiskClaims = async (params: {
     reviewed_by: `${userId}:auto`,
   }));
 
-  const { error: insertError } = await admin.from("evidence_claim_reviews").insert(reviewRows);
+  const { error: insertError } = await admin
+    .from("evidence_claim_reviews")
+    .insert(reviewRows);
   if (insertError) {
     console.error("autoApproveLowRiskClaims insert failed:", insertError);
-    return { approved: 0, skipped: (data || []).length, error: insertError.message };
+    return {
+      approved: 0,
+      skipped: (data || []).length,
+      error: insertError.message,
+    };
   }
 
-  await auditEvent(admin, userId, correlationId, "review", "auto_review_completed", {
-    contact_id: contactId,
-    approved_count: toApprove.length,
-    total_candidates: (data || []).length,
-  });
+  await auditEvent(
+    admin,
+    userId,
+    correlationId,
+    "review",
+    "auto_review_completed",
+    {
+      contact_id: contactId,
+      approved_count: toApprove.length,
+      total_candidates: (data || []).length,
+    },
+  );
 
-  return { approved: toApprove.length, skipped: Math.max(0, (data || []).length - toApprove.length), error: null };
+  return {
+    approved: toApprove.length,
+    skipped: Math.max(0, (data || []).length - toApprove.length),
+    error: null,
+  };
 };
 
 const extractEvidenceClaimsInternal = async (params: {
@@ -1328,7 +1685,9 @@ const extractEvidenceClaimsInternal = async (params: {
 
   const { data: doc, error: docError } = await admin
     .from("evidence_documents")
-    .select("id, owner_user_id, source_url, captured_at, content_text, language, correlation_id")
+    .select(
+      "id, owner_user_id, source_url, captured_at, content_text, language, correlation_id",
+    )
     .eq("id", documentId)
     .eq("owner_user_id", userId)
     .single();
@@ -1354,12 +1713,19 @@ const extractEvidenceClaimsInternal = async (params: {
     error: "not_started",
   });
 
-  await auditEvent(admin, userId, correlationId, "extract", "extraction_started", {
-    document_id: documentId,
-    extraction_run_id: extractionRunId,
-    model,
-    prompt_version: promptVersion,
-  });
+  await auditEvent(
+    admin,
+    userId,
+    correlationId,
+    "extract",
+    "extraction_started",
+    {
+      document_id: documentId,
+      extraction_run_id: extractionRunId,
+      model,
+      prompt_version: promptVersion,
+    },
+  );
 
   const openai = new OpenAI({ apiKey });
   const system = [
@@ -1397,21 +1763,28 @@ const extractEvidenceClaimsInternal = async (params: {
 
     const raw = completion.choices?.[0]?.message?.content ?? "";
     const extracted = JSON.parse(raw);
-    if (!Array.isArray(extracted)) throw new Error("Extractor output is not an array");
+    if (!Array.isArray(extracted))
+      throw new Error("Extractor output is not an array");
 
     const claimsToInsert: any[] = [];
     for (const item of extracted) {
       const claim = item?.claim?.toString().trim();
       const evidenceSnippet = item?.evidence_snippet?.toString();
       const confidence = item?.confidence?.toString();
-      if (!claim || !evidenceSnippet || !confidence) throw new Error("Missing claim fields in extractor output");
-      if (!["high", "medium", "low"].includes(confidence)) throw new Error("Invalid confidence value");
+      if (!claim || !evidenceSnippet || !confidence)
+        throw new Error("Missing claim fields in extractor output");
+      if (!["high", "medium", "low"].includes(confidence))
+        throw new Error("Invalid confidence value");
       if (!doc.content_text.includes(evidenceSnippet)) {
-        throw new Error("evidence_snippet not found verbatim in document content");
+        throw new Error(
+          "evidence_snippet not found verbatim in document content",
+        );
       }
 
       const claimHash = await sha256Hex(
-        `${claim}\n---\n${doc.source_url}\n---\n${evidenceSnippet}`.toLowerCase().trim(),
+        `${claim}\n---\n${doc.source_url}\n---\n${evidenceSnippet}`
+          .toLowerCase()
+          .trim(),
       );
 
       claimsToInsert.push({
@@ -1434,7 +1807,10 @@ const extractEvidenceClaimsInternal = async (params: {
     if (claimsToInsert.length > 0) {
       const { error: insertClaimsError } = await admin
         .from("evidence_claims")
-        .upsert(claimsToInsert, { onConflict: "owner_user_id,claim_hash", ignoreDuplicates: true });
+        .upsert(claimsToInsert, {
+          onConflict: "owner_user_id,claim_hash",
+          ignoreDuplicates: true,
+        });
       if (insertClaimsError) throw new Error(insertClaimsError.message);
     }
 
@@ -1444,11 +1820,18 @@ const extractEvidenceClaimsInternal = async (params: {
       .eq("id", extractionRunId)
       .eq("owner_user_id", userId);
 
-    await auditEvent(admin, userId, correlationId, "extract", "extraction_succeeded", {
-      document_id: documentId,
-      extraction_run_id: extractionRunId,
-      claim_count: claimsToInsert.length,
-    });
+    await auditEvent(
+      admin,
+      userId,
+      correlationId,
+      "extract",
+      "extraction_succeeded",
+      {
+        document_id: documentId,
+        extraction_run_id: extractionRunId,
+        claim_count: claimsToInsert.length,
+      },
+    );
 
     const { data: insertedClaims } = await admin
       .from("evidence_claims")
@@ -1473,11 +1856,18 @@ const extractEvidenceClaimsInternal = async (params: {
       .eq("id", extractionRunId)
       .eq("owner_user_id", userId);
 
-    await auditEvent(admin, userId, correlationId, "extract", "extraction_failed", {
-      document_id: documentId,
-      extraction_run_id: extractionRunId,
-      error: message,
-    });
+    await auditEvent(
+      admin,
+      userId,
+      correlationId,
+      "extract",
+      "extraction_failed",
+      {
+        document_id: documentId,
+        extraction_run_id: extractionRunId,
+        error: message,
+      },
+    );
 
     throw new Error(message);
   }
@@ -1525,7 +1915,10 @@ app.use("*", async (c, next) => {
     path.startsWith("/evidence/")
   ) {
     max = 20;
-  } else if (path.startsWith("/pipedrive/") || path.startsWith("/integrations/")) {
+  } else if (
+    path.startsWith("/pipedrive/") ||
+    path.startsWith("/integrations/")
+  ) {
     max = 40;
   } else if (method !== "GET") {
     max = 60;
@@ -1595,11 +1988,18 @@ app.post(`${BASE_PATH}/evidence/ingest/user-note`, async (c) => {
     .single();
 
   if (insertError) return c.json({ error: insertError.message }, 500);
-  await auditEvent(admin, userId, correlationId, "ingest", "user_note_ingested", {
-    document_id: data.id,
-    contact_id: contactId,
-    note_kind: noteKind,
-  });
+  await auditEvent(
+    admin,
+    userId,
+    correlationId,
+    "ingest",
+    "user_note_ingested",
+    {
+      document_id: data.id,
+      contact_id: contactId,
+      note_kind: noteKind,
+    },
+  );
 
   return c.json({
     correlation_id: correlationId,
@@ -1648,10 +2048,17 @@ app.post(`${BASE_PATH}/evidence/ingest/internal-product-note`, async (c) => {
     .single();
 
   if (insertError) return c.json({ error: insertError.message }, 500);
-  await auditEvent(admin, userId, correlationId, "ingest", "internal_product_note_ingested", {
-    document_id: data.id,
-    source_url: sourceUrl,
-  });
+  await auditEvent(
+    admin,
+    userId,
+    correlationId,
+    "ingest",
+    "internal_product_note_ingested",
+    {
+      document_id: data.id,
+      source_url: sourceUrl,
+    },
+  );
 
   return c.json({
     correlation_id: correlationId,
@@ -1674,7 +2081,11 @@ app.post(`${BASE_PATH}/evidence/ingest/url`, async (c) => {
   const sourceType = body?.source_type?.toString() || "company_website";
   if (!contactId) return c.json({ error: "Missing contact_id" }, 400);
   if (!url) return c.json({ error: "Missing url" }, 400);
-  if (sourceType !== "company_website") return c.json({ error: "Only source_type=company_website supported here" }, 400);
+  if (sourceType !== "company_website")
+    return c.json(
+      { error: "Only source_type=company_website supported here" },
+      400,
+    );
 
   const normalizedUrl = normalizeUrl(url);
   const ua = "EchoEvidenceBot/1.0";
@@ -1690,17 +2101,26 @@ app.post(`${BASE_PATH}/evidence/ingest/url`, async (c) => {
   try {
     const u = new URL(normalizedUrl);
     const robotsUrl = `${u.origin}/robots.txt`;
-    const robotsRes = await fetch(robotsUrl, { headers: { "User-Agent": ua }, redirect: "follow" });
+    const robotsRes = await fetch(robotsUrl, {
+      headers: { "User-Agent": ua },
+      redirect: "follow",
+    });
     const robotsTxt = robotsRes.ok ? await robotsRes.text() : "";
     const rules = robotsTxt ? parseRobotsForUserAgent(robotsTxt, ua) : [];
     const allowed = isPathAllowedByRobots(u.pathname, rules);
     robotsPolicy = { robots_url: robotsUrl, ok: robotsRes.ok, rules, allowed };
     if (!allowed) {
-      return c.json({ error: "Blocked by robots.txt", robots_policy: robotsPolicy }, 403);
+      return c.json(
+        { error: "Blocked by robots.txt", robots_policy: robotsPolicy },
+        403,
+      );
     }
 
     const res = await fetch(normalizedUrl, {
-      headers: { "User-Agent": ua, Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1" },
+      headers: {
+        "User-Agent": ua,
+        Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
+      },
       redirect: "follow",
     });
 
@@ -1708,7 +2128,9 @@ app.post(`${BASE_PATH}/evidence/ingest/url`, async (c) => {
     canonicalUrl = res.url || normalizedUrl;
     contentType = res.headers.get("content-type");
     const raw = await res.text();
-    const text = contentType?.includes("text/html") ? htmlToText(raw) : raw.trim();
+    const text = contentType?.includes("text/html")
+      ? htmlToText(raw)
+      : raw.trim();
     contentText = text;
 
     if (contentType?.includes("text/html")) {
@@ -1742,7 +2164,9 @@ app.post(`${BASE_PATH}/evidence/ingest/url`, async (c) => {
       request_meta: { user_agent: ua },
       contact_id: contactId,
     })
-    .select("id, captured_at, canonical_url, http_status, language, content_sha256")
+    .select(
+      "id, captured_at, canonical_url, http_status, language, content_sha256",
+    )
     .single();
 
   if (insertError) return c.json({ error: insertError.message }, 500);
@@ -1829,13 +2253,25 @@ app.post(`${BASE_PATH}/evidence/ingest/ares-record`, async (c) => {
     .single();
 
   if (insertError) return c.json({ error: insertError.message }, 500);
-  await auditEvent(admin, userId, correlationId, "ingest", "ares_record_ingested", {
-    document_id: data.id,
-    contact_id: contactId,
-    source_url: sourceUrl,
-  });
+  await auditEvent(
+    admin,
+    userId,
+    correlationId,
+    "ingest",
+    "ares_record_ingested",
+    {
+      document_id: data.id,
+      contact_id: contactId,
+      source_url: sourceUrl,
+    },
+  );
 
-  return c.json({ correlation_id: correlationId, document_id: data.id, captured_at: data.captured_at, source_url: data.source_url });
+  return c.json({
+    correlation_id: correlationId,
+    document_id: data.id,
+    captured_at: data.captured_at,
+    source_url: data.source_url,
+  });
 });
 
 app.post(`${BASE_PATH}/evidence/extract`, async (c) => {
@@ -1852,7 +2288,9 @@ app.post(`${BASE_PATH}/evidence/extract`, async (c) => {
 
   const { data: doc, error: docError } = await admin
     .from("evidence_documents")
-    .select("id, owner_user_id, source_url, captured_at, content_text, language, correlation_id")
+    .select(
+      "id, owner_user_id, source_url, captured_at, content_text, language, correlation_id",
+    )
     .eq("id", documentId)
     .eq("owner_user_id", userId)
     .single();
@@ -1875,12 +2313,19 @@ app.post(`${BASE_PATH}/evidence/extract`, async (c) => {
     error: "not_started",
   });
 
-  await auditEvent(admin, userId, correlationId, "extract", "extraction_started", {
-    document_id: documentId,
-    extraction_run_id: extractionRunId,
-    model,
-    prompt_version: promptVersion,
-  });
+  await auditEvent(
+    admin,
+    userId,
+    correlationId,
+    "extract",
+    "extraction_started",
+    {
+      document_id: documentId,
+      extraction_run_id: extractionRunId,
+      model,
+      prompt_version: promptVersion,
+    },
+  );
 
   const openai = new OpenAI({ apiKey });
   const system = [
@@ -1918,21 +2363,28 @@ app.post(`${BASE_PATH}/evidence/extract`, async (c) => {
 
     const raw = completion.choices?.[0]?.message?.content ?? "";
     const extracted = JSON.parse(raw);
-    if (!Array.isArray(extracted)) throw new Error("Extractor output is not an array");
+    if (!Array.isArray(extracted))
+      throw new Error("Extractor output is not an array");
 
     const claimsToInsert: any[] = [];
     for (const item of extracted) {
       const claim = item?.claim?.toString().trim();
       const evidenceSnippet = item?.evidence_snippet?.toString();
       const confidence = item?.confidence?.toString();
-      if (!claim || !evidenceSnippet || !confidence) throw new Error("Missing claim fields in extractor output");
-      if (!["high", "medium", "low"].includes(confidence)) throw new Error("Invalid confidence value");
+      if (!claim || !evidenceSnippet || !confidence)
+        throw new Error("Missing claim fields in extractor output");
+      if (!["high", "medium", "low"].includes(confidence))
+        throw new Error("Invalid confidence value");
       if (!doc.content_text.includes(evidenceSnippet)) {
-        throw new Error("evidence_snippet not found verbatim in document content");
+        throw new Error(
+          "evidence_snippet not found verbatim in document content",
+        );
       }
 
       const claimHash = await sha256Hex(
-        `${claim}\n---\n${doc.source_url}\n---\n${evidenceSnippet}`.toLowerCase().trim(),
+        `${claim}\n---\n${doc.source_url}\n---\n${evidenceSnippet}`
+          .toLowerCase()
+          .trim(),
       );
 
       claimsToInsert.push({
@@ -1955,7 +2407,10 @@ app.post(`${BASE_PATH}/evidence/extract`, async (c) => {
     if (claimsToInsert.length > 0) {
       const { error: insertClaimsError } = await admin
         .from("evidence_claims")
-        .upsert(claimsToInsert, { onConflict: "owner_user_id,claim_hash", ignoreDuplicates: true });
+        .upsert(claimsToInsert, {
+          onConflict: "owner_user_id,claim_hash",
+          ignoreDuplicates: true,
+        });
       if (insertClaimsError) throw new Error(insertClaimsError.message);
     }
 
@@ -1965,11 +2420,18 @@ app.post(`${BASE_PATH}/evidence/extract`, async (c) => {
       .eq("id", extractionRunId)
       .eq("owner_user_id", userId);
 
-    await auditEvent(admin, userId, correlationId, "extract", "extraction_succeeded", {
-      document_id: documentId,
-      extraction_run_id: extractionRunId,
-      claim_count: claimsToInsert.length,
-    });
+    await auditEvent(
+      admin,
+      userId,
+      correlationId,
+      "extract",
+      "extraction_succeeded",
+      {
+        document_id: documentId,
+        extraction_run_id: extractionRunId,
+        claim_count: claimsToInsert.length,
+      },
+    );
 
     const { data: insertedClaims } = await admin
       .from("evidence_claims")
@@ -1994,11 +2456,18 @@ app.post(`${BASE_PATH}/evidence/extract`, async (c) => {
       .eq("id", extractionRunId)
       .eq("owner_user_id", userId);
 
-    await auditEvent(admin, userId, correlationId, "extract", "extraction_failed", {
-      document_id: documentId,
-      extraction_run_id: extractionRunId,
-      error: message,
-    });
+    await auditEvent(
+      admin,
+      userId,
+      correlationId,
+      "extract",
+      "extraction_failed",
+      {
+        document_id: documentId,
+        extraction_run_id: extractionRunId,
+        error: message,
+      },
+    );
 
     return c.json({ error: message }, 500);
   }
@@ -2056,7 +2525,8 @@ app.post(`${BASE_PATH}/evidence/claims/:evidenceId/review`, async (c) => {
   const approvedClaim = body?.approved_claim?.toString();
   const reviewerNotes = body?.reviewer_notes?.toString();
 
-  if (!["approved", "rejected", "needs_review"].includes(status)) return c.json({ error: "Invalid status" }, 400);
+  if (!["approved", "rejected", "needs_review"].includes(status))
+    return c.json({ error: "Invalid status" }, 400);
 
   const { data: claimRow, error: claimError } = await admin
     .from("evidence_claims")
@@ -2066,15 +2536,17 @@ app.post(`${BASE_PATH}/evidence/claims/:evidenceId/review`, async (c) => {
     .single();
   if (claimError || !claimRow) return c.json({ error: "Claim not found" }, 404);
 
-  const { error: insertError } = await admin.from("evidence_claim_reviews").insert({
-    owner_user_id: userId,
-    claim_id: evidenceId,
-    status,
-    approved_claim: approvedClaim || null,
-    reviewer_notes: reviewerNotes || null,
-    reviewed_at: new Date().toISOString(),
-    reviewed_by: userId,
-  });
+  const { error: insertError } = await admin
+    .from("evidence_claim_reviews")
+    .insert({
+      owner_user_id: userId,
+      claim_id: evidenceId,
+      status,
+      approved_claim: approvedClaim || null,
+      reviewer_notes: reviewerNotes || null,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: userId,
+    });
   if (insertError) return c.json({ error: insertError.message }, 500);
 
   await auditEvent(admin, userId, correlationId, "review", "claim_reviewed", {
@@ -2094,7 +2566,9 @@ app.get(`${BASE_PATH}/facts`, async (c) => {
 
   let q = admin
     .from("v_approved_facts")
-    .select("evidence_id, claim, source_url, evidence_snippet, captured_at, confidence, contact_id, approved_at, approved_by")
+    .select(
+      "evidence_id, claim, source_url, evidence_snippet, captured_at, confidence, contact_id, approved_at, approved_by",
+    )
     .eq("owner_user_id", userId)
     .order("approved_at", { ascending: false });
 
@@ -2108,27 +2582,50 @@ app.get(`${BASE_PATH}/facts`, async (c) => {
 
 const validateGeneratedPack = (envelope: any) => {
   const errors: string[] = [];
-  const evidenceIds = new Set<string>((envelope?.approved_facts || []).map((f: any) => f?.evidence_id).filter(Boolean));
-  const hypothesisIds = new Set<string>((envelope?.hypotheses || []).map((h: any) => h?.hypothesis_id).filter(Boolean));
+  const evidenceIds = new Set<string>(
+    (envelope?.approved_facts || [])
+      .map((f: any) => f?.evidence_id)
+      .filter(Boolean),
+  );
+  const hypothesisIds = new Set<string>(
+    (envelope?.hypotheses || [])
+      .map((h: any) => h?.hypothesis_id)
+      .filter(Boolean),
+  );
 
   const checkLines = (lines: any[], path: string) => {
     if (!Array.isArray(lines)) return;
     for (const line of lines) {
       const text = line?.text?.toString() || "";
       const eids = Array.isArray(line?.evidence_ids) ? line.evidence_ids : [];
-      const hids = Array.isArray(line?.hypothesis_ids) ? line.hypothesis_ids : [];
-      if (eids.length === 0 && hids.length === 0) errors.push(`${path}: line missing evidence_ids/hypothesis_ids`);
-      for (const id of eids) if (!evidenceIds.has(id)) errors.push(`${path}: unknown evidence_id ${id}`);
-      for (const id of hids) if (!hypothesisIds.has(id)) errors.push(`${path}: unknown hypothesis_id ${id}`);
+      const hids = Array.isArray(line?.hypothesis_ids)
+        ? line.hypothesis_ids
+        : [];
+      if (eids.length === 0 && hids.length === 0)
+        errors.push(`${path}: line missing evidence_ids/hypothesis_ids`);
+      for (const id of eids)
+        if (!evidenceIds.has(id))
+          errors.push(`${path}: unknown evidence_id ${id}`);
+      for (const id of hids)
+        if (!hypothesisIds.has(id))
+          errors.push(`${path}: unknown hypothesis_id ${id}`);
       if (/\d/.test(text)) {
         const referencedSnippets = (envelope?.approved_facts || [])
           .filter((f: any) => eids.includes(f?.evidence_id))
           .map((f: any) => f?.evidence_snippet?.toString() || "");
         const digitToken = text.match(/\d+/)?.[0];
         if (digitToken && eids.length === 0) {
-          errors.push(`${path}: numeric token "${digitToken}" requires evidence_ids`);
-        } else if (digitToken && referencedSnippets.length > 0 && !referencedSnippets.some((s: string) => s.includes(digitToken))) {
-          errors.push(`${path}: numeric token "${digitToken}" not present in any referenced evidence_snippet`);
+          errors.push(
+            `${path}: numeric token "${digitToken}" requires evidence_ids`,
+          );
+        } else if (
+          digitToken &&
+          referencedSnippets.length > 0 &&
+          !referencedSnippets.some((s: string) => s.includes(digitToken))
+        ) {
+          errors.push(
+            `${path}: numeric token "${digitToken}" not present in any referenced evidence_snippet`,
+          );
         }
       }
     }
@@ -2146,7 +2643,16 @@ const validateGeneratedPack = (envelope: any) => {
     checkLines(obj.discovery_questions, `${name}.discovery_questions`);
     if (Array.isArray(obj.objections)) {
       for (const o of obj.objections) {
-        checkLines([{ text: o?.response, evidence_ids: o?.evidence_ids, hypothesis_ids: o?.hypothesis_ids }], `${name}.objections`);
+        checkLines(
+          [
+            {
+              text: o?.response,
+              evidence_ids: o?.evidence_ids,
+              hypothesis_ids: o?.hypothesis_ids,
+            },
+          ],
+          `${name}.objections`,
+        );
       }
     }
     checkLines(obj.meeting_asks, `${name}.meeting_asks`);
@@ -2162,7 +2668,10 @@ const validateGeneratedPack = (envelope: any) => {
       checkLines(obj.three_act_demo.act1, `${name}.three_act_demo.act1`);
       checkLines(obj.three_act_demo.act2, `${name}.three_act_demo.act2`);
       checkLines(obj.three_act_demo.act3, `${name}.three_act_demo.act3`);
-      checkLines(obj.three_act_demo.proof_moments, `${name}.three_act_demo.proof_moments`);
+      checkLines(
+        obj.three_act_demo.proof_moments,
+        `${name}.three_act_demo.proof_moments`,
+      );
       checkLines(obj.three_act_demo.close, `${name}.three_act_demo.close`);
     }
   }
@@ -2170,7 +2679,10 @@ const validateGeneratedPack = (envelope: any) => {
   return { ok: errors.length === 0, errors };
 };
 
-type PackInclude = "cold_call_prep_card" | "meeting_booking_pack" | "spin_demo_pack";
+type PackInclude =
+  | "cold_call_prep_card"
+  | "meeting_booking_pack"
+  | "spin_demo_pack";
 const ALLOWED_PACK_INCLUDES = new Set<PackInclude>([
   "cold_call_prep_card",
   "meeting_booking_pack",
@@ -2185,7 +2697,9 @@ const coercePackIncludes = (raw: unknown): PackInclude[] => {
   const values = Array.isArray(raw) ? raw : [];
   const next = values
     .map((v) => v?.toString?.() ?? "")
-    .filter((v): v is PackInclude => ALLOWED_PACK_INCLUDES.has(v as PackInclude));
+    .filter((v): v is PackInclude =>
+      ALLOWED_PACK_INCLUDES.has(v as PackInclude),
+    );
   return next.length ? next : ["cold_call_prep_card"];
 };
 
@@ -2210,21 +2724,25 @@ const generateAndSavePackInternal = async (params: {
     insufficient_evidence: boolean;
   }>
 > => {
-  const { admin, userId, correlationId, rawContactId, include, language } = params;
+  const { admin, userId, correlationId, rawContactId, include, language } =
+    params;
 
   let contactId = params.resolvedContact?.contactId || rawContactId;
   let contact: ResolvedContact | null = params.resolvedContact?.contact || null;
 
   if (!contact) {
     const resolved = await resolveContactForUser(admin, userId, rawContactId);
-    if (!resolved) return { ok: false, status: 404, error: "Contact not found" };
+    if (!resolved)
+      return { ok: false, status: 404, error: "Contact not found" };
     contactId = resolved.contactId;
     contact = resolved.contact;
   }
 
   const { data: approvedFacts, error: factsError } = await admin
     .from("v_approved_facts")
-    .select("evidence_id, claim, source_url, evidence_snippet, captured_at, confidence")
+    .select(
+      "evidence_id, claim, source_url, evidence_snippet, captured_at, confidence",
+    )
     .eq("owner_user_id", userId)
     .eq("contact_id", contactId);
   if (factsError) return { ok: false, status: 500, error: factsError.message };
@@ -2243,7 +2761,12 @@ const generateAndSavePackInternal = async (params: {
     priority: "high",
   });
 
-  const line = (id: string, text: string, evidenceIds: string[] = [], hypothesisIds: string[] = []) => ({
+  const line = (
+    id: string,
+    text: string,
+    evidenceIds: string[] = [],
+    hypothesisIds: string[] = [],
+  ) => ({
     id,
     text,
     evidence_ids: evidenceIds,
@@ -2253,42 +2776,82 @@ const generateAndSavePackInternal = async (params: {
   const fallbackColdCall = include.includes("cold_call_prep_card")
     ? {
         opener_variants: [
-          line("op1", `Dobrý den ${contact.name}, máte teď minutu na krátkou otázku?`, [], [h1]),
-          line("op2", `Jestli se to nehodí, mám zavolat později, nebo je u vás lepší člověk na tenhle typ rozhodnutí?`, [], [h1]),
-          line("op3", `Budu stručný — můžu se zeptat, jak to dnes řešíte?`, [], [h1]),
+          line(
+            "op1",
+            `Dobrý den ${contact.name}, máte teď minutu na krátkou otázku?`,
+            [],
+            [h1],
+          ),
+          line(
+            "op2",
+            `Jestli se to nehodí, mám zavolat později, nebo je u vás lepší člověk na tenhle typ rozhodnutí?`,
+            [],
+            [h1],
+          ),
+          line(
+            "op3",
+            `Budu stručný — můžu se zeptat, jak to dnes řešíte?`,
+            [],
+            [h1],
+          ),
         ],
         discovery_questions: [
-          line("dq1", "Jak to dnes řešíte (proces, nástroj, frekvence)?", [], [h1]),
-          line("dq2", "Kdo to dnes vlastní a kdo je v tom ještě zapojený?", [], [h1]),
+          line(
+            "dq1",
+            "Jak to dnes řešíte (proces, nástroj, frekvence)?",
+            [],
+            [h1],
+          ),
+          line(
+            "dq2",
+            "Kdo to dnes vlastní a kdo je v tom ještě zapojený?",
+            [],
+            [h1],
+          ),
           line("dq3", "Kde se to dnes nejčastěji zasekne?", [], [h1]),
-          line("dq4", "Co to stojí v čase nebo v riziku, když to zůstane stejné?", [], [h1]),
-          line("dq5", "Co by muselo platit, aby mělo smysl to změnit?", [], [h1]),
+          line(
+            "dq4",
+            "Co to stojí v čase nebo v riziku, když to zůstane stejné?",
+            [],
+            [h1],
+          ),
+          line(
+            "dq5",
+            "Co by muselo platit, aby mělo smysl to změnit?",
+            [],
+            [h1],
+          ),
         ],
         objections: [
           {
             id: "obj1",
             trigger: "Už to nějak řešíme.",
-            response: "Super — co na tom funguje a co byste chtěli, aby fungovalo líp?",
+            response:
+              "Super — co na tom funguje a co byste chtěli, aby fungovalo líp?",
             evidence_ids: [],
             hypothesis_ids: [h1],
           },
           {
             id: "obj2",
             trigger: "Nemám čas.",
-            response: "Chápu. Můžu jen ověřit jednu věc: je větší problém získat input, nebo z toho udělat akci?",
+            response:
+              "Chápu. Můžu jen ověřit jednu věc: je větší problém získat input, nebo z toho udělat akci?",
             evidence_ids: [],
             hypothesis_ids: [h1],
           },
           {
             id: "obj3",
             trigger: "Pošlete to do mailu.",
-            response: "Pošlu. Aby to nebylo generické: co má ten mail hlavně zodpovědět — dopad, implementaci, nebo cenu?",
+            response:
+              "Pošlu. Aby to nebylo generické: co má ten mail hlavně zodpovědět — dopad, implementaci, nebo cenu?",
             evidence_ids: [],
             hypothesis_ids: [h1],
           },
         ],
         insufficient_evidence: insufficientEvidence,
-        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+        insufficient_evidence_reasons: insufficientEvidence
+          ? ["No approved facts for this contact."]
+          : [],
       }
     : null;
 
@@ -2296,13 +2859,38 @@ const generateAndSavePackInternal = async (params: {
     ? {
         discovery_questions: [
           line("mq1", "Proč to řešíte právě teď?", [], [h1]),
-          line("mq2", "Jak poznáte, že další krok/demíčko dává smysl?", [], [h1]),
-          line("mq3", "Kdo musí být u dalšího kroku, aby se rozhodlo rychle?", [], [h1]),
-          line("mq4", "Co musí být jasné po patnácti minutách, aby to stálo za pokračování?", [], [h1]),
+          line(
+            "mq2",
+            "Jak poznáte, že další krok/demíčko dává smysl?",
+            [],
+            [h1],
+          ),
+          line(
+            "mq3",
+            "Kdo musí být u dalšího kroku, aby se rozhodlo rychle?",
+            [],
+            [h1],
+          ),
+          line(
+            "mq4",
+            "Co musí být jasné po patnácti minutách, aby to stálo za pokračování?",
+            [],
+            [h1],
+          ),
         ],
         meeting_asks: [
-          line("ma1", "Dává smysl dát si krátké demo a projít, jak to u vás dnes funguje end‑to‑end?", [], [h1]),
-          line("ma2", "Pokud to bude relevantní, přizveme i člověka, který vlastní follow‑up a rozhodnutí.", [], [h1]),
+          line(
+            "ma1",
+            "Dává smysl dát si krátké demo a projít, jak to u vás dnes funguje end‑to‑end?",
+            [],
+            [h1],
+          ),
+          line(
+            "ma2",
+            "Pokud to bude relevantní, přizveme i člověka, který vlastní follow‑up a rozhodnutí.",
+            [],
+            [h1],
+          ),
         ],
         agenda: [
           line("ag1", "Jak to dnes běží a kde se to láme.", [], [h1]),
@@ -2310,31 +2898,86 @@ const generateAndSavePackInternal = async (params: {
           line("ag3", "Jak vypadá ideální stav a další krok.", [], [h1]),
         ],
         next_step_conditions: [
-          line("ns1", "Když je bottleneck v ownershipu, řešíme odpovědnost a workflow.", [], [h1]),
-          line("ns2", "Když je bottleneck v datech, řešíme sběr, kvalitu a akční výstupy.", [], [h1]),
+          line(
+            "ns1",
+            "Když je bottleneck v ownershipu, řešíme odpovědnost a workflow.",
+            [],
+            [h1],
+          ),
+          line(
+            "ns2",
+            "Když je bottleneck v datech, řešíme sběr, kvalitu a akční výstupy.",
+            [],
+            [h1],
+          ),
         ],
         insufficient_evidence: insufficientEvidence,
-        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+        insufficient_evidence_reasons: insufficientEvidence
+          ? ["No approved facts for this contact."]
+          : [],
       }
     : null;
 
   const fallbackSpinPack = include.includes("spin_demo_pack")
     ? {
         spin: {
-          situation: [line("s1", "Jak to dnes řešíte a kdo to vlastní?", [], [h1])],
-          problem: [line("p1", "Co je dnes největší komplikace nebo bottleneck?", [], [h1])],
-          implication: [line("i1", "Jaký dopad to má na čas, kvalitu, nebo riziko?", [], [h1])],
-          need_payoff: [line("n1", "Kdybyste to vyřešili, co by se zlepšilo jako první?", [], [h1])],
+          situation: [
+            line("s1", "Jak to dnes řešíte a kdo to vlastní?", [], [h1]),
+          ],
+          problem: [
+            line(
+              "p1",
+              "Co je dnes největší komplikace nebo bottleneck?",
+              [],
+              [h1],
+            ),
+          ],
+          implication: [
+            line(
+              "i1",
+              "Jaký dopad to má na čas, kvalitu, nebo riziko?",
+              [],
+              [h1],
+            ),
+          ],
+          need_payoff: [
+            line(
+              "n1",
+              "Kdybyste to vyřešili, co by se zlepšilo jako první?",
+              [],
+              [h1],
+            ),
+          ],
         },
         three_act_demo: {
           act1: [line("a1", "Potvrdíme současný stav a cíle.", [], [h1])],
-          act2: [line("a2", "Ukážeme konkrétní workflow a hodnotu v praxi.", [], [h1])],
-          act3: [line("a3", "Sladíme další krok a success kritéria.", [], [h1])],
-          proof_moments: [line("pm1", "Zmapujeme, co je pro vás důkaz úspěchu.", [], [h1])],
-          close: [line("c1", "Domluvíme nejmenší další krok a kdo musí být u toho.", [], [h1])],
+          act2: [
+            line(
+              "a2",
+              "Ukážeme konkrétní workflow a hodnotu v praxi.",
+              [],
+              [h1],
+            ),
+          ],
+          act3: [
+            line("a3", "Sladíme další krok a success kritéria.", [], [h1]),
+          ],
+          proof_moments: [
+            line("pm1", "Zmapujeme, co je pro vás důkaz úspěchu.", [], [h1]),
+          ],
+          close: [
+            line(
+              "c1",
+              "Domluvíme nejmenší další krok a kdo musí být u toho.",
+              [],
+              [h1],
+            ),
+          ],
         },
         insufficient_evidence: insufficientEvidence,
-        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+        insufficient_evidence_reasons: insufficientEvidence
+          ? ["No approved facts for this contact."]
+          : [],
       }
     : null;
 
@@ -2343,17 +2986,28 @@ const generateAndSavePackInternal = async (params: {
   const normalizeLines = (lines: any[], prefix: string, fallback: any[]) => {
     const fallbackLines = Array.isArray(fallback) ? fallback : [];
     if (!Array.isArray(lines) || lines.length === 0) return fallbackLines;
-    const evidenceIds = new Set((approvedFacts || []).map((f: any) => f?.evidence_id).filter(Boolean));
+    const evidenceIds = new Set(
+      (approvedFacts || []).map((f: any) => f?.evidence_id).filter(Boolean),
+    );
     const hypothesisIds = new Set([h1]);
     return lines
       .map((line: any, idx: number) => {
         const text = sanitizeText(line?.text?.toString() || "");
         if (!text) return fallbackLines[idx] || null;
-        const rawEvidence = Array.isArray(line?.evidence_ids) ? line.evidence_ids : [];
-        const rawHypothesis = Array.isArray(line?.hypothesis_ids) ? line.hypothesis_ids : [];
-        const evidence = rawEvidence.filter((id: string) => evidenceIds.has(id));
-        const hypothesis = rawHypothesis.filter((id: string) => hypothesisIds.has(id));
-        if (evidence.length === 0 && hypothesis.length === 0) hypothesis.push(h1);
+        const rawEvidence = Array.isArray(line?.evidence_ids)
+          ? line.evidence_ids
+          : [];
+        const rawHypothesis = Array.isArray(line?.hypothesis_ids)
+          ? line.hypothesis_ids
+          : [];
+        const evidence = rawEvidence.filter((id: string) =>
+          evidenceIds.has(id),
+        );
+        const hypothesis = rawHypothesis.filter((id: string) =>
+          hypothesisIds.has(id),
+        );
+        if (evidence.length === 0 && hypothesis.length === 0)
+          hypothesis.push(h1);
         return {
           id: line?.id?.toString() || `${prefix}${idx + 1}`,
           text,
@@ -2364,21 +3018,36 @@ const generateAndSavePackInternal = async (params: {
       .filter(Boolean);
   };
 
-  const normalizeObjections = (items: any[], prefix: string, fallback: any[]) => {
+  const normalizeObjections = (
+    items: any[],
+    prefix: string,
+    fallback: any[],
+  ) => {
     const fallbackItems = Array.isArray(fallback) ? fallback : [];
     if (!Array.isArray(items) || items.length === 0) return fallbackItems;
-    const evidenceIds = new Set((approvedFacts || []).map((f: any) => f?.evidence_id).filter(Boolean));
+    const evidenceIds = new Set(
+      (approvedFacts || []).map((f: any) => f?.evidence_id).filter(Boolean),
+    );
     const hypothesisIds = new Set([h1]);
     return items
       .map((item: any, idx: number) => {
         const trigger = sanitizeText(item?.trigger?.toString() || "");
         const response = sanitizeText(item?.response?.toString() || "");
         if (!response) return fallbackItems[idx] || null;
-        const rawEvidence = Array.isArray(item?.evidence_ids) ? item.evidence_ids : [];
-        const rawHypothesis = Array.isArray(item?.hypothesis_ids) ? item.hypothesis_ids : [];
-        const evidence = rawEvidence.filter((id: string) => evidenceIds.has(id));
-        const hypothesis = rawHypothesis.filter((id: string) => hypothesisIds.has(id));
-        if (evidence.length === 0 && hypothesis.length === 0) hypothesis.push(h1);
+        const rawEvidence = Array.isArray(item?.evidence_ids)
+          ? item.evidence_ids
+          : [];
+        const rawHypothesis = Array.isArray(item?.hypothesis_ids)
+          ? item.hypothesis_ids
+          : [];
+        const evidence = rawEvidence.filter((id: string) =>
+          evidenceIds.has(id),
+        );
+        const hypothesis = rawHypothesis.filter((id: string) =>
+          hypothesisIds.has(id),
+        );
+        if (evidence.length === 0 && hypothesis.length === 0)
+          hypothesis.push(h1);
         return {
           id: item?.id?.toString() || `${prefix}${idx + 1}`,
           trigger,
@@ -2396,8 +3065,16 @@ const generateAndSavePackInternal = async (params: {
       act1: normalizeLines(payload.act1, `${prefix}a1-`, fallback?.act1 || []),
       act2: normalizeLines(payload.act2, `${prefix}a2-`, fallback?.act2 || []),
       act3: normalizeLines(payload.act3, `${prefix}a3-`, fallback?.act3 || []),
-      proof_moments: normalizeLines(payload.proof_moments, `${prefix}pm-`, fallback?.proof_moments || []),
-      close: normalizeLines(payload.close, `${prefix}c-`, fallback?.close || []),
+      proof_moments: normalizeLines(
+        payload.proof_moments,
+        `${prefix}pm-`,
+        fallback?.proof_moments || [],
+      ),
+      close: normalizeLines(
+        payload.close,
+        `${prefix}c-`,
+        fallback?.close || [],
+      ),
     };
     return result;
   };
@@ -2405,10 +3082,26 @@ const generateAndSavePackInternal = async (params: {
   const normalizeSpin = (payload: any, prefix: string, fallback: any) => {
     if (!payload) return fallback || null;
     return {
-      situation: normalizeLines(payload.situation, `${prefix}s-`, fallback?.situation || []),
-      problem: normalizeLines(payload.problem, `${prefix}p-`, fallback?.problem || []),
-      implication: normalizeLines(payload.implication, `${prefix}i-`, fallback?.implication || []),
-      need_payoff: normalizeLines(payload.need_payoff, `${prefix}n-`, fallback?.need_payoff || []),
+      situation: normalizeLines(
+        payload.situation,
+        `${prefix}s-`,
+        fallback?.situation || [],
+      ),
+      problem: normalizeLines(
+        payload.problem,
+        `${prefix}p-`,
+        fallback?.problem || [],
+      ),
+      implication: normalizeLines(
+        payload.implication,
+        `${prefix}i-`,
+        fallback?.implication || [],
+      ),
+      need_payoff: normalizeLines(
+        payload.need_payoff,
+        `${prefix}n-`,
+        fallback?.need_payoff || [],
+      ),
     };
   };
 
@@ -2482,31 +3175,73 @@ Return JSON with only the requested pack objects: cold_call_prep_card, meeting_b
 
   const coldCall = include.includes("cold_call_prep_card")
     ? {
-        opener_variants: normalizeLines(aiPack?.cold_call_prep_card?.opener_variants, "op", fallbackColdCall?.opener_variants || []),
-        discovery_questions: normalizeLines(aiPack?.cold_call_prep_card?.discovery_questions, "dq", fallbackColdCall?.discovery_questions || []),
-        objections: normalizeObjections(aiPack?.cold_call_prep_card?.objections, "obj", fallbackColdCall?.objections || []),
+        opener_variants: normalizeLines(
+          aiPack?.cold_call_prep_card?.opener_variants,
+          "op",
+          fallbackColdCall?.opener_variants || [],
+        ),
+        discovery_questions: normalizeLines(
+          aiPack?.cold_call_prep_card?.discovery_questions,
+          "dq",
+          fallbackColdCall?.discovery_questions || [],
+        ),
+        objections: normalizeObjections(
+          aiPack?.cold_call_prep_card?.objections,
+          "obj",
+          fallbackColdCall?.objections || [],
+        ),
         insufficient_evidence: insufficientEvidence,
-        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+        insufficient_evidence_reasons: insufficientEvidence
+          ? ["No approved facts for this contact."]
+          : [],
       }
     : null;
 
   const meetingPack = include.includes("meeting_booking_pack")
     ? {
-        discovery_questions: normalizeLines(aiPack?.meeting_booking_pack?.discovery_questions, "mq", fallbackMeetingPack?.discovery_questions || []),
-        meeting_asks: normalizeLines(aiPack?.meeting_booking_pack?.meeting_asks, "ma", fallbackMeetingPack?.meeting_asks || []),
-        agenda: normalizeLines(aiPack?.meeting_booking_pack?.agenda, "ag", fallbackMeetingPack?.agenda || []),
-        next_step_conditions: normalizeLines(aiPack?.meeting_booking_pack?.next_step_conditions, "ns", fallbackMeetingPack?.next_step_conditions || []),
+        discovery_questions: normalizeLines(
+          aiPack?.meeting_booking_pack?.discovery_questions,
+          "mq",
+          fallbackMeetingPack?.discovery_questions || [],
+        ),
+        meeting_asks: normalizeLines(
+          aiPack?.meeting_booking_pack?.meeting_asks,
+          "ma",
+          fallbackMeetingPack?.meeting_asks || [],
+        ),
+        agenda: normalizeLines(
+          aiPack?.meeting_booking_pack?.agenda,
+          "ag",
+          fallbackMeetingPack?.agenda || [],
+        ),
+        next_step_conditions: normalizeLines(
+          aiPack?.meeting_booking_pack?.next_step_conditions,
+          "ns",
+          fallbackMeetingPack?.next_step_conditions || [],
+        ),
         insufficient_evidence: insufficientEvidence,
-        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+        insufficient_evidence_reasons: insufficientEvidence
+          ? ["No approved facts for this contact."]
+          : [],
       }
     : null;
 
   const spinPack = include.includes("spin_demo_pack")
     ? {
-        spin: normalizeSpin(aiPack?.spin_demo_pack?.spin, "sp", fallbackSpinPack?.spin || null),
-        three_act_demo: normalizeThreeAct(aiPack?.spin_demo_pack?.three_act_demo, "ta", fallbackSpinPack?.three_act_demo || null),
+        spin: normalizeSpin(
+          aiPack?.spin_demo_pack?.spin,
+          "sp",
+          fallbackSpinPack?.spin || null,
+        ),
+        three_act_demo: normalizeThreeAct(
+          aiPack?.spin_demo_pack?.three_act_demo,
+          "ta",
+          fallbackSpinPack?.three_act_demo || null,
+        ),
         insufficient_evidence: insufficientEvidence,
-        insufficient_evidence_reasons: insufficientEvidence ? ["No approved facts for this contact."] : [],
+        insufficient_evidence_reasons: insufficientEvidence
+          ? ["No approved facts for this contact."]
+          : [],
       }
     : null;
 
@@ -2528,8 +3263,17 @@ Return JSON with only the requested pack objects: cold_call_prep_card, meeting_b
   };
 
   const validation = validateGeneratedPack(envelope);
-  const qualityReport = { passes: validation.ok, failed_checks: validation.errors };
-  if (!validation.ok) return { ok: false, status: 500, error: "Pack validation failed", details: qualityReport };
+  const qualityReport = {
+    passes: validation.ok,
+    failed_checks: validation.errors,
+  };
+  if (!validation.ok)
+    return {
+      ok: false,
+      status: 500,
+      error: "Pack validation failed",
+      details: qualityReport,
+    };
 
   const generationRunId = crypto.randomUUID();
   await admin.from("generation_runs").insert({
@@ -2561,10 +3305,17 @@ Return JSON with only the requested pack objects: cold_call_prep_card, meeting_b
       quality_report: qualityReport,
       generation_run_id: generationRunId,
     })
-    .select("id, correlation_id, contact_id, approved_facts, hypotheses, cold_call_prep_card, meeting_booking_pack, spin_demo_pack, quality_report, created_at")
+    .select(
+      "id, correlation_id, contact_id, approved_facts, hypotheses, cold_call_prep_card, meeting_booking_pack, spin_demo_pack, quality_report, created_at",
+    )
     .single();
 
-  if (packError || !savedPack) return { ok: false, status: 500, error: packError?.message || "Failed to save pack" };
+  if (packError || !savedPack)
+    return {
+      ok: false,
+      status: 500,
+      error: packError?.message || "Failed to save pack",
+    };
 
   await auditEvent(admin, userId, correlationId, "generate", "pack_generated", {
     pack_id: savedPack.id,
@@ -2598,7 +3349,13 @@ app.post(`${BASE_PATH}/lead/prepare`, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const rawContactId = body?.contact_id?.toString();
   const language = body?.language?.toString() || "cs";
-  const include = coercePackIncludes(body?.include ?? ["cold_call_prep_card", "meeting_booking_pack", "spin_demo_pack"]);
+  const include = coercePackIncludes(
+    body?.include ?? [
+      "cold_call_prep_card",
+      "meeting_booking_pack",
+      "spin_demo_pack",
+    ],
+  );
   const baseUrl = body?.base_url?.toString() || null;
 
   if (!rawContactId) return c.json({ error: "Missing contact_id" }, 400);
@@ -2606,18 +3363,38 @@ app.post(`${BASE_PATH}/lead/prepare`, async (c) => {
   const resolved = await resolveContactForUser(admin, userId, rawContactId);
   if (!resolved) return c.json({ error: "Contact not found" }, 404);
 
-  const derivedSite = deriveCompanyWebsiteFromEmail(resolved.contact.email || null);
-  const companySite = (baseUrl || resolved.contact.company_website || derivedSite || "").toString().trim();
+  const derivedSite = deriveCompanyWebsiteFromEmail(
+    resolved.contact.email || null,
+  );
+  const companySite = (
+    baseUrl ||
+    resolved.contact.company_website ||
+    derivedSite ||
+    ""
+  )
+    .toString()
+    .trim();
   let ingest: any = null;
-  const extracts: Array<{ document_id: string; ok: boolean; extraction_run_id?: string; error?: string }> = [];
+  const extracts: Array<{
+    document_id: string;
+    ok: boolean;
+    extraction_run_id?: string;
+    error?: string;
+  }> = [];
 
   if (companySite) {
     try {
       const normalized = normalizeBaseUrl(companySite);
-      if (!resolved.contact.company_website || normalizeBaseUrl(resolved.contact.company_website) !== normalized) {
+      if (
+        !resolved.contact.company_website ||
+        normalizeBaseUrl(resolved.contact.company_website) !== normalized
+      ) {
         await admin
           .from("contacts")
-          .update({ company_website: normalized, updated_at: new Date().toISOString() })
+          .update({
+            company_website: normalized,
+            updated_at: new Date().toISOString(),
+          })
           .eq("id", resolved.contactId);
       }
     } catch {
@@ -2642,9 +3419,17 @@ app.post(`${BASE_PATH}/lead/prepare`, async (c) => {
             model: "gpt-4o-mini",
             promptVersion: "extractor_v1",
           });
-          extracts.push({ document_id: doc.document_id, ok: true, extraction_run_id: res.extraction_run_id });
+          extracts.push({
+            document_id: doc.document_id,
+            ok: true,
+            extraction_run_id: res.extraction_run_id,
+          });
         } catch (e) {
-          extracts.push({ document_id: doc.document_id, ok: false, error: e instanceof Error ? e.message : String(e) });
+          extracts.push({
+            document_id: doc.document_id,
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
       }
     } catch (e) {
@@ -2670,7 +3455,10 @@ app.post(`${BASE_PATH}/lead/prepare`, async (c) => {
   });
 
   if (!packRes.ok) {
-    return c.json({ error: packRes.error, details: packRes.details ?? null }, packRes.status);
+    return c.json(
+      { error: packRes.error, details: packRes.details ?? null },
+      packRes.status,
+    );
   }
 
   return c.json({
@@ -2707,7 +3495,11 @@ app.post(`${BASE_PATH}/packs/generate`, async (c) => {
     language,
   });
 
-  if (!res.ok) return c.json({ error: res.error, details: res.details ?? null }, res.status);
+  if (!res.ok)
+    return c.json(
+      { error: res.error, details: res.details ?? null },
+      res.status,
+    );
 
   return c.json({
     correlation_id: res.value.correlation_id,
@@ -2726,7 +3518,9 @@ app.get(`${BASE_PATH}/packs/:packId`, async (c) => {
   const packId = c.req.param("packId");
   const { data, error: packError } = await admin
     .from("sales_packs")
-    .select("id, correlation_id, contact_id, approved_facts, hypotheses, company_dossier, lead_dossier, cold_call_prep_card, meeting_booking_pack, spin_demo_pack, quality_report, created_at")
+    .select(
+      "id, correlation_id, contact_id, approved_facts, hypotheses, company_dossier, lead_dossier, cold_call_prep_card, meeting_booking_pack, spin_demo_pack, quality_report, created_at",
+    )
     .eq("id", packId)
     .eq("owner_user_id", userId)
     .single();
@@ -2746,13 +3540,21 @@ app.post(`${BASE_PATH}/precall/context`, async (c) => {
   const rawContactId = body?.contact_id?.toString();
   const language = body?.language?.toString() || "cs";
   const include = coercePackIncludes(
-    body?.include ?? ["cold_call_prep_card", "meeting_booking_pack", "spin_demo_pack"],
+    body?.include ?? [
+      "cold_call_prep_card",
+      "meeting_booking_pack",
+      "spin_demo_pack",
+    ],
   );
   const ttlHoursRaw = Number(body?.ttl_hours ?? 24);
-  const ttlHours = Number.isFinite(ttlHoursRaw) && ttlHoursRaw >= 0 ? ttlHoursRaw : 24;
+  const ttlHours =
+    Number.isFinite(ttlHoursRaw) && ttlHoursRaw >= 0 ? ttlHoursRaw : 24;
   const timeline = body?.timeline || {};
   const timelineLimits = {
-    activities: Math.max(0, Math.min(50, Number(timeline.activities ?? 15) || 15)),
+    activities: Math.max(
+      0,
+      Math.min(50, Number(timeline.activities ?? 15) || 15),
+    ),
     notes: Math.max(0, Math.min(50, Number(timeline.notes ?? 10) || 10)),
     deals: Math.max(0, Math.min(20, Number(timeline.deals ?? 3) || 3)),
   };
@@ -2762,8 +3564,14 @@ app.post(`${BASE_PATH}/precall/context`, async (c) => {
   const resolved = await resolveContactForUser(admin, userId, rawContactId);
   if (!resolved) return c.json({ error: "Contact not found" }, 404);
 
-  const pd = await resolvePipedrivePersonAndDeal({ admin, userId, rawContactId, resolved });
-  let pdTimeline: { activities: any[]; notes: any[]; deals: any[] } | null = null;
+  const pd = await resolvePipedrivePersonAndDeal({
+    admin,
+    userId,
+    rawContactId,
+    resolved,
+  });
+  let pdTimeline: { activities: any[]; notes: any[]; deals: any[] } | null =
+    null;
   if (pd.configured && pd.apiKey && pd.personId) {
     try {
       pdTimeline = await fetchPipedriveTimeline({
@@ -2776,7 +3584,11 @@ app.post(`${BASE_PATH}/precall/context`, async (c) => {
     }
   }
 
-  let pack: any = await getLatestPackForContact(admin, userId, resolved.contactId);
+  let pack: any = await getLatestPackForContact(
+    admin,
+    userId,
+    resolved.contactId,
+  );
   let generated = false;
 
   if (!pack || isOlderThanHours(parseMaybeDate(pack?.created_at), ttlHours)) {
@@ -2789,17 +3601,28 @@ app.post(`${BASE_PATH}/precall/context`, async (c) => {
       language,
       resolvedContact: resolved,
     });
-    if (!res.ok) return c.json({ error: res.error, details: res.details ?? null }, res.status);
+    if (!res.ok)
+      return c.json(
+        { error: res.error, details: res.details ?? null },
+        res.status,
+      );
     pack = res.value.pack;
     generated = true;
   }
 
-  const leadDossier = (pack?.lead_dossier && typeof pack.lead_dossier === "object") ? pack.lead_dossier : {};
+  const leadDossier =
+    pack?.lead_dossier && typeof pack.lead_dossier === "object"
+      ? pack.lead_dossier
+      : {};
   const existingBrief = (leadDossier as any)?.precall_brief ?? null;
-  const existingBriefDate = parseMaybeDate(existingBrief?.generated_at || existingBrief?.generatedAt || null);
+  const existingBriefDate = parseMaybeDate(
+    existingBrief?.generated_at || existingBrief?.generatedAt || null,
+  );
 
   let precall: any =
-    existingBrief && !generated && !isOlderThanHours(existingBriefDate, ttlHours)
+    existingBrief &&
+    !generated &&
+    !isOlderThanHours(existingBriefDate, ttlHours)
       ? existingBrief
       : null;
 
@@ -2813,14 +3636,23 @@ app.post(`${BASE_PATH}/precall/context`, async (c) => {
         openaiApiKey: await getOpenAiApiKeyForUser(userId),
       });
       if (brief) {
-        const nextLeadDossier = { ...(leadDossier as any), precall_brief: brief };
+        const nextLeadDossier = {
+          ...(leadDossier as any),
+          precall_brief: brief,
+        };
         const { error: updateError } = await admin
           .from("sales_packs")
-          .update({ lead_dossier: nextLeadDossier, updated_at: new Date().toISOString() })
+          .update({
+            lead_dossier: nextLeadDossier,
+            updated_at: new Date().toISOString(),
+          })
           .eq("id", pack.id)
           .eq("owner_user_id", userId);
         if (updateError) {
-          console.error("sales_packs precall update failed (non-blocking):", updateError);
+          console.error(
+            "sales_packs precall update failed (non-blocking):",
+            updateError,
+          );
         }
         pack = { ...pack, lead_dossier: nextLeadDossier };
         precall = brief;
@@ -2881,44 +3713,89 @@ const OBJECTION_DATASET_V1 = {
   domain: "B2B HR-Tech SaaS",
   product: "Echo Pulse",
   global_response_rules: {
-    never_do: ["defend_price", "argue", "overexplain_features", "rush_to_close"],
-    always_do: ["validate_emotion", "reframe_context", "expand_implication", "offer_low_risk_next_step"],
+    never_do: [
+      "defend_price",
+      "argue",
+      "overexplain_features",
+      "rush_to_close",
+    ],
+    always_do: [
+      "validate_emotion",
+      "reframe_context",
+      "expand_implication",
+      "offer_low_risk_next_step",
+    ],
     preferred_outcome: "pilot_or_next_step",
-    primary_value_frame: ["early_signal", "decision_clarity", "risk_reduction", "time_savings_for_leadership"],
+    primary_value_frame: [
+      "early_signal",
+      "decision_clarity",
+      "risk_reduction",
+      "time_savings_for_leadership",
+    ],
   },
   objection_space: [
     {
       id: "FIN_01",
       category: "financial",
       core_fear: "poor_roi",
-      surface_objections: ["je to drahé", "nemáme na to rozpočet", "nevidím návratnost", "musím to obhájit vedení"],
-      detection_signals: ["řeší cenu dřív než problém", "ptá se na slevy", "odkládá rozhodnutí kvůli rozpočtu"],
+      surface_objections: [
+        "je to drahé",
+        "nemáme na to rozpočet",
+        "nevidím návratnost",
+        "musím to obhájit vedení",
+      ],
+      detection_signals: [
+        "řeší cenu dřív než problém",
+        "ptá se na slevy",
+        "odkládá rozhodnutí kvůli rozpočtu",
+      ],
       validated_response: "Rozumím, dává smysl se dívat na návratnost.",
-      implication_question: "Když dnes odejde dobrý člověk a vy to zjistíte pozdě, kolik vás to stojí?",
-      reframe: "Nechci obhajovat cenu. Chci jen zjistit, jestli vám chybí včasný signál rizika.",
-      need_payoff: "Pokud byste měl včasný signál, můžete reagovat dřív, než je rozhodnutí drahé.",
+      implication_question:
+        "Když dnes odejde dobrý člověk a vy to zjistíte pozdě, kolik vás to stojí?",
+      reframe:
+        "Nechci obhajovat cenu. Chci jen zjistit, jestli vám chybí včasný signál rizika.",
+      need_payoff:
+        "Pokud byste měl včasný signál, můžete reagovat dřív, než je rozhodnutí drahé.",
       next_step: "pilot_small_team",
     },
     {
       id: "DATA_01",
       category: "data_privacy",
       core_fear: "loss_of_trust",
-      surface_objections: ["bojíme se GDPR", "lidi se neotevřou", "půjde poznat, kdo co řekl"],
-      detection_signals: ["opakované otázky na anonymitu", "zapojení IT / právníka", "opatrný tón"],
+      surface_objections: [
+        "bojíme se GDPR",
+        "lidi se neotevřou",
+        "půjde poznat, kdo co řekl",
+      ],
+      detection_signals: [
+        "opakované otázky na anonymitu",
+        "zapojení IT / právníka",
+        "opatrný tón",
+      ],
       validated_response: "Tohle je naprosto legitimní obava.",
-      implication_question: "Jakou pravdu dnes dostáváte od lidí, když nemají bezpečný kanál?",
+      implication_question:
+        "Jakou pravdu dnes dostáváte od lidí, když nemají bezpečný kanál?",
       reframe: "Bez důvěry a bezpečí dostanete jen oficiální verzi reality.",
-      need_payoff: "Cíl je bezpečný signál na úrovni týmu, ne individuální výpovědi.",
+      need_payoff:
+        "Cíl je bezpečný signál na úrovni týmu, ne individuální výpovědi.",
       next_step: "explain_aggregation_logic",
     },
     {
       id: "SQ_01",
       category: "status_quo",
       core_fear: "change_risk",
-      surface_objections: ["už máme průzkumy", "komunikace funguje", "už to nějak řešíme"],
-      detection_signals: ["obhajoba současného stavu", "srovnávání s jiným nástrojem"],
+      surface_objections: [
+        "už máme průzkumy",
+        "komunikace funguje",
+        "už to nějak řešíme",
+      ],
+      detection_signals: [
+        "obhajoba současného stavu",
+        "srovnávání s jiným nástrojem",
+      ],
       validated_response: "To je dobře, že se tomu věnujete.",
-      implication_question: "Jak rychle se dnes dozvíte, že se v jednom týmu něco láme?",
+      implication_question:
+        "Jak rychle se dnes dozvíte, že se v jednom týmu něco láme?",
       reframe: "Nejde o nahrazení. Jde o frekvenci a včasnost signálu.",
       need_payoff: "Když víte dřív, máte víc možností jak reagovat.",
       next_step: "contrast_annual_vs_pulse",
@@ -2927,20 +3804,38 @@ const OBJECTION_DATASET_V1 = {
       id: "EMO_01",
       category: "emotional_fear",
       core_fear: "loss_of_control",
-      surface_objections: ["otevře to moc problémů", "nechci Pandořinu skříňku", "nebudeme to stíhat řešit"],
-      detection_signals: ["nejistota v hlase", "téma kapacity", "uhýbání od rozhodnutí"],
+      surface_objections: [
+        "otevře to moc problémů",
+        "nechci Pandořinu skříňku",
+        "nebudeme to stíhat řešit",
+      ],
+      detection_signals: [
+        "nejistota v hlase",
+        "téma kapacity",
+        "uhýbání od rozhodnutí",
+      ],
       validated_response: "Tohle slyším často a je to pochopitelné.",
-      implication_question: "Co se stane, když se o těch věcech dozvíte až ve chvíli, kdy je pozdě?",
-      reframe: "Ty problémy často už existují; rozdíl je, jestli o nich víte včas a v jakém rozsahu.",
-      need_payoff: "Bezpečný rozsah a prioritizace je důležitější než otevřít všechno najednou.",
+      implication_question:
+        "Co se stane, když se o těch věcech dozvíte až ve chvíli, kdy je pozdě?",
+      reframe:
+        "Ty problémy často už existují; rozdíl je, jestli o nich víte včas a v jakém rozsahu.",
+      need_payoff:
+        "Bezpečný rozsah a prioritizace je důležitější než otevřít všechno najednou.",
       next_step: "define_safe_scope",
     },
     {
       id: "AUTH_01",
       category: "authority",
       core_fear: "internal_conflict",
-      surface_objections: ["manažeři to nevezmou", "ukáže to slabiny vedení", "nebude to citlivé téma?"],
-      detection_signals: ["řešení reakce manažerů", "opatrnost kolem leadershipu"],
+      surface_objections: [
+        "manažeři to nevezmou",
+        "ukáže to slabiny vedení",
+        "nebude to citlivé téma?",
+      ],
+      detection_signals: [
+        "řešení reakce manažerů",
+        "opatrnost kolem leadershipu",
+      ],
       validated_response: "Tohle je citlivé téma v každé firmě.",
       implication_question: "Jak se dnes tyhle věci řeší bez dat?",
       reframe: "Data pomáhají odosobnit diskusi a snížit politiku.",
@@ -2951,10 +3846,15 @@ const OBJECTION_DATASET_V1 = {
       id: "TIME_01",
       category: "timing",
       core_fear: "decision_avoidance",
-      surface_objections: ["teď se to nehodí", "ozveme se později", "není na to čas"],
+      surface_objections: [
+        "teď se to nehodí",
+        "ozveme se později",
+        "není na to čas",
+      ],
       detection_signals: ["odkládání bez jasného důvodu", "vágní odpovědi"],
       validated_response: "Chápu, že teď řešíte spoustu věcí.",
-      implication_question: "Co by se muselo stát, abyste si za tři měsíce řekl, že jste to měli řešit dřív?",
+      implication_question:
+        "Co by se muselo stát, abyste si za tři měsíce řekl, že jste to měli řešit dřív?",
       reframe: "Právě při změnách se signály nejčastěji ztrácí.",
       need_payoff: "Časově omezený pilot nevyžaduje velké rozhodnutí.",
       next_step: "time_boxed_pilot",
@@ -3019,7 +3919,9 @@ app.post(`${BASE_PATH}/whisper/objection`, async (c) => {
   // Approved internal product facts can be used, but only if they exist and are referenced via evidence_ids.
   const { data: internalFacts } = await admin
     .from("v_approved_facts")
-    .select("evidence_id, claim, source_url, evidence_snippet, captured_at, confidence")
+    .select(
+      "evidence_id, claim, source_url, evidence_snippet, captured_at, confidence",
+    )
     .eq("owner_user_id", userId)
     .is("contact_id", null)
     .like("source_url", "internal://%");
@@ -3035,7 +3937,11 @@ app.post(`${BASE_PATH}/whisper/objection`, async (c) => {
   const insufficientEvidence = productEvidenceIds.length === 0;
   const hypotheses: any[] = [];
 
-  const mkHyp = (hypothesis: string, howToVerify: string, basedOn: string[] = []) => {
+  const mkHyp = (
+    hypothesis: string,
+    howToVerify: string,
+    basedOn: string[] = [],
+  ) => {
     const id = crypto.randomUUID();
     hypotheses.push({
       hypothesis_id: id,
@@ -3061,7 +3967,12 @@ app.post(`${BASE_PATH}/whisper/objection`, async (c) => {
       )
     : null;
 
-  const line = (id: string, text: string, evidenceIds: string[] = [], hypothesisIds: string[] = []) => ({
+  const line = (
+    id: string,
+    text: string,
+    evidenceIds: string[] = [],
+    hypothesisIds: string[] = [],
+  ) => ({
     id,
     text,
     evidence_ids: evidenceIds,
@@ -3070,8 +3981,18 @@ app.post(`${BASE_PATH}/whisper/objection`, async (c) => {
 
   const whisper = {
     validate: line("validate", play.validated_response, [], [hValidate]),
-    reframe: line("reframe", play.reframe, [], [hValidate, ...(hProduct ? [hProduct] : [])]),
-    implication_question: line("implication_q", play.implication_question, [], [hValidate]),
+    reframe: line(
+      "reframe",
+      play.reframe,
+      [],
+      [hValidate, ...(hProduct ? [hProduct] : [])],
+    ),
+    implication_question: line(
+      "implication_q",
+      play.implication_question,
+      [],
+      [hValidate],
+    ),
     next_step: line(
       "next_step",
       play.next_step === "pilot_small_team"
@@ -3104,19 +4025,32 @@ app.post(`${BASE_PATH}/whisper/objection`, async (c) => {
   };
 
   // Gate: every whisper line must have hypothesis_ids or evidence_ids
-  const requiredLines = [whisper.validate, whisper.reframe, whisper.implication_question, whisper.next_step];
+  const requiredLines = [
+    whisper.validate,
+    whisper.reframe,
+    whisper.implication_question,
+    whisper.next_step,
+  ];
   for (const l of requiredLines) {
     const eids = Array.isArray(l.evidence_ids) ? l.evidence_ids : [];
     const hids = Array.isArray(l.hypothesis_ids) ? l.hypothesis_ids : [];
-    if (eids.length === 0 && hids.length === 0) return c.json({ error: "Whisper validation failed" }, 500);
+    if (eids.length === 0 && hids.length === 0)
+      return c.json({ error: "Whisper validation failed" }, 500);
   }
 
-  await auditEvent(admin, userId, correlationId, "generate", "whisper_generated", {
-    contact_id: contactId,
-    objection_id: play.id,
-    confidence,
-    product_evidence_available: !insufficientEvidence,
-  });
+  await auditEvent(
+    admin,
+    userId,
+    correlationId,
+    "generate",
+    "whisper_generated",
+    {
+      contact_id: contactId,
+      objection_id: play.id,
+      confidence,
+      product_evidence_available: !insufficientEvidence,
+    },
+  );
 
   return c.json(envelope);
 });
@@ -3128,7 +4062,7 @@ type Contact = {
   company: string;
   phone: string;
   email?: string;
-  status: 'pending' | 'called';
+  status: "pending" | "called";
 };
 
 type Campaign = {
@@ -3169,8 +4103,9 @@ app.get(`${BASE_PATH}/knowledge`, async (c) => {
 app.post(`${BASE_PATH}/knowledge`, async (c) => {
   const userId = getUserId(c);
   const { title, content } = await c.req.json();
-  if (!title || !content) return c.json({ error: "Missing title/content" }, 400);
-  
+  if (!title || !content)
+    return c.json({ error: "Missing title/content" }, 400);
+
   const id = crypto.randomUUID();
   await kv.set(userKey(userId, `knowledge:${id}`), { id, title, content });
   return c.json({ id, title, content });
@@ -3190,7 +4125,7 @@ app.get(`${BASE_PATH}/analytics`, async (c) => {
     const calls = await kv.getByPrefix(userPrefix(userId, "call:"));
     return c.json({
       totalCalls: calls.length,
-      calls
+      calls,
     });
   } catch (e) {
     console.error("Analytics fetch failed:", e);
@@ -3200,14 +4135,18 @@ app.get(`${BASE_PATH}/analytics`, async (c) => {
 
 app.post(`${BASE_PATH}/pipedrive/import`, async (c) => {
   const userId = getUserId(c);
-  const apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+  const apiKey =
+    (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
   if (!apiKey) return c.json({ error: "No Pipedrive API key" }, 401);
 
   const admin = getAdminClient();
-  if (!admin) return c.json({ error: "Supabase service role not configured" }, 500);
+  if (!admin)
+    return c.json({ error: "Supabase service role not configured" }, 500);
 
   try {
-    const res = await fetch(`https://api.pipedrive.com/v1/leads?limit=200&api_token=${apiKey}`);
+    const res = await fetch(
+      `https://api.pipedrive.com/v1/leads?limit=200&api_token=${apiKey}`,
+    );
     if (!res.ok) return c.json({ error: "Pipedrive API error" }, res.status);
     const data = await res.json();
     const leads = (data.data || []).map((lead: any) => ({
@@ -3243,7 +4182,8 @@ app.post(`${BASE_PATH}/pipedrive/import`, async (c) => {
 app.post(`${BASE_PATH}/pipedrive/activity`, async (c) => {
   try {
     const userId = getUserId(c);
-    const apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+    const apiKey =
+      (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
     if (!apiKey) return c.json({ error: "No API Key" }, 500);
 
     const { subject, type, note, person_id, duration } = await c.req.json();
@@ -3254,66 +4194,87 @@ app.post(`${BASE_PATH}/pipedrive/activity`, async (c) => {
     let org_id = null; // We can also fetch org_id to be safe, though Pipedrive often infers it.
 
     if (person_id) {
-        try {
-             console.log(`🔍 Hunting for Open Deals for Person ${person_id}...`);
-             const dealRes = await fetch(`https://api.pipedrive.com/v1/persons/${person_id}/deals?status=open&limit=1&api_token=${apiKey}`, {
-                 headers: { 'Accept': 'application/json' }
-             });
-             const dealData = await dealRes.json();
-             
-             if (dealData.data && dealData.data.length > 0) {
-                 deal_id = dealData.data[0].id;
-                 console.log(`🔗 SUCCESS: Linking Activity to Deal #${deal_id} ("${dealData.data[0].title}")`);
-                 
-                 // Capture Org ID if available from deal to ensure consistency
-                 if (dealData.data[0].org_id) {
-                     org_id = dealData.data[0].org_id.value;
-                 }
-             } else {
-                 console.log("ℹ️ No Open Deal found. Activity will be logged to Person only.");
-             }
-        } catch (err) {
-             console.error("⚠️ Deal Linking Failed (Non-blocking):", err);
+      try {
+        console.log(`🔍 Hunting for Open Deals for Person ${person_id}...`);
+        const dealRes = await fetch(
+          `https://api.pipedrive.com/v1/persons/${person_id}/deals?status=open&limit=1&api_token=${apiKey}`,
+          {
+            headers: { Accept: "application/json" },
+          },
+        );
+        const dealData = await dealRes.json();
+
+        if (dealData.data && dealData.data.length > 0) {
+          deal_id = dealData.data[0].id;
+          console.log(
+            `🔗 SUCCESS: Linking Activity to Deal #${deal_id} ("${dealData.data[0].title}")`,
+          );
+
+          // Capture Org ID if available from deal to ensure consistency
+          if (dealData.data[0].org_id) {
+            org_id = dealData.data[0].org_id.value;
+          }
+        } else {
+          console.log(
+            "ℹ️ No Open Deal found. Activity will be logged to Person only.",
+          );
         }
+      } catch (err) {
+        console.error("⚠️ Deal Linking Failed (Non-blocking):", err);
+      }
     }
 
     // --- 2. HTML FORMATTING (Beautifier) ---
     // Convert plain text newlines to HTML breaks and bold key sections for readability
     let htmlNote = note || "";
     if (!htmlNote.includes("<br>")) {
-        htmlNote = htmlNote
-            // Escape HTML chars if needed (basic)
-            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-            // Convert newlines
-            .replace(/\n/g, '<br>')
-            // Bold standard AI headers
-            .replace(/(Result:|AI Summary:|Score:|Strengths:|Transcript:)/g, '<b>$1</b>');
+      htmlNote = htmlNote
+        // Escape HTML chars if needed (basic)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        // Convert newlines
+        .replace(/\n/g, "<br>")
+        // Bold standard AI headers
+        .replace(
+          /(Result:|AI Summary:|Score:|Strengths:|Transcript:)/g,
+          "<b>$1</b>",
+        );
     }
 
     const activityBody: any = {
-        subject: subject,
-        type: type || 'call',
-        person_id: Number(person_id),
-        done: 1, // Completed
-        duration: duration || 0,
-        note: htmlNote
+      subject: subject,
+      type: type || "call",
+      person_id: Number(person_id),
+      done: 1, // Completed
+      duration: duration || 0,
+      note: htmlNote,
     };
 
     if (deal_id) activityBody.deal_id = deal_id;
     if (org_id) activityBody.org_id = org_id;
 
-    console.log("📤 Syncing Verified Activity to Pipedrive:", JSON.stringify(activityBody));
+    console.log(
+      "📤 Syncing Verified Activity to Pipedrive:",
+      JSON.stringify(activityBody),
+    );
 
-    const pdRes = await fetch(`https://api.pipedrive.com/v1/activities?api_token=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(activityBody)
-    });
+    const pdRes = await fetch(
+      `https://api.pipedrive.com/v1/activities?api_token=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(activityBody),
+      },
+    );
 
     if (!pdRes.ok) {
-        const err = await pdRes.text();
-        console.error("❌ Pipedrive Sync Error", err);
-        return c.json({ error: "Failed to sync to Pipedrive", details: err }, 500);
+      const err = await pdRes.text();
+      console.error("❌ Pipedrive Sync Error", err);
+      return c.json(
+        { error: "Failed to sync to Pipedrive", details: err },
+        500,
+      );
     }
 
     return c.json({ success: true, data: await pdRes.json() });
@@ -3346,7 +4307,7 @@ app.post(`${BASE_PATH}/ai/sector-battle-card`, async (c) => {
     7. HR / Recruitment (Pain: talent shortage, onboarding)
 
     INSTRUKCE:
-    1. Podle názvu firmy "${companyName}" a oboru "${industry || 'neznámý'}" urči jeden z výše uvedených SEKTORŮ.
+    1. Podle názvu firmy "${companyName}" a oboru "${industry || "neznámý"}" urči jeden z výše uvedených SEKTORŮ.
     2. Vytvoř 3 "Killer Objections Handlers" specifické pro tento sektor.
        - NEPOUŽÍVEJ obecné fráze ("Chápu vás").
        - POUŽIJ "Industry Jargon" (např. pro SaaS zmiň "API", pro Výrobu zmiň "OEE" nebo "směnný provoz").
@@ -3369,7 +4330,10 @@ app.post(`${BASE_PATH}/ai/sector-battle-card`, async (c) => {
     const completion = await openai.chat.completions.create({
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Analýza pro firmu: ${companyName}, Pozice osoby: ${personTitle || "Rozhodovatel"}` },
+        {
+          role: "user",
+          content: `Analýza pro firmu: ${companyName}, Pozice osoby: ${personTitle || "Rozhodovatel"}`,
+        },
       ],
       model: "gpt-4o",
       response_format: { type: "json_object" },
@@ -3389,7 +4353,8 @@ app.post(`${BASE_PATH}/ai/sector-battle-card`, async (c) => {
 app.post(`${BASE_PATH}/ai/brief`, async (c) => {
   const userId = getUserId(c);
   const { domain, personName, role, notes } = await c.req.json();
-  if (!domain || !personName) return c.json({ error: "domain and personName required" }, 400);
+  if (!domain || !personName)
+    return c.json({ error: "domain and personName required" }, 400);
 
   // Cache key
   const cacheKey = `brief:${await sha256Hex(`${userId}:${domain}:${personName}:${role || ""}`.toLowerCase())}`;
@@ -3398,7 +4363,9 @@ app.post(`${BASE_PATH}/ai/brief`, async (c) => {
     try {
       const parsed = JSON.parse(cached);
       return c.json({ ...parsed, cached: true });
-    } catch { /* stale cache, regenerate */ }
+    } catch {
+      /* stale cache, regenerate */
+    }
   }
 
   const apiKey = (Deno.env.get("OPENAI_API_KEY") || "").trim();
@@ -3418,10 +4385,26 @@ RULES:
     role: role || "Unknown",
     notes: notes || "",
     schema: {
-      company: { name: "string", industry: "string (in Czech)", size: "string?", website: "string?", summary: "string (2-3 sentences, natural Czech)", recentNews: "string? (1 sentence if found)" },
-      person: { name: "string (full name as given)", role: "string (in Czech)", linkedin: "string?", background: "string? (1-2 sentences, natural Czech)", decisionPower: "'decision-maker' | 'influencer' | 'champion' | 'unknown'" },
-      signals: "[{ type: 'opportunity'|'risk'|'neutral', text: 'string (concise, Czech, max 15 words)' }] (2-4 items)",
-      landmines: "string[] (1-3 things to avoid — short, practical Czech phrases)",
+      company: {
+        name: "string",
+        industry: "string (in Czech)",
+        size: "string?",
+        website: "string?",
+        summary: "string (2-3 sentences, natural Czech)",
+        recentNews: "string? (1 sentence if found)",
+      },
+      person: {
+        name: "string (full name as given)",
+        role: "string (in Czech)",
+        linkedin: "string?",
+        background: "string? (1-2 sentences, natural Czech)",
+        decisionPower:
+          "'decision-maker' | 'influencer' | 'champion' | 'unknown'",
+      },
+      signals:
+        "[{ type: 'opportunity'|'risk'|'neutral', text: 'string (concise, Czech, max 15 words)' }] (2-4 items)",
+      landmines:
+        "string[] (1-3 things to avoid — short, practical Czech phrases)",
       sources: "string[] (where you inferred info from)",
     },
   };
@@ -3438,11 +4421,23 @@ RULES:
     const raw = completion.choices?.[0]?.message?.content || "{}";
     const parsed = JSON.parse(raw);
     const result = {
-      company: parsed.company || { name: domain, industry: "Unknown", summary: "" },
-      person: parsed.person || { name: personName, role: role || "Unknown", decisionPower: "unknown" },
+      company: parsed.company || {
+        name: domain,
+        industry: "Unknown",
+        summary: "",
+      },
+      person: parsed.person || {
+        name: personName,
+        role: role || "Unknown",
+        decisionPower: "unknown",
+      },
       signals: Array.isArray(parsed.signals) ? parsed.signals.slice(0, 6) : [],
-      landmines: Array.isArray(parsed.landmines) ? parsed.landmines.map(String).slice(0, 4) : [],
-      sources: Array.isArray(parsed.sources) ? parsed.sources.map(String).slice(0, 5) : [],
+      landmines: Array.isArray(parsed.landmines)
+        ? parsed.landmines.map(String).slice(0, 4)
+        : [],
+      sources: Array.isArray(parsed.sources)
+        ? parsed.sources.map(String).slice(0, 5)
+        : [],
       generatedAt: new Date().toISOString(),
       cached: false,
     };
@@ -3466,7 +4461,9 @@ app.post(`${BASE_PATH}/ai/call-script`, async (c) => {
   if (cached) {
     try {
       return c.json({ ...JSON.parse(cached), cached: true });
-    } catch { /* regenerate */ }
+    } catch {
+      /* regenerate */
+    }
   }
 
   const apiKey = (Deno.env.get("OPENAI_API_KEY") || "").trim();
@@ -3486,12 +4483,16 @@ RULES:
     task: "Create a personalized call script to qualify the lead and book a demo.",
     brief,
     goal: goal || "Book a 20-minute Echo Pulse demo",
-    style: "Natural spoken Czech, formal but warm. Like a real human calling, not a robot. Short sentences.",
+    style:
+      "Natural spoken Czech, formal but warm. Like a real human calling, not a robot. Short sentences.",
     schema: {
-      openingVariants: "[{ id: 'o1', text: 'string (address by pane/paní + příjmení in vokativu)' }] (2-3 variants)",
+      openingVariants:
+        "[{ id: 'o1', text: 'string (address by pane/paní + příjmení in vokativu)' }] (2-3 variants)",
       valueProps: "[{ persona: 'string', points: ['string'] }] (2-3 personas)",
-      qualification: "[{ question: 'string (natural spoken question)', why: 'string (internal note for salesperson — not to be read aloud)' }] (3-4 items)",
-      objections: "[{ objection: 'string (what prospect says)', response: 'string (natural comeback, address by příjmení)' }] (4-6 items)",
+      qualification:
+        "[{ question: 'string (natural spoken question)', why: 'string (internal note for salesperson — not to be read aloud)' }] (3-4 items)",
+      objections:
+        "[{ objection: 'string (what prospect says)', response: 'string (natural comeback, address by příjmení)' }] (4-6 items)",
       closeVariants: "[{ id: 'c1', text: 'string' }] (2-3 variants)",
       nextSteps: "string[] (2-3 items)",
     },
@@ -3509,12 +4510,24 @@ RULES:
     const raw = completion.choices?.[0]?.message?.content || "{}";
     const parsed = JSON.parse(raw);
     const result = {
-      openingVariants: Array.isArray(parsed.openingVariants) ? parsed.openingVariants.slice(0, 4) : [],
-      valueProps: Array.isArray(parsed.valueProps) ? parsed.valueProps.slice(0, 4) : [],
-      qualification: Array.isArray(parsed.qualification) ? parsed.qualification.slice(0, 6) : [],
-      objections: Array.isArray(parsed.objections) ? parsed.objections.slice(0, 8) : [],
-      closeVariants: Array.isArray(parsed.closeVariants) ? parsed.closeVariants.slice(0, 4) : [],
-      nextSteps: Array.isArray(parsed.nextSteps) ? parsed.nextSteps.map(String).slice(0, 4) : [],
+      openingVariants: Array.isArray(parsed.openingVariants)
+        ? parsed.openingVariants.slice(0, 4)
+        : [],
+      valueProps: Array.isArray(parsed.valueProps)
+        ? parsed.valueProps.slice(0, 4)
+        : [],
+      qualification: Array.isArray(parsed.qualification)
+        ? parsed.qualification.slice(0, 6)
+        : [],
+      objections: Array.isArray(parsed.objections)
+        ? parsed.objections.slice(0, 8)
+        : [],
+      closeVariants: Array.isArray(parsed.closeVariants)
+        ? parsed.closeVariants.slice(0, 4)
+        : [],
+      nextSteps: Array.isArray(parsed.nextSteps)
+        ? parsed.nextSteps.map(String).slice(0, 4)
+        : [],
       generatedAt: new Date().toISOString(),
       cached: false,
     };
@@ -3542,11 +4555,18 @@ app.post(`${BASE_PATH}/ai/live-coach`, async (c) => {
   const prompt = {
     task: "Provide coaching tips based on the conversation so far.",
     recentConversation: captionsChunk.slice(0, 2000),
-    context: brief ? { company: brief.company?.name, person: brief.person?.name, role: brief.person?.role } : null,
+    context: brief
+      ? {
+          company: brief.company?.name,
+          person: brief.person?.name,
+          role: brief.person?.role,
+        }
+      : null,
     currentSpinStage: currentSpinStage || "S",
     schema: {
       tips: "[{ id: 't1', text: 'string (max 80 chars, Czech)', priority: 'high'|'medium'|'low' }] (1-3 items)",
-      nextSpinQuestion: "{ phase: 'S'|'P'|'I'|'N', question: 'string (Czech)' } (optional, one question)",
+      nextSpinQuestion:
+        "{ phase: 'S'|'P'|'I'|'N', question: 'string (Czech)' } (optional, one question)",
     },
   };
 
@@ -3574,55 +4594,63 @@ app.post(`${BASE_PATH}/ai/live-coach`, async (c) => {
 // 2. Auto-Enrich Organization Data (Smart)
 app.patch(`${BASE_PATH}/pipedrive/enrich-org/:id`, async (c) => {
   try {
-     const userId = getUserId(c);
-     const apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
-     const orgId = c.req.param('id');
-     const body = await c.req.json();
-     
-     // Accept both old "extracted_crm_data" and new "smart_enrichment" formats
-     const data = body.smart_enrichment || body;
+    const userId = getUserId(c);
+    const apiKey =
+      (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+    const orgId = c.req.param("id");
+    const body = await c.req.json();
 
-     if (!apiKey || !orgId) return c.json({ error: "Missing params" }, 400);
+    // Accept both old "extracted_crm_data" and new "smart_enrichment" formats
+    const data = body.smart_enrichment || body;
 
-     // 1. Update Standard Fields (Address)
-     const updateData: any = {};
-     if (data.address_city) updateData.address = data.address_city; // New format
-     if (data.address) updateData.address = data.address; // Old format
-     
-     if (Object.keys(updateData).length > 0) {
-         console.log(`✨ Enriching Org ${orgId} Address:`, updateData);
-         await fetch(`https://api.pipedrive.com/v1/organizations/${orgId}?api_token=${apiKey}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updateData)
-         });
-     }
+    if (!apiKey || !orgId) return c.json({ error: "Missing params" }, 400);
 
-     // 2. Add "Digital Footprint" Note (Website, LinkedIn, Industry)
-     // This is safer than guessing Custom Field IDs
-     let noteContent = "🕵️ <b>AI Sales Detective Enrichment:</b><br>";
-     if (data.verified_company_name) noteContent += `• Legal Name: ${data.verified_company_name}<br>`;
-     if (data.industry_vertical) noteContent += `• Industry: ${data.industry_vertical}<br>`;
-     if (data.website) noteContent += `• Web: <a href="${data.website}">${data.website}</a><br>`;
-     if (data.linkedin_search_url) noteContent += `• LinkedIn Search: <a href="${data.linkedin_search_url}">Verify Person</a><br>`;
-     
-     if (noteContent.length > 50) { // Only add if we have content
-         console.log(`📝 Adding Enrichment Note to Org ${orgId}`);
-         await fetch(`https://api.pipedrive.com/v1/notes?api_token=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                org_id: orgId,
-                content: noteContent
-            })
-         });
-     }
-     
-     return c.json({ success: true });
+    // 1. Update Standard Fields (Address)
+    const updateData: any = {};
+    if (data.address_city) updateData.address = data.address_city; // New format
+    if (data.address) updateData.address = data.address; // Old format
 
+    if (Object.keys(updateData).length > 0) {
+      console.log(`✨ Enriching Org ${orgId} Address:`, updateData);
+      await fetch(
+        `https://api.pipedrive.com/v1/organizations/${orgId}?api_token=${apiKey}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updateData),
+        },
+      );
+    }
+
+    // 2. Add "Digital Footprint" Note (Website, LinkedIn, Industry)
+    // This is safer than guessing Custom Field IDs
+    let noteContent = "🕵️ <b>AI Sales Detective Enrichment:</b><br>";
+    if (data.verified_company_name)
+      noteContent += `• Legal Name: ${data.verified_company_name}<br>`;
+    if (data.industry_vertical)
+      noteContent += `• Industry: ${data.industry_vertical}<br>`;
+    if (data.website)
+      noteContent += `• Web: <a href="${data.website}">${data.website}</a><br>`;
+    if (data.linkedin_search_url)
+      noteContent += `• LinkedIn Search: <a href="${data.linkedin_search_url}">Verify Person</a><br>`;
+
+    if (noteContent.length > 50) {
+      // Only add if we have content
+      console.log(`📝 Adding Enrichment Note to Org ${orgId}`);
+      await fetch(`https://api.pipedrive.com/v1/notes?api_token=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          org_id: orgId,
+          content: noteContent,
+        }),
+      });
+    }
+
+    return c.json({ success: true });
   } catch (e) {
-      console.error("Enrichment Error", e);
-      return c.json({ error: "Enrichment failed" }, 500);
+    console.error("Enrichment Error", e);
+    return c.json({ error: "Enrichment failed" }, 500);
   }
 });
 
@@ -3632,7 +4660,8 @@ app.patch(`${BASE_PATH}/pipedrive/enrich-org/:id`, async (c) => {
 app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
   try {
     const userId = getUserId(c);
-    let apiToken = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+    let apiToken =
+      (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
     if (!apiToken) return c.json({ error: "No API Key" }, 500);
     apiToken = apiToken.trim();
 
@@ -3643,19 +4672,23 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
     try {
       const meRes = await fetch(
         `https://api.pipedrive.com/v1/users/me?api_token=${apiToken}`,
-        { headers: { 'Accept': 'application/json' } }
+        { headers: { Accept: "application/json" } },
       );
       if (meRes.ok) {
         const meData = await meRes.json();
         pipedriveUserId = meData?.data?.id ?? null;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // 2. Fetch leads from inbox (non-archived), filtered by owner
     let leadsUrl = `https://api.pipedrive.com/v1/leads?limit=${maxLeads}&api_token=${apiToken}`;
     if (pipedriveUserId) leadsUrl += `&owner_id=${pipedriveUserId}`;
 
-    const leadsRes = await fetch(leadsUrl, { headers: { 'Accept': 'application/json' } });
+    const leadsRes = await fetch(leadsUrl, {
+      headers: { Accept: "application/json" },
+    });
     if (!leadsRes.ok) return c.json({ error: "Pipedrive Leads Error" }, 500);
     const leadsData = await leadsRes.json();
     const leads: any[] = leadsData?.data || [];
@@ -3663,22 +4696,30 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
     if (leads.length === 0) return c.json([]);
 
     // 3. Collect unique person IDs and org IDs from the leads
-    const personIds = [...new Set(leads.map((l: any) => l.person_id).filter(Boolean))] as number[];
-    const orgIds = [...new Set(leads.map((l: any) => l.organization_id).filter(Boolean))] as number[];
+    const personIds = [
+      ...new Set(leads.map((l: any) => l.person_id).filter(Boolean)),
+    ] as number[];
+    const orgIds = [
+      ...new Set(leads.map((l: any) => l.organization_id).filter(Boolean)),
+    ] as number[];
 
     // 4. Batch-fetch persons (up to 100 in parallel chunks of 25)
     const personMap: Record<number, any> = {};
     const chunks = [];
-    for (let i = 0; i < personIds.length; i += 25) chunks.push(personIds.slice(i, i + 25));
+    for (let i = 0; i < personIds.length; i += 25)
+      chunks.push(personIds.slice(i, i + 25));
     for (const chunk of chunks) {
       const results = await Promise.all(
         chunk.map((pid: number) =>
-          fetch(`https://api.pipedrive.com/v1/persons/${pid}?api_token=${apiToken}`, {
-            headers: { 'Accept': 'application/json' },
-          })
+          fetch(
+            `https://api.pipedrive.com/v1/persons/${pid}?api_token=${apiToken}`,
+            {
+              headers: { Accept: "application/json" },
+            },
+          )
             .then((r) => (r.ok ? r.json() : null))
-            .catch(() => null)
-        )
+            .catch(() => null),
+        ),
       );
       for (const r of results) {
         if (r?.data?.id) personMap[r.data.id] = r.data;
@@ -3688,16 +4729,20 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
     // 5. Batch-fetch organisations
     const orgMap: Record<number, any> = {};
     const orgChunks = [];
-    for (let i = 0; i < orgIds.length; i += 25) orgChunks.push(orgIds.slice(i, i + 25));
+    for (let i = 0; i < orgIds.length; i += 25)
+      orgChunks.push(orgIds.slice(i, i + 25));
     for (const chunk of orgChunks) {
       const results = await Promise.all(
         chunk.map((oid: number) =>
-          fetch(`https://api.pipedrive.com/v1/organizations/${oid}?api_token=${apiToken}`, {
-            headers: { 'Accept': 'application/json' },
-          })
+          fetch(
+            `https://api.pipedrive.com/v1/organizations/${oid}?api_token=${apiToken}`,
+            {
+              headers: { Accept: "application/json" },
+            },
+          )
             .then((r) => (r.ok ? r.json() : null))
-            .catch(() => null)
-        )
+            .catch(() => null),
+        ),
       );
       for (const r of results) {
         if (r?.data?.id) orgMap[r.data.id] = r.data;
@@ -3705,28 +4750,34 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
     }
 
     // 6. Map leads → contacts shape the frontend expects
-    const contacts = leads.map((lead: any) => {
-      const person = lead.person_id ? personMap[lead.person_id] : null;
-      const org = lead.organization_id ? orgMap[lead.organization_id] : null;
+    const contacts = leads
+      .map((lead: any) => {
+        const person = lead.person_id ? personMap[lead.person_id] : null;
+        const org = lead.organization_id ? orgMap[lead.organization_id] : null;
 
-      // Phone / email from person
-      const phones = person && Array.isArray(person.phone) ? person.phone : [];
-      const phone = phones.map((ph: any) => ph?.value?.trim()).filter(Boolean)[0] || null;
-      const emails = person && Array.isArray(person.email) ? person.email : [];
-      const email = emails.map((em: any) => em?.value?.trim()).filter(Boolean)[0] || null;
+        // Phone / email from person
+        const phones =
+          person && Array.isArray(person.phone) ? person.phone : [];
+        const phone =
+          phones.map((ph: any) => ph?.value?.trim()).filter(Boolean)[0] || null;
+        const emails =
+          person && Array.isArray(person.email) ? person.email : [];
+        const email =
+          emails.map((em: any) => em?.value?.trim()).filter(Boolean)[0] || null;
 
-      return {
-        id: String(lead.id), // lead UUID
-        name: person?.name || lead.title || 'Unnamed lead',
-        company: org?.name || person?.org_name || null,
-        org_id: lead.organization_id || person?.org_id?.value || null,
-        phone,
-        email,
-        role: person?.job_title || null,
-        aiScore: null,
-        status: 'active',
-      };
-    }).filter((c: any) => c.name);
+        return {
+          id: String(lead.id), // lead UUID
+          name: person?.name || lead.title || "Unnamed lead",
+          company: org?.name || person?.org_name || null,
+          org_id: lead.organization_id || person?.org_id?.value || null,
+          phone,
+          email,
+          role: person?.job_title || null,
+          aiScore: null,
+          status: "active",
+        };
+      })
+      .filter((c: any) => c.name);
 
     return c.json(contacts);
   } catch (e) {
@@ -3756,7 +4807,13 @@ app.patch(`${BASE_PATH}/contacts/:id`, async (c) => {
   }
 
   if (Object.keys(updates).length === 0) {
-    return c.json({ error: "No supported fields provided (company_website, linkedin_url, manual_notes)" }, 400);
+    return c.json(
+      {
+        error:
+          "No supported fields provided (company_website, linkedin_url, manual_notes)",
+      },
+      400,
+    );
   }
 
   const { data, error: updateError } = await admin
@@ -3767,7 +4824,10 @@ app.patch(`${BASE_PATH}/contacts/:id`, async (c) => {
     .single();
 
   if (updateError || !data) {
-    return c.json({ error: updateError?.message || "Contact not found" }, updateError ? 500 : 404);
+    return c.json(
+      { error: updateError?.message || "Contact not found" },
+      updateError ? 500 : 404,
+    );
   }
 
   await auditEvent(admin, userId, correlationId, "export", "contact_updated", {
@@ -3781,26 +4841,40 @@ app.patch(`${BASE_PATH}/contacts/:id`, async (c) => {
 // --- INTEGRATIONS (stored server-side) ---
 app.get(`${BASE_PATH}/integrations/pipedrive`, async (c) => {
   const userId = getUserId(c);
-  const apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+  const apiKey =
+    (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
   return c.json({ configured: Boolean(apiKey && apiKey.toString().trim()) });
 });
 
 app.get(`${BASE_PATH}/integrations/pipedrive/test`, async (c) => {
   try {
     const userId = getUserId(c);
-    const apiKey = ((await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY") || "").toString().trim();
+    const apiKey = (
+      (await getPipedriveKey(userId)) ||
+      Deno.env.get("PIPEDRIVE_API_KEY") ||
+      ""
+    )
+      .toString()
+      .trim();
     if (!apiKey) return c.json({ ok: false, error: "not_configured" });
 
-    const res = await fetch(`https://api.pipedrive.com/v1/users/me?api_token=${encodeURIComponent(apiKey)}`, {
-      headers: { Accept: "application/json" },
-    });
+    const res = await fetch(
+      `https://api.pipedrive.com/v1/users/me?api_token=${encodeURIComponent(apiKey)}`,
+      {
+        headers: { Accept: "application/json" },
+      },
+    );
     const json = await res.json().catch(() => null);
     if (!res.ok || !json?.success) {
       const msg = json?.error || json?.message || "Pipedrive test failed";
       return c.json({ ok: false, error: msg });
     }
     const user = json?.data
-      ? { id: json.data.id, name: json.data.name || null, email: json.data.email || null }
+      ? {
+          id: json.data.id,
+          name: json.data.name || null,
+          email: json.data.email || null,
+        }
       : undefined;
     return c.json({ ok: true, user });
   } catch (e) {
@@ -3817,12 +4891,16 @@ app.post(`${BASE_PATH}/integrations/pipedrive`, async (c) => {
     if (!trimmed) return c.json({ error: "API key required" }, 400);
 
     // Verify before storing.
-    const testRes = await fetch(`https://api.pipedrive.com/v1/users/me?api_token=${encodeURIComponent(trimmed)}`, {
-      headers: { Accept: "application/json" },
-    });
+    const testRes = await fetch(
+      `https://api.pipedrive.com/v1/users/me?api_token=${encodeURIComponent(trimmed)}`,
+      {
+        headers: { Accept: "application/json" },
+      },
+    );
     const testJson = await testRes.json().catch(() => null);
     if (!testRes.ok || !testJson?.success) {
-      const msg = testJson?.error || testJson?.message || "Invalid Pipedrive API key";
+      const msg =
+        testJson?.error || testJson?.message || "Invalid Pipedrive API key";
       return c.json({ error: msg }, 401);
     }
 
@@ -3830,7 +4908,9 @@ app.post(`${BASE_PATH}/integrations/pipedrive`, async (c) => {
       apiKey: trimmed,
       updatedAt: Date.now(),
       verifiedAt: Date.now(),
-      verifiedUser: testJson?.data ? { id: testJson.data.id, name: testJson.data.name || null } : null,
+      verifiedUser: testJson?.data
+        ? { id: testJson.data.id, name: testJson.data.name || null }
+        : null,
     });
     return c.json({ success: true });
   } catch (e) {
@@ -3877,7 +4957,11 @@ app.post(`${BASE_PATH}/integrations/openai`, async (c) => {
     if (!trimmed) return c.json({ error: "API key required" }, 400);
 
     const meta = await testOpenAiApiKey(trimmed);
-    await kv.set(userKey(userId, "integration:openai"), { apiKey: trimmed, updatedAt: Date.now(), verifiedAt: Date.now() });
+    await kv.set(userKey(userId, "integration:openai"), {
+      apiKey: trimmed,
+      updatedAt: Date.now(),
+      verifiedAt: Date.now(),
+    });
     return c.json({ success: true, ...meta });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -3901,8 +4985,10 @@ app.get(`${BASE_PATH}/gmail/status`, async (c) => {
   const userId = getUserId(c);
   const integration = await getGmailIntegration(userId);
   const configured = Boolean(
-    (integration?.gmail_refresh_token && integration.gmail_refresh_token.toString().trim()) ||
-      (integration?.gmail_access_token && integration.gmail_access_token.toString().trim()),
+    (integration?.gmail_refresh_token &&
+      integration.gmail_refresh_token.toString().trim()) ||
+    (integration?.gmail_access_token &&
+      integration.gmail_access_token.toString().trim()),
   );
   return c.json({ configured, email: integration?.gmail_email || undefined });
 });
@@ -3912,14 +4998,20 @@ app.get(`${BASE_PATH}/gmail/auth`, async (c) => {
   const clientId = googleClientId();
   const clientSecret = googleClientSecret();
   const redirectUri = googleRedirectUri();
-  if (!clientId || !clientSecret || !redirectUri) return c.json({ error: "Google OAuth není nakonfigurovaný" }, 500);
+  if (!clientId || !clientSecret || !redirectUri)
+    return c.json({ error: "Google OAuth není nakonfigurovaný" }, 500);
 
   const redirectToRaw = (c.req.query("redirectTo") || "").toString().trim();
-  const redirectTo = redirectToRaw && isRedirectAllowed(redirectToRaw) ? redirectToRaw : null;
+  const redirectTo =
+    redirectToRaw && isRedirectAllowed(redirectToRaw) ? redirectToRaw : null;
 
   const state = crypto.randomUUID();
   const stateKey = `gmail:oauth_state:${state}`;
-  const stateValue: GmailOauthStateKv = { userId, redirectTo, createdAt: Date.now() };
+  const stateValue: GmailOauthStateKv = {
+    userId,
+    redirectTo,
+    createdAt: Date.now(),
+  };
   await kv.set(stateKey, stateValue);
 
   const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
@@ -3929,7 +5021,10 @@ app.get(`${BASE_PATH}/gmail/auth`, async (c) => {
   authUrl.searchParams.set("access_type", "offline");
   authUrl.searchParams.set("prompt", "consent");
   authUrl.searchParams.set("include_granted_scopes", "true");
-  authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/gmail.compose");
+  authUrl.searchParams.set(
+    "scope",
+    "https://www.googleapis.com/auth/gmail.compose",
+  );
   authUrl.searchParams.set("state", state);
 
   return c.redirect(authUrl.toString());
@@ -3949,12 +5044,14 @@ app.get(`${BASE_PATH}/gmail/callback`, async (c) => {
     const stateValue = (await kv.get(stateKey)) as GmailOauthStateKv | null;
     await kv.del(stateKey);
     if (!stateValue?.userId) return c.json({ error: "Invalid state" }, 400);
-    if (Date.now() - Number(stateValue.createdAt || 0) > 15 * 60_000) return c.json({ error: "State expired" }, 400);
+    if (Date.now() - Number(stateValue.createdAt || 0) > 15 * 60_000)
+      return c.json({ error: "State expired" }, 400);
 
     const clientId = googleClientId();
     const clientSecret = googleClientSecret();
     const redirectUri = googleRedirectUri();
-    if (!clientId || !clientSecret || !redirectUri) return c.json({ error: "Google OAuth není nakonfigurovaný" }, 500);
+    if (!clientId || !clientSecret || !redirectUri)
+      return c.json({ error: "Google OAuth není nakonfigurovaný" }, 500);
 
     const body = new URLSearchParams();
     body.set("code", code);
@@ -3970,17 +5067,27 @@ app.get(`${BASE_PATH}/gmail/callback`, async (c) => {
     });
     const tokenJson = await tokenRes.json().catch(() => null);
     if (!tokenRes.ok) {
-      const msg = tokenJson?.error_description || tokenJson?.error || tokenJson?.message || `Token exchange failed (${tokenRes.status})`;
+      const msg =
+        tokenJson?.error_description ||
+        tokenJson?.error ||
+        tokenJson?.message ||
+        `Token exchange failed (${tokenRes.status})`;
       return c.json({ error: msg }, 400);
     }
 
-    const accessToken = tokenJson?.access_token ? String(tokenJson.access_token) : "";
-    const refreshTokenFromExchange = tokenJson?.refresh_token ? String(tokenJson.refresh_token) : "";
+    const accessToken = tokenJson?.access_token
+      ? String(tokenJson.access_token)
+      : "";
+    const refreshTokenFromExchange = tokenJson?.refresh_token
+      ? String(tokenJson.refresh_token)
+      : "";
     const expiresIn = Number(tokenJson?.expires_in || 0);
-    if (!accessToken || !Number.isFinite(expiresIn) || expiresIn <= 0) return c.json({ error: "Invalid token response" }, 400);
+    if (!accessToken || !Number.isFinite(expiresIn) || expiresIn <= 0)
+      return c.json({ error: "Invalid token response" }, 400);
 
     const existing = await getGmailIntegration(stateValue.userId);
-    const refreshToken = refreshTokenFromExchange || existing?.gmail_refresh_token || "";
+    const refreshToken =
+      refreshTokenFromExchange || existing?.gmail_refresh_token || "";
 
     const next: GmailIntegrationKv = {
       ...(existing || {}),
@@ -3991,12 +5098,20 @@ app.get(`${BASE_PATH}/gmail/callback`, async (c) => {
 
     // Best-effort: fetch connected email for display.
     try {
-      const profileRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
-        method: "GET",
-        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-      });
+      const profileRes = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+        },
+      );
       const profileJson = await profileRes.json().catch(() => null);
-      const email = profileJson?.emailAddress ? String(profileJson.emailAddress) : "";
+      const email = profileJson?.emailAddress
+        ? String(profileJson.emailAddress)
+        : "";
       if (email) next.gmail_email = email;
     } catch {
       // non-blocking
@@ -4004,7 +5119,10 @@ app.get(`${BASE_PATH}/gmail/callback`, async (c) => {
 
     await setGmailIntegration(stateValue.userId, next);
 
-    const redirectTo = stateValue.redirectTo && isRedirectAllowed(stateValue.redirectTo) ? stateValue.redirectTo : null;
+    const redirectTo =
+      stateValue.redirectTo && isRedirectAllowed(stateValue.redirectTo)
+        ? stateValue.redirectTo
+        : null;
     if (redirectTo) {
       const u = new URL(redirectTo);
       u.searchParams.set("gmail", "connected");
@@ -4023,26 +5141,47 @@ app.get(`${BASE_PATH}/gmail/test`, async (c) => {
     const tokenInfo = await getValidGmailAccessToken(userId);
     if (!tokenInfo) return c.json({ ok: false, error: "not_configured" }, 200);
 
-    const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts?maxResults=1", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${tokenInfo.accessToken}`, Accept: "application/json" },
-    });
+    const res = await fetch(
+      "https://gmail.googleapis.com/gmail/v1/users/me/drafts?maxResults=1",
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${tokenInfo.accessToken}`,
+          Accept: "application/json",
+        },
+      },
+    );
     const json = await res.json().catch(() => null);
     if (!res.ok) {
-      const msg = json?.error?.message || json?.error || json?.message || `Gmail test failed (${res.status})`;
+      const msg =
+        json?.error?.message ||
+        json?.error ||
+        json?.message ||
+        `Gmail test failed (${res.status})`;
       return c.json({ ok: false, error: msg }, 200);
     }
 
     // Best-effort store email if missing.
     try {
-      const profileRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
-        method: "GET",
-        headers: { Authorization: `Bearer ${tokenInfo.accessToken}`, Accept: "application/json" },
-      });
+      const profileRes = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${tokenInfo.accessToken}`,
+            Accept: "application/json",
+          },
+        },
+      );
       const profileJson = await profileRes.json().catch(() => null);
-      const email = profileJson?.emailAddress ? String(profileJson.emailAddress) : "";
+      const email = profileJson?.emailAddress
+        ? String(profileJson.emailAddress)
+        : "";
       if (email && !tokenInfo.integration.gmail_email) {
-        await setGmailIntegration(userId, { ...tokenInfo.integration, gmail_email: email });
+        await setGmailIntegration(userId, {
+          ...tokenInfo.integration,
+          gmail_email: email,
+        });
       }
     } catch {
       // ignore
@@ -4073,28 +5212,50 @@ app.post(`${BASE_PATH}/gmail/create-draft`, async (c) => {
   const subject = payload?.subject ? String(payload.subject).trim() : "";
   const bodyText = payload?.body ? String(payload.body) : "";
   const bcc = payload?.bcc ? String(payload.bcc).trim() : "";
-  if (!to || !subject) return c.json({ ok: false, draftId: "", gmailUrl: "", error: "Missing to/subject" }, 400);
+  if (!to || !subject)
+    return c.json(
+      { ok: false, draftId: "", gmailUrl: "", error: "Missing to/subject" },
+      400,
+    );
 
   const tokenInfo = await getValidGmailAccessToken(userId);
-  if (!tokenInfo) return c.json({ ok: false, draftId: "", gmailUrl: "", error: "not_configured" }, 400);
+  if (!tokenInfo)
+    return c.json(
+      { ok: false, draftId: "", gmailUrl: "", error: "not_configured" },
+      400,
+    );
 
-  const rfc2822 = buildRfc2822Message({ to, subject, body: bodyText, bcc: bcc || undefined });
+  const rfc2822 = buildRfc2822Message({
+    to,
+    subject,
+    body: bodyText,
+    bcc: bcc || undefined,
+  });
   const raw = base64UrlEncodeBytes(new TextEncoder().encode(rfc2822));
   const draftReqBody = JSON.stringify({ message: { raw } });
 
   const doCreate = async (accessToken: string) => {
-    return await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", Accept: "application/json" },
-      body: draftReqBody,
-    });
+    return await fetch(
+      "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: draftReqBody,
+      },
+    );
   };
 
   let res = await doCreate(tokenInfo.accessToken);
   if (res.status === 401 && tokenInfo.integration.gmail_refresh_token) {
     // One retry after refresh (best-effort).
     try {
-      const refreshed = await refreshGmailAccessToken(String(tokenInfo.integration.gmail_refresh_token));
+      const refreshed = await refreshGmailAccessToken(
+        String(tokenInfo.integration.gmail_refresh_token),
+      );
       await setGmailIntegration(userId, {
         ...tokenInfo.integration,
         gmail_access_token: refreshed.accessToken,
@@ -4108,7 +5269,11 @@ app.post(`${BASE_PATH}/gmail/create-draft`, async (c) => {
 
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    const msg = json?.error?.message || json?.error || json?.message || `Gmail draft create failed (${res.status})`;
+    const msg =
+      json?.error?.message ||
+      json?.error ||
+      json?.message ||
+      `Gmail draft create failed (${res.status})`;
     return c.json({ ok: false, draftId: "", gmailUrl: "", error: msg }, 200);
   }
 
@@ -4120,7 +5285,8 @@ app.post(`${BASE_PATH}/gmail/create-draft`, async (c) => {
 
   // Best-effort: log to email history (non-blocking).
   try {
-    const log = payload?.log && typeof payload.log === "object" ? payload.log : null;
+    const log =
+      payload?.log && typeof payload.log === "object" ? payload.log : null;
     const contactId = log?.contactId ? String(log.contactId).trim() : "";
     const emailType = log?.emailType ? String(log.emailType).trim() : "";
     if (contactId && emailType) {
@@ -4163,7 +5329,8 @@ app.post(`${BASE_PATH}/email/log`, async (c) => {
   const body = await c.req.json().catch(() => null);
   const contactId = body?.contactId ? String(body.contactId).trim() : "";
   const emailType = body?.emailType ? String(body.emailType).trim() : "";
-  if (!contactId || !emailType) return c.json({ ok: false, error: "Missing contactId/emailType" }, 400);
+  if (!contactId || !emailType)
+    return c.json({ ok: false, error: "Missing contactId/emailType" }, 400);
 
   const { admin, error } = requireAdmin(c);
   if (error) return error;
@@ -4182,13 +5349,20 @@ app.post(`${BASE_PATH}/email/log`, async (c) => {
     sent_at: body?.sentAt ? String(body.sentAt) : new Date().toISOString(),
   };
 
-  const { data, error: insertError } = await admin.from("email_log").insert(row).select("id").single();
-  if (insertError) return c.json({ ok: false, error: insertError.message }, 500);
+  const { data, error: insertError } = await admin
+    .from("email_log")
+    .insert(row)
+    .select("id")
+    .single();
+  if (insertError)
+    return c.json({ ok: false, error: insertError.message }, 500);
 
   // Auto-cancel any pending sequences for this contact (manual send overrides sequence).
   const source = String(row.source || "manual");
   const shouldCancelSequences =
-    source !== "auto-sequence" && emailType !== "cold" && emailType !== "demo-followup";
+    source !== "auto-sequence" &&
+    emailType !== "cold" &&
+    emailType !== "demo-followup";
   if (shouldCancelSequences) {
     try {
       await admin
@@ -4208,14 +5382,17 @@ app.post(`${BASE_PATH}/email/log`, async (c) => {
 app.get(`${BASE_PATH}/email/history`, async (c) => {
   const userId = getUserId(c);
   const contactId = (c.req.query("contact_id") || "").toString().trim();
-  if (!contactId) return c.json({ ok: false, error: "Missing contact_id" }, 400);
+  if (!contactId)
+    return c.json({ ok: false, error: "Missing contact_id" }, 400);
 
   const { admin, error } = requireAdmin(c);
   if (error) return error;
 
   const { data, error: qErr } = await admin
     .from("email_log")
-    .select("id, email_type, subject, sent_at, source, gmail_draft_id, recipient_email")
+    .select(
+      "id, email_type, subject, sent_at, source, gmail_draft_id, recipient_email",
+    )
     .eq("owner_user_id", userId)
     .eq("contact_id", contactId)
     .order("sent_at", { ascending: false })
@@ -4231,7 +5408,8 @@ app.post(`${BASE_PATH}/email/schedule`, async (c) => {
   const body = await c.req.json().catch(() => null);
   const contactId = body?.contactId ? String(body.contactId).trim() : "";
   const schedules = Array.isArray(body?.schedules) ? body.schedules : [];
-  if (!contactId || schedules.length === 0) return c.json({ ok: false, error: "Missing contactId/schedules" }, 400);
+  if (!contactId || schedules.length === 0)
+    return c.json({ ok: false, error: "Missing contactId/schedules" }, 400);
 
   const { admin, error } = requireAdmin(c);
   if (error) return error;
@@ -4256,12 +5434,15 @@ app.post(`${BASE_PATH}/email/schedule`, async (c) => {
     }))
     .filter((r: any) => r.email_type && r.scheduled_for);
 
-  if (rows.length === 0) return c.json({ ok: false, error: "No valid schedules" }, 400);
+  if (rows.length === 0)
+    return c.json({ ok: false, error: "No valid schedules" }, 400);
 
   const { data, error: insErr } = await admin
     .from("email_schedule")
     .insert(rows)
-    .select("id, contact_id, email_type, scheduled_for, status, context, created_at");
+    .select(
+      "id, contact_id, email_type, scheduled_for, status, context, created_at",
+    );
   if (insErr) return c.json({ ok: false, error: insErr.message }, 500);
   return c.json({ ok: true, schedules: data || [] });
 });
@@ -4271,12 +5452,16 @@ app.post(`${BASE_PATH}/email/schedule/cancel`, async (c) => {
   const body = await c.req.json().catch(() => null);
   const scheduleId = body?.scheduleId ? String(body.scheduleId).trim() : "";
   const contactId = body?.contactId ? String(body.contactId).trim() : "";
-  if (!scheduleId && !contactId) return c.json({ ok: false, error: "Missing scheduleId/contactId" }, 400);
+  if (!scheduleId && !contactId)
+    return c.json({ ok: false, error: "Missing scheduleId/contactId" }, 400);
 
   const { admin, error } = requireAdmin(c);
   if (error) return error;
 
-  let q = admin.from("email_schedule").update({ status: "cancelled" }).eq("owner_user_id", userId);
+  let q = admin
+    .from("email_schedule")
+    .update({ status: "cancelled" })
+    .eq("owner_user_id", userId);
   if (scheduleId) q = q.eq("id", scheduleId);
   if (contactId) q = q.eq("contact_id", contactId);
   const { error: updErr } = await q.in("status", ["pending", "draft-created"]);
@@ -4293,7 +5478,9 @@ app.get(`${BASE_PATH}/email/schedule/active`, async (c) => {
 
   let q = admin
     .from("email_schedule")
-    .select("id, contact_id, email_type, scheduled_for, status, context, created_at")
+    .select(
+      "id, contact_id, email_type, scheduled_for, status, context, created_at",
+    )
     .eq("owner_user_id", userId)
     .in("status", ["pending", "draft-created"])
     .order("scheduled_for", { ascending: true })
@@ -4307,8 +5494,15 @@ app.get(`${BASE_PATH}/email/schedule/active`, async (c) => {
 // --- CRON: process due scheduled emails (creates drafts, never sends) ---
 app.post(`${BASE_PATH}/cron/email-schedule/process`, async (c) => {
   const secret = (Deno.env.get("CRON_SECRET") || "").toString().trim();
-  const provided = (c.req.header("x-cron-secret") || c.req.query("secret") || "").toString().trim();
-  if (!secret || provided !== secret) return c.json({ ok: false, error: "Unauthorized" }, 401);
+  const provided = (
+    c.req.header("x-cron-secret") ||
+    c.req.query("secret") ||
+    ""
+  )
+    .toString()
+    .trim();
+  if (!secret || provided !== secret)
+    return c.json({ ok: false, error: "Unauthorized" }, 401);
 
   const { admin, error } = requireAdmin(c);
   if (error) return error;
@@ -4317,9 +5511,16 @@ app.post(`${BASE_PATH}/cron/email-schedule/process`, async (c) => {
 
   const parseEmailContent = (content: string) => {
     const lines = (content || "").split(/\r?\n/);
-    const subjectLine = lines.find((l) => l.trim().toLowerCase().startsWith("předmět:"));
-    const subject = subjectLine ? subjectLine.replace(/^\s*Předmět:\s*/i, "").trim() : "";
-    const body = lines.filter((l) => !l.trim().toLowerCase().startsWith("předmět:")).join("\n").trim();
+    const subjectLine = lines.find((l) =>
+      l.trim().toLowerCase().startsWith("předmět:"),
+    );
+    const subject = subjectLine
+      ? subjectLine.replace(/^\s*Předmět:\s*/i, "").trim()
+      : "";
+    const body = lines
+      .filter((l) => !l.trim().toLowerCase().startsWith("předmět:"))
+      .join("\n")
+      .trim();
     return { subject, body };
   };
 
@@ -4327,23 +5528,28 @@ app.post(`${BASE_PATH}/cron/email-schedule/process`, async (c) => {
     const k = (kind || "cold").toLowerCase();
     const t = (type || "").toLowerCase();
     if (k === "demo") {
-      if (t === "sequence-d1") return 'Krátký bump po demo: poděkuj a napiš, že jsi k dispozici pro otázky. Max 50 slov. Česky.';
-      return 'Finální follow-up po demo: přidej konkrétní value-add (case study / ROI / čísla). Max 100 slov. Česky.';
+      if (t === "sequence-d1")
+        return "Krátký bump po demo: poděkuj a napiš, že jsi k dispozici pro otázky. Max 50 slov. Česky.";
+      return "Finální follow-up po demo: přidej konkrétní value-add (case study / ROI / čísla). Max 100 slov. Česky.";
     }
     // cold
-    if (t === "sequence-d1") return 'Krátký bump e‑mail: navázat na původní cold e‑mail, slušně připomenout. Max 50 slov. Česky.';
-    return 'Finální follow‑up: navázat na původní cold e‑mail + přidat social proof nebo mini case study. Max 80 slov. Česky.';
+    if (t === "sequence-d1")
+      return "Krátký bump e‑mail: navázat na původní cold e‑mail, slušně připomenout. Max 50 slov. Česky.";
+    return "Finální follow‑up: navázat na původní cold e‑mail + přidat social proof nebo mini case study. Max 80 slov. Česky.";
   };
 
   const listRes = await admin
     .from("email_schedule")
-    .select("id, owner_user_id, contact_id, email_type, scheduled_for, status, context, created_at")
+    .select(
+      "id, owner_user_id, contact_id, email_type, scheduled_for, status, context, created_at",
+    )
     .eq("status", "pending")
     .lte("scheduled_for", nowIso)
     .order("scheduled_for", { ascending: true })
     .limit(25);
 
-  if (listRes.error) return c.json({ ok: false, error: listRes.error.message }, 500);
+  if (listRes.error)
+    return c.json({ ok: false, error: listRes.error.message }, 500);
   const due = Array.isArray(listRes.data) ? listRes.data : [];
 
   const results: any[] = [];
@@ -4352,7 +5558,8 @@ app.post(`${BASE_PATH}/cron/email-schedule/process`, async (c) => {
     const ownerUserId = String(item.owner_user_id);
     const contactId = String(item.contact_id);
     const emailType = String(item.email_type || "");
-    const context = (item.context && typeof item.context === "object") ? item.context : {};
+    const context =
+      item.context && typeof item.context === "object" ? item.context : {};
 
     try {
       // Guard: if a matching email was already logged after this schedule was created, cancel to avoid duplicates.
@@ -4365,31 +5572,60 @@ app.post(`${BASE_PATH}/cron/email-schedule/process`, async (c) => {
         .gte("sent_at", item.created_at)
         .limit(1);
       if (existing.data && existing.data.length) {
-        await admin.from("email_schedule").update({ status: "cancelled" }).eq("id", scheduleId).eq("owner_user_id", ownerUserId);
+        await admin
+          .from("email_schedule")
+          .update({ status: "cancelled" })
+          .eq("id", scheduleId)
+          .eq("owner_user_id", ownerUserId);
         results.push({ id: scheduleId, ok: true, skipped: "already_logged" });
         continue;
       }
 
       const apiKey = await getOpenAiApiKeyForUser(ownerUserId);
       if (!apiKey) {
-        await admin.from("email_schedule").update({ status: "cancelled", context: { ...context, error: "OpenAI not configured" } }).eq("id", scheduleId).eq("owner_user_id", ownerUserId);
-        results.push({ id: scheduleId, ok: false, error: "openai_not_configured" });
+        await admin
+          .from("email_schedule")
+          .update({
+            status: "cancelled",
+            context: { ...context, error: "OpenAI not configured" },
+          })
+          .eq("id", scheduleId)
+          .eq("owner_user_id", ownerUserId);
+        results.push({
+          id: scheduleId,
+          ok: false,
+          error: "openai_not_configured",
+        });
         continue;
       }
 
-      const contactName = context?.contactName ? String(context.contactName) : "";
+      const contactName = context?.contactName
+        ? String(context.contactName)
+        : "";
       const company = context?.company ? String(context.company) : "";
-      const recipientEmail = context?.recipientEmail ? String(context.recipientEmail) : "";
+      const recipientEmail = context?.recipientEmail
+        ? String(context.recipientEmail)
+        : "";
       const bcc = context?.bcc ? String(context.bcc) : "";
-      const kind = context?.sequenceKind ? String(context.sequenceKind) : "cold";
-      const originalSubject = context?.originalEmail?.subject ? String(context.originalEmail.subject) : (context?.originalSubject ? String(context.originalSubject) : "");
-      const originalBody = context?.originalEmail?.body ? String(context.originalEmail.body) : (context?.originalBody ? String(context.originalBody) : "");
+      const kind = context?.sequenceKind
+        ? String(context.sequenceKind)
+        : "cold";
+      const originalSubject = context?.originalEmail?.subject
+        ? String(context.originalEmail.subject)
+        : context?.originalSubject
+          ? String(context.originalSubject)
+          : "";
+      const originalBody = context?.originalEmail?.body
+        ? String(context.originalEmail.body)
+        : context?.originalBody
+          ? String(context.originalBody)
+          : "";
 
       const instruction = buildSequenceInstruction(kind, emailType);
       const system = [
         "Jsi zkušený B2B obchodník. Piš česky. Nehalucinuj fakta o firmě.",
         "Výstup musí být POUZE plaintext e‑mail.",
-        "První řádek vždy: \"Předmět: ...\"",
+        'První řádek vždy: "Předmět: ..."',
         "Žádné markdown, žádné podpisové obrázky, žádné trackovací pixely.",
       ].join("\n");
 
@@ -4417,11 +5653,14 @@ app.post(`${BASE_PATH}/cron/email-schedule/process`, async (c) => {
         max_tokens: 380,
       });
 
-      const content = (completion.choices?.[0]?.message?.content || "").toString().trim();
+      const content = (completion.choices?.[0]?.message?.content || "")
+        .toString()
+        .trim();
       if (!content) throw new Error("OpenAI returned empty content");
 
       const parsed = parseEmailContent(content);
-      const subject = parsed.subject || `${company || "Follow‑up"} – krátká připomínka`;
+      const subject =
+        parsed.subject || `${company || "Follow‑up"} – krátká připomínka`;
       const body = parsed.body || content;
 
       let gmailDraftId: string | null = null;
@@ -4430,22 +5669,42 @@ app.post(`${BASE_PATH}/cron/email-schedule/process`, async (c) => {
       if (recipientEmail) {
         const tokenInfo = await getValidGmailAccessToken(ownerUserId);
         if (tokenInfo?.accessToken) {
-          const rfc2822 = buildRfc2822Message({ to: recipientEmail, subject, body, bcc: bcc || undefined });
-          const raw = base64UrlEncodeBytes(new TextEncoder().encode(rfc2822));
-          const draftRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${tokenInfo.accessToken}`, "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({ message: { raw } }),
+          const rfc2822 = buildRfc2822Message({
+            to: recipientEmail,
+            subject,
+            body,
+            bcc: bcc || undefined,
           });
+          const raw = base64UrlEncodeBytes(new TextEncoder().encode(rfc2822));
+          const draftRes = await fetch(
+            "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${tokenInfo.accessToken}`,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify({ message: { raw } }),
+            },
+          );
           const draftJson = await draftRes.json().catch(() => null);
           if (draftRes.ok) {
             gmailDraftId = draftJson?.id ? String(draftJson.id) : null;
-            const messageId = draftJson?.message?.id ? String(draftJson.message.id) : "";
+            const messageId = draftJson?.message?.id
+              ? String(draftJson.message.id)
+              : "";
             gmailUrl = messageId
               ? `https://mail.google.com/mail/u/0/#drafts?compose=${encodeURIComponent(messageId)}`
-              : (gmailDraftId ? `https://mail.google.com/mail/u/0/#drafts/${encodeURIComponent(gmailDraftId)}` : null);
+              : gmailDraftId
+                ? `https://mail.google.com/mail/u/0/#drafts/${encodeURIComponent(gmailDraftId)}`
+                : null;
           } else {
-            const msg = draftJson?.error?.message || draftJson?.error || draftJson?.message || `Gmail draft create failed (${draftRes.status})`;
+            const msg =
+              draftJson?.error?.message ||
+              draftJson?.error ||
+              draftJson?.message ||
+              `Gmail draft create failed (${draftRes.status})`;
             console.error("Cron Gmail draft create failed:", msg);
           }
         }
@@ -4488,12 +5747,19 @@ app.post(`${BASE_PATH}/cron/email-schedule/process`, async (c) => {
         console.error("Cron email_log insert failed (non-blocking):", e);
       }
 
-      results.push({ id: scheduleId, ok: true, draft_created: Boolean(gmailDraftId) });
+      results.push({
+        id: scheduleId,
+        ok: true,
+        draft_created: Boolean(gmailDraftId),
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await admin
         .from("email_schedule")
-        .update({ status: "cancelled", context: { ...(context || {}), error: msg, failedAt: nowIso } })
+        .update({
+          status: "cancelled",
+          context: { ...(context || {}), error: msg, failedAt: nowIso },
+        })
         .eq("id", scheduleId)
         .eq("owner_user_id", ownerUserId);
       results.push({ id: scheduleId, ok: false, error: msg });
@@ -4509,7 +5775,8 @@ app.post(`${BASE_PATH}/meet/transcript`, async (c) => {
   try {
     const userId = getUserId(c);
     const { callId, text, speaker, speakerName, source } = await c.req.json();
-    if (!callId || !text) return c.json({ error: "callId and text are required" }, 400);
+    if (!callId || !text)
+      return c.json({ error: "callId and text are required" }, 400);
 
     const event = {
       id: crypto.randomUUID(),
@@ -4525,7 +5792,11 @@ app.post(`${BASE_PATH}/meet/transcript`, async (c) => {
     const updated = [...(existing || []), event].slice(-200); // keep last 200
 
     await kv.set(key, updated);
-    await kv.set(userKey(userId, `meet:${callId}:meta`), { callId, userId, updatedAt: event.ts });
+    await kv.set(userKey(userId, `meet:${callId}:meta`), {
+      callId,
+      userId,
+      updatedAt: event.ts,
+    });
 
     return c.json({ success: true, event });
   } catch (e) {
@@ -4544,7 +5815,9 @@ app.get(`${BASE_PATH}/meet/transcript/:callId`, async (c) => {
 
     const key = userKey(userId, `meet:${callId}:events`);
     const events = ((await kv.get(key)) as any[] | null) || [];
-    const filtered = since ? events.filter((e) => Number(e.ts) > since) : events;
+    const filtered = since
+      ? events.filter((e) => Number(e.ts) > since)
+      : events;
 
     return c.json({ callId, events: filtered });
   } catch (e) {
@@ -4621,7 +5894,10 @@ const SPIN_AGENT_TEMPLATES = {
   },
 };
 
-const buildAgentMessages = (role: keyof typeof SPIN_AGENT_TEMPLATES, payload: any) => {
+const buildAgentMessages = (
+  role: keyof typeof SPIN_AGENT_TEMPLATES,
+  payload: any,
+) => {
   const base = SPIN_AGENT_TEMPLATES[role];
   const strict = Boolean(payload.strict);
   const header =
@@ -4649,7 +5925,12 @@ ${payload.proofPack || DEFAULT_PROOF_PACK}
   ];
 };
 
-const runSpinAgent = async (openai: any, model: string, role: keyof typeof SPIN_AGENT_TEMPLATES, payload: any) => {
+const runSpinAgent = async (
+  openai: any,
+  model: string,
+  role: keyof typeof SPIN_AGENT_TEMPLATES,
+  payload: any,
+) => {
   try {
     const messages = buildAgentMessages(role, payload);
     const completion = await openai.chat.completions.create({
@@ -4658,7 +5939,10 @@ const runSpinAgent = async (openai: any, model: string, role: keyof typeof SPIN_
       messages,
       max_tokens: 180,
     });
-    const parsed = safeJsonParse(completion.choices?.[0]?.message?.content, null);
+    const parsed = safeJsonParse(
+      completion.choices?.[0]?.message?.content,
+      null,
+    );
     return parsed || null;
   } catch (e) {
     console.error(`Spin agent ${role} failed`, e);
@@ -4667,7 +5951,16 @@ const runSpinAgent = async (openai: any, model: string, role: keyof typeof SPIN_
 };
 
 const buildOrchestratorMessages = (payload: any) => {
-  const { stage, transcript, recap, dealState, proofPack, agents, timers, strict } = payload;
+  const {
+    stage,
+    transcript,
+    recap,
+    dealState,
+    proofPack,
+    agents,
+    timers,
+    strict,
+  } = payload;
   const schema = `
 Return JSON:
 {
@@ -4736,18 +6029,32 @@ app.post(`${BASE_PATH}/ai/spin/next`, async (c) => {
     const orchestratorModel = mode === "heavy" ? heavyModel : liveModel;
 
     const stage = (body?.stage || "situation").toLowerCase();
-    const transcriptWindow = Array.isArray(body?.transcriptWindow) ? body.transcriptWindow : [];
-    const transcript = limitString(transcriptWindow.slice(-14).join("\n"), 4000);
+    const transcriptWindow = Array.isArray(body?.transcriptWindow)
+      ? body.transcriptWindow
+      : [];
+    const transcript = limitString(
+      transcriptWindow.slice(-14).join("\n"),
+      4000,
+    );
     const recap = limitString(body?.recap || "", 1200);
     const dealState = limitString(
-      typeof body?.dealState === "string" ? body.dealState : JSON.stringify(body?.dealState || {}),
+      typeof body?.dealState === "string"
+        ? body.dealState
+        : JSON.stringify(body?.dealState || {}),
       1200,
     );
     const proofPack = limitString(body?.proofPack || DEFAULT_PROOF_PACK, 1200);
     const strict = Boolean(body?.strict);
 
     const openai = new OpenAI({ apiKey });
-    const agentPayload = { transcript, recap, dealState, proofPack, stage, strict };
+    const agentPayload = {
+      transcript,
+      recap,
+      dealState,
+      proofPack,
+      stage,
+      strict,
+    };
 
     const [situation, problem, implication, payoff] = await Promise.all([
       runSpinAgent(openai, liveModel, "situation", agentPayload),
@@ -4758,7 +6065,10 @@ app.post(`${BASE_PATH}/ai/spin/next`, async (c) => {
 
     let objection: any = null;
     if (body?.objectionTrigger) {
-      objection = await runSpinAgent(openai, liveModel, "objection", { ...agentPayload, trigger: body.objectionTrigger });
+      objection = await runSpinAgent(openai, liveModel, "objection", {
+        ...agentPayload,
+        trigger: body.objectionTrigger,
+      });
     }
 
     const messages = buildOrchestratorMessages({
@@ -4781,7 +6091,10 @@ app.post(`${BASE_PATH}/ai/spin/next`, async (c) => {
     });
     const latency = Date.now() - started;
 
-    let parsed = safeJsonParse(completion.choices?.[0]?.message?.content, defaultSpinOutput(stage));
+    let parsed = safeJsonParse(
+      completion.choices?.[0]?.message?.content,
+      defaultSpinOutput(stage),
+    );
     if (!parsed || parsed.say_next === undefined) {
       parsed = defaultSpinOutput(stage);
     }
@@ -4790,7 +6103,12 @@ app.post(`${BASE_PATH}/ai/spin/next`, async (c) => {
       parsed.say_next = "(pause)";
       parsed.coach_whisper = "";
     }
-    parsed.meta = { ...(parsed.meta || {}), latency_ms: latency, model: orchestratorModel, mode };
+    parsed.meta = {
+      ...(parsed.meta || {}),
+      latency_ms: latency,
+      model: orchestratorModel,
+      mode,
+    };
 
     return c.json({
       output: parsed,
@@ -4808,107 +6126,115 @@ app.post(`${BASE_PATH}/ai/spin/next`, async (c) => {
 
 // 1. Upload Audio for Transcription (Whisper)
 app.post(`${BASE_PATH}/ai/transcribe`, async (c) => {
-    try {
-        const userId = getUserId(c);
-        const apiKey = await getOpenAiApiKeyForUser(userId);
-        if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
+  try {
+    const userId = getUserId(c);
+    const apiKey = await getOpenAiApiKeyForUser(userId);
+    if (!apiKey) return c.json({ error: "OpenAI not configured" }, 500);
 
-        const body = await c.req.parseBody();
-        const file = body['file'];
+    const body = await c.req.parseBody();
+    const file = body["file"];
 
-        if (!file || !(file instanceof File)) {
-            return c.json({ error: "No file uploaded" }, 400);
-        }
-
-        // Hard cap to limit abuse and unexpected cost.
-        const MAX_AUDIO_BYTES = 15 * 1024 * 1024; // 15MB
-        if (file.size > MAX_AUDIO_BYTES) {
-            return c.json({ error: "File too large" }, 413);
-        }
-
-        console.log(`🎤 Received audio file: ${file.name} (${file.size} bytes)`);
-
-        // OpenAI expects a File object.
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("model", "whisper-1");
-        formData.append("language", "cs"); // Force Czech
-
-        const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-            },
-            body: formData,
-        });
-
-        if (!response.ok) {
-            const err = await response.text();
-            console.error("Whisper API Error", err);
-            return c.json({ error: "Transcription Failed" }, 500);
-        }
-
-        const data = await response.json();
-        console.log("✅ Transcription success");
-        
-        return c.json({ text: data.text });
-
-    } catch (e) {
-        console.error("Transcription Internal Error", e);
-        return c.json({ error: "Internal Transcription Error" }, 500);
+    if (!file || !(file instanceof File)) {
+      return c.json({ error: "No file uploaded" }, 400);
     }
+
+    // Hard cap to limit abuse and unexpected cost.
+    const MAX_AUDIO_BYTES = 15 * 1024 * 1024; // 15MB
+    if (file.size > MAX_AUDIO_BYTES) {
+      return c.json({ error: "File too large" }, 413);
+    }
+
+    console.log(`🎤 Received audio file: ${file.name} (${file.size} bytes)`);
+
+    // OpenAI expects a File object.
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("model", "whisper-1");
+    formData.append("language", "cs"); // Force Czech
+
+    const response = await fetch(
+      "https://api.openai.com/v1/audio/transcriptions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: formData,
+      },
+    );
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error("Whisper API Error", err);
+      return c.json({ error: "Transcription Failed" }, 500);
+    }
+
+    const data = await response.json();
+    console.log("✅ Transcription success");
+
+    return c.json({ text: data.text });
+  } catch (e) {
+    console.error("Transcription Internal Error", e);
+    return c.json({ error: "Internal Transcription Error" }, 500);
+  }
 });
 
 // --- CONTACT INTEL ENDPOINTS ---
 // GET: Retrieve cached AI intelligence for a contact
 app.get(`${BASE_PATH}/contact-intel/:id`, async (c) => {
-    try {
-        const userId = getUserId(c);
-        const contactId = c.req.param('id');
-        const intel = await kv.get(userKey(userId, `intel:${contactId}`));
-        
-        if (intel) {
-            return c.json(intel);
-        }
-        return c.json({ message: "No cached data found" }, 404);
-    } catch (e) {
-        console.error("Failed to retrieve contact intel", e);
-        return c.json({ error: "Failed to retrieve intel" }, 500);
+  try {
+    const userId = getUserId(c);
+    const contactId = c.req.param("id");
+    const intel = await kv.get(userKey(userId, `intel:${contactId}`));
+
+    if (intel) {
+      return c.json(intel);
     }
+    return c.json({ message: "No cached data found" }, 404);
+  } catch (e) {
+    console.error("Failed to retrieve contact intel", e);
+    return c.json({ error: "Failed to retrieve intel" }, 500);
+  }
 });
 
 // PATCH: Save/update AI intelligence for a contact
 app.patch(`${BASE_PATH}/contact-intel/:id`, async (c) => {
-    try {
-        const userId = getUserId(c);
-        const contactId = c.req.param('id');
-        const body = await c.req.json();
-        // body should contain { aiSummary, hiringSignal, intentScore, personalityType, etc. }
-        
-        // Save to KV - this creates permanent cache that survives app reloads
-        await kv.set(userKey(userId, `intel:${contactId}`), { id: contactId, ...body });
-        console.log(`💾 Cached AI data for contact ${contactId}`);
-        
-        return c.json({ success: true });
-    } catch (e) {
-        console.error("Failed to save contact intel", e);
-        return c.json({ error: "Failed to save intel" }, 500);
-    }
+  try {
+    const userId = getUserId(c);
+    const contactId = c.req.param("id");
+    const body = await c.req.json();
+    // body should contain { aiSummary, hiringSignal, intentScore, personalityType, etc. }
+
+    // Save to KV - this creates permanent cache that survives app reloads
+    await kv.set(userKey(userId, `intel:${contactId}`), {
+      id: contactId,
+      ...body,
+    });
+    console.log(`💾 Cached AI data for contact ${contactId}`);
+
+    return c.json({ success: true });
+  } catch (e) {
+    console.error("Failed to save contact intel", e);
+    return c.json({ error: "Failed to save intel" }, 500);
+  }
 });
 
 // DELETE: Clear cached AI intelligence for a contact (force re-analysis)
 app.delete(`${BASE_PATH}/contact-intel/:id`, async (c) => {
-    try {
-        const userId = getUserId(c);
-        const contactId = c.req.param('id');
-        await kv.del(userKey(userId, `intel:${contactId}`));
-        console.log(`🗑️ Cleared AI cache for contact ${contactId}`);
-        
-        return c.json({ success: true, message: "Cache cleared. Contact will be re-analyzed." });
-    } catch (e) {
-        console.error("Failed to delete contact intel", e);
-        return c.json({ error: "Failed to delete intel" }, 500);
-    }
+  try {
+    const userId = getUserId(c);
+    const contactId = c.req.param("id");
+    await kv.del(userKey(userId, `intel:${contactId}`));
+    console.log(`🗑️ Cleared AI cache for contact ${contactId}`);
+
+    return c.json({
+      success: true,
+      message: "Cache cleared. Contact will be re-analyzed.",
+    });
+  } catch (e) {
+    console.error("Failed to delete contact intel", e);
+    return c.json({ error: "Failed to delete intel" }, 500);
+  }
 });
 
 // OpenAI Integration with Multi-Model Router
@@ -4921,26 +6247,36 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
     }
 
     const body = await c.req.json();
-    const { contactName, company, goal, type, contextData, salesStyle, prompt } = body; 
-    
+    const {
+      contactName,
+      company,
+      goal,
+      type,
+      contextData,
+      salesStyle,
+      prompt,
+    } = body;
+
     // 1. Fetch Custom Knowledge (Sales Codex)
     let customKnowledge = "";
     try {
-        const knowledgeModules = await kv.getByPrefix(userPrefix(userId, "knowledge:"));
-        if (knowledgeModules && knowledgeModules.length > 0) {
-            customKnowledge = `
+      const knowledgeModules = await kv.getByPrefix(
+        userPrefix(userId, "knowledge:"),
+      );
+      if (knowledgeModules && knowledgeModules.length > 0) {
+        customKnowledge = `
             USER'S SALES CODEX (Priority Instructions from uploaded books):
-            ${knowledgeModules.map((k: any) => `--- METHODOLOGY: ${k.title} ---\n${k.content}`).join('\n')}
+            ${knowledgeModules.map((k: any) => `--- METHODOLOGY: ${k.title} ---\n${k.content}`).join("\n")}
             `;
-        }
+      }
     } catch (e) {
-        console.error("Failed to load knowledge modules", e);
+      console.error("Failed to load knowledge modules", e);
     }
 
     // 2. Define Style Instructions based on Sales Style
     let styleInstruction = "";
-    if (salesStyle === 'hunter') {
-        styleInstruction = `
+    if (salesStyle === "hunter") {
+      styleInstruction = `
         STYLE: HUNTER / CHALLENGER (CZ: "Dravý obchodník").
         - Be direct, assertive, professional but bold.
         - Focus on ROI, Money, Risk of Inaction.
@@ -4948,7 +6284,7 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         - Challenge their current status quo (Excel, annual surveys).
         `;
     } else {
-        styleInstruction = `
+      styleInstruction = `
         STYLE: CONSULTATIVE / ADVISOR (CZ: "Partner/Konzultant").
         - Be empathetic, curious, high emotional intelligence.
         - Focus on "Understanding", "Help", "Team Health".
@@ -4957,14 +6293,14 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         `;
     }
 
-    let model = "gpt-4o"; 
+    let model = "gpt-4o";
     let systemPrompt = "";
     let userPrompt = "";
 
     switch (type) {
-      case 'email':
-      case 'email-cold':
-        model = "gpt-4o"; 
+      case "email":
+      case "email-cold":
+        model = "gpt-4o";
         systemPrompt = `You are top-tier B2B Sales Copywriter for the Czech market.
         ${PRODUCT_KNOWLEDGE}
         ${INDUSTRY_KNOWLEDGE}
@@ -4988,7 +6324,7 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         `;
         break;
 
-      case 'email-demo':
+      case "email-demo":
         model = "gpt-4o";
         systemPrompt = `You are a top-tier B2B Sales Follow-Up Specialist for the Czech market.
         ${PRODUCT_KNOWLEDGE}
@@ -5016,19 +6352,19 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         Goal: ${goal}.
         
         DEMO CONTEXT:
-        ${contextData?.totalTimeSec ? `Demo duration: ${Math.round(Number(contextData.totalTimeSec) / 60)} minutes` : ''}
-        ${contextData?.phaseTimes ? `SPIN phase distribution: ${JSON.stringify(contextData.phaseTimes)}` : ''}
-        ${contextData?.aiAnalysis ? `AI analysis of the demo: ${JSON.stringify(contextData.aiAnalysis)}` : ''}
-        ${contextData?.keyCaptions ? `Key moments from the conversation:\n${contextData.keyCaptions}` : ''}
-        ${contextData?.notes ? `Sales rep notes: ${contextData.notes}` : ''}
-        ${contextData?.outcome ? `Call outcome: ${contextData.outcome}` : ''}
-        ${contextData?.duration_sec ? `Call duration: ${Math.round(Number(contextData.duration_sec) / 60)} min` : ''}
+        ${contextData?.totalTimeSec ? `Demo duration: ${Math.round(Number(contextData.totalTimeSec) / 60)} minutes` : ""}
+        ${contextData?.phaseTimes ? `SPIN phase distribution: ${JSON.stringify(contextData.phaseTimes)}` : ""}
+        ${contextData?.aiAnalysis ? `AI analysis of the demo: ${JSON.stringify(contextData.aiAnalysis)}` : ""}
+        ${contextData?.keyCaptions ? `Key moments from the conversation:\n${contextData.keyCaptions}` : ""}
+        ${contextData?.notes ? `Sales rep notes: ${contextData.notes}` : ""}
+        ${contextData?.outcome ? `Call outcome: ${contextData.outcome}` : ""}
+        ${contextData?.duration_sec ? `Call duration: ${Math.round(Number(contextData.duration_sec) / 60)} min` : ""}
         
         Use the conversation context to make the email hyper-specific. Reference their actual pain points and questions.
         `;
         break;
 
-      case 'spin-script': {
+      case "spin-script": {
         model = "gpt-4o";
 
         const industry = contextData?.industry?.toString?.() || "";
@@ -5037,8 +6373,14 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         const redLines = buildRedLines({ industry, role, notes });
 
         const admin = getAdminClient();
-        const contactId = contextData?.contact_id ? String(contextData.contact_id) : null;
-        let approvedFacts: Array<{ claim?: string; source_url?: string; evidence_id?: string }> = [];
+        const contactId = contextData?.contact_id
+          ? String(contextData.contact_id)
+          : null;
+        let approvedFacts: Array<{
+          claim?: string;
+          source_url?: string;
+          evidence_id?: string;
+        }> = [];
         if (admin && contactId) {
           try {
             const { data } = await admin
@@ -5050,7 +6392,10 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
               .limit(10);
             approvedFacts = Array.isArray(data) ? data : [];
           } catch (e) {
-            console.error("spin-script: facts lookup failed (non-blocking):", e);
+            console.error(
+              "spin-script: facts lookup failed (non-blocking):",
+              e,
+            );
             approvedFacts = [];
           }
         }
@@ -5058,7 +6403,10 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         const approvedFactsText =
           approvedFacts.length > 0
             ? approvedFacts
-                .map((f) => `- ${String(f.claim || "").trim()}${f.source_url ? ` (${String(f.source_url).trim()})` : ""}`)
+                .map(
+                  (f) =>
+                    `- ${String(f.claim || "").trim()}${f.source_url ? ` (${String(f.source_url).trim()})` : ""}`,
+                )
                 .filter((s) => s.length > 3)
                 .join("\n")
             : "(none)";
@@ -5143,13 +6491,15 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         ALL TEXT IN CZECH. Natural spoken language. Questions must be ready-to-say Czech phrases.
         Avoid hype. Be concrete. Follow evidence rules.`;
 
-        userPrompt = prompt || `Create a full 20-minute demo meeting script for ${contactName || 'klienta'} ve firmě ${company || '—'}.
-        Goal: ${goal || 'Vést 20-min demo, pochopit potřeby, dohodnout pilotní spuštění Echo Pulse'}.
+        userPrompt =
+          prompt ||
+          `Create a full 20-minute demo meeting script for ${contactName || "klienta"} ve firmě ${company || "—"}.
+        Goal: ${goal || "Vést 20-min demo, pochopit potřeby, dohodnout pilotní spuštění Echo Pulse"}.
         Context: ${JSON.stringify(contextData || {})}`;
         break;
       }
 
-      case 'script':
+      case "script":
         model = "gpt-4o";
         systemPrompt = `You are a cold-calling expert creating a script for a Czech B2B rep.
         ${PRODUCT_KNOWLEDGE}
@@ -5174,8 +6524,8 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         Goal: ${goal}.`;
         break;
 
-      case 'research':
-        model = "gpt-4o"; 
+      case "research":
+        model = "gpt-4o";
         systemPrompt = `You are a "Sales OSINT Detective" for the Czech B2B market.
         
         INPUT DATA:
@@ -5220,8 +6570,8 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         If domain is corporate, TRUST THE DOMAIN for enrichment.
         `;
         break;
-        
-      case 'analysis':
+
+      case "analysis":
         model = "gpt-4o";
         systemPrompt = `You are a CRM Data Enrichment Bot.
         Extract BANT and key facts from the text.
@@ -5231,7 +6581,7 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         If missing, return empty string.`;
         break;
 
-      case 'battle_card':
+      case "battle_card":
         model = "gpt-4o";
         systemPrompt = `You are an expert sales coach whispering advice during a call.
         ${PRODUCT_KNOWLEDGE}
@@ -5248,8 +6598,8 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         userPrompt = `Trigger: ${contextData?.trigger}. Context: ${company}. Give me the best response line.`;
         break;
 
-      case 'live_assist':
-        model = "gpt-4o-mini"; 
+      case "live_assist":
+        model = "gpt-4o-mini";
         systemPrompt = `You are a real-time sales copilot. Analyze the last few seconds of a sales call transcript.
         
         YOUR JOB:
@@ -5264,11 +6614,11 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         userPrompt = `Transcript excerpt: "${contextData?.transcript}". Sales Style: ${salesStyle}. Analyze immediately.`;
         break;
 
-      case 'roleplay':
-        model = "gpt-4o"; 
+      case "roleplay":
+        model = "gpt-4o";
         const prospect = contextData?.contact || {};
         const history = contextData?.history || [];
-        
+
         systemPrompt = `You are a Czech B2B Prospect in a realistic roleplay. 
         
         PROSPECT PROFILE:
@@ -5285,16 +6635,16 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         
         LANGUAGE: Czech only. Colloquial is fine.
         `;
-        
+
         userPrompt = `Conversation History:
-        ${history.map((h: any) => `${h.speaker === 'me' ? 'Salesperson' : 'Prospect'}: ${h.text}`).join('\n')}
+        ${history.map((h: any) => `${h.speaker === "me" ? "Salesperson" : "Prospect"}: ${h.text}`).join("\n")}
         
-        Salesperson just said: "${contextData?.lastUserMessage || '(Silence)'}"
+        Salesperson just said: "${contextData?.lastUserMessage || "(Silence)"}"
         
         Respond as the Prospect (keep it short):`;
         break;
 
-      case 'call-intelligence':
+      case "call-intelligence":
         model = "gpt-4o";
         systemPrompt = `You are an elite Czech B2B sales intelligence analyst for Echo Pulse by Behavery.
         You have deep expertise in three proven sales methodologies: SPIN Selling, Straight Line Persuasion, and Challenger Sale.
@@ -5383,13 +6733,13 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
         - ALWAYS return all fields, never null or undefined
         `;
         userPrompt = `Prepare complete call intelligence for:
-        - Person: ${contactName || 'Unknown'}
-        - Title/Role: ${contextData?.title || 'Unknown'}
-        - Company: ${company || 'Unknown'}
-        - Industry: ${contextData?.industry || 'Unknown'}
-        - Email: ${contextData?.email || 'N/A'}
-        - Website: ${contextData?.website || 'N/A'}
-        - Notes: ${contextData?.notes || 'None'}
+        - Person: ${contactName || "Unknown"}
+        - Title/Role: ${contextData?.title || "Unknown"}
+        - Company: ${company || "Unknown"}
+        - Industry: ${contextData?.industry || "Unknown"}
+        - Email: ${contextData?.email || "N/A"}
+        - Website: ${contextData?.website || "N/A"}
+        - Notes: ${contextData?.notes || "None"}
         
         Generate the full JSON intelligence brief.`;
         break;
@@ -5399,81 +6749,122 @@ app.post(`${BASE_PATH}/ai/generate`, async (c) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: model, 
+        model: model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
-        temperature: (type === 'research' || type === 'call-intelligence') ? 0.3 : (type === 'spin-script' ? 0.5 : 0.7),
-        response_format: (type === 'research' || type === 'spin-script' || type === 'call-intelligence') ? { type: "json_object" } : undefined
-      })
+        temperature:
+          type === "research" || type === "call-intelligence"
+            ? 0.3
+            : type === "spin-script"
+              ? 0.5
+              : 0.7,
+        response_format:
+          type === "research" ||
+          type === "spin-script" ||
+          type === "call-intelligence"
+            ? { type: "json_object" }
+            : undefined,
+      }),
     });
 
     if (!response.ok) {
       const err = await response.text();
       console.error("OpenAI API error:", err);
-      return c.json({ error: "Failed to generate AI content" }, response.status);
+      return c.json(
+        { error: "Failed to generate AI content" },
+        response.status,
+      );
     }
 
     const aiData = await response.json();
     const content = aiData.choices[0]?.message?.content || "";
 
     // For research, parse the JSON
-    if (type === 'research') {
-        try {
-            return c.json(JSON.parse(content));
-        } catch (e) {
-            console.error("Failed to parse JSON from AI", content);
-            return c.json({ error: "Invalid AI JSON format" }, 500);
-        }
+    if (type === "research") {
+      try {
+        return c.json(JSON.parse(content));
+      } catch (e) {
+        console.error("Failed to parse JSON from AI", content);
+        return c.json({ error: "Invalid AI JSON format" }, 500);
+      }
     }
 
     // For call-intelligence, parse JSON and return directly
-    if (type === 'call-intelligence') {
-        try {
-            const parsed = JSON.parse(content);
-            // Ensure all required fields exist with fallbacks
-            return c.json({
-                companyInsight: parsed.companyInsight || '',
-                painPoints: Array.isArray(parsed.painPoints) ? parsed.painPoints : [],
-                openingLine: parsed.openingLine || '',
-                openingVariants: Array.isArray(parsed.openingVariants) ? parsed.openingVariants : [],
-                voicemailScript: parsed.voicemailScript || '',
-                gatekeeperScript: parsed.gatekeeperScript || '',
-                linkedInMessageDraft: parsed.linkedInMessageDraft || parsed.linkedinMessageDraft || parsed.linkedInMessage || '',
-                qualifyingQuestions: Array.isArray(parsed.qualifyingQuestions) ? parsed.qualifyingQuestions : [],
-                objectionHandlers: Array.isArray(parsed.objectionHandlers) ? parsed.objectionHandlers : [],
-                competitorMentions: Array.isArray(parsed.competitorMentions) ? parsed.competitorMentions : [],
-                recentNews: parsed.recentNews || '',
-                decisionMakerTips: parsed.decisionMakerTips || '',
-                bookingScript: parsed.bookingScript || '',
-                challengerInsight: parsed.challengerInsight || '',
-                certaintyBuilders: parsed.certaintyBuilders && typeof parsed.certaintyBuilders === 'object' ? parsed.certaintyBuilders : { product: '', you: '', company: '' },
-                callTimeline: Array.isArray(parsed.callTimeline) ? parsed.callTimeline : [],
-                loopingScripts: Array.isArray(parsed.loopingScripts) ? parsed.loopingScripts : [],
-            });
-        } catch (e) {
-            console.error("Failed to parse call-intelligence JSON from AI", content);
-            return c.json({ error: "AI returned invalid JSON for call intelligence" }, 500);
-        }
+    if (type === "call-intelligence") {
+      try {
+        const parsed = JSON.parse(content);
+        // Ensure all required fields exist with fallbacks
+        return c.json({
+          companyInsight: parsed.companyInsight || "",
+          painPoints: Array.isArray(parsed.painPoints) ? parsed.painPoints : [],
+          openingLine: parsed.openingLine || "",
+          openingVariants: Array.isArray(parsed.openingVariants)
+            ? parsed.openingVariants
+            : [],
+          voicemailScript: parsed.voicemailScript || "",
+          gatekeeperScript: parsed.gatekeeperScript || "",
+          linkedInMessageDraft:
+            parsed.linkedInMessageDraft ||
+            parsed.linkedinMessageDraft ||
+            parsed.linkedInMessage ||
+            "",
+          qualifyingQuestions: Array.isArray(parsed.qualifyingQuestions)
+            ? parsed.qualifyingQuestions
+            : [],
+          objectionHandlers: Array.isArray(parsed.objectionHandlers)
+            ? parsed.objectionHandlers
+            : [],
+          competitorMentions: Array.isArray(parsed.competitorMentions)
+            ? parsed.competitorMentions
+            : [],
+          recentNews: parsed.recentNews || "",
+          decisionMakerTips: parsed.decisionMakerTips || "",
+          bookingScript: parsed.bookingScript || "",
+          challengerInsight: parsed.challengerInsight || "",
+          certaintyBuilders:
+            parsed.certaintyBuilders &&
+            typeof parsed.certaintyBuilders === "object"
+              ? parsed.certaintyBuilders
+              : { product: "", you: "", company: "" },
+          callTimeline: Array.isArray(parsed.callTimeline)
+            ? parsed.callTimeline
+            : [],
+          loopingScripts: Array.isArray(parsed.loopingScripts)
+            ? parsed.loopingScripts
+            : [],
+        });
+      } catch (e) {
+        console.error(
+          "Failed to parse call-intelligence JSON from AI",
+          content,
+        );
+        return c.json(
+          { error: "AI returned invalid JSON for call intelligence" },
+          500,
+        );
+      }
     }
 
     // For spin-script, return as { script: ... }
-    if (type === 'spin-script') {
-        try {
-            const parsed = JSON.parse(content);
-            return c.json({ script: parsed });
-        } catch (e) {
-            console.error("Failed to parse SPIN script JSON from AI", content);
-            return c.json({ script: null, error: "AI returned invalid JSON for SPIN script" }, 500);
-        }
+    if (type === "spin-script") {
+      try {
+        const parsed = JSON.parse(content);
+        return c.json({ script: parsed });
+      } catch (e) {
+        console.error("Failed to parse SPIN script JSON from AI", content);
+        return c.json(
+          { script: null, error: "AI returned invalid JSON for SPIN script" },
+          500,
+        );
+      }
     }
 
     return c.json({ content });
-
   } catch (error) {
     console.error("OpenAI integration error:", error);
     return c.json({ error: "Internal AI Error" }, 500);
@@ -5492,7 +6883,7 @@ app.post(`${BASE_PATH}/ai/speak`, async (c) => {
     const response = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -5503,9 +6894,9 @@ app.post(`${BASE_PATH}/ai/speak`, async (c) => {
     });
 
     if (!response.ok) {
-        const err = await response.text();
-        console.error("TTS Error", err);
-        return c.json({ error: "TTS Failed" }, 500);
+      const err = await response.text();
+      console.error("TTS Error", err);
+      return c.json({ error: "TTS Failed" }, 500);
     }
 
     // Proxy the audio stream
@@ -5514,7 +6905,6 @@ app.post(`${BASE_PATH}/ai/speak`, async (c) => {
         "Content-Type": "audio/mpeg",
       },
     });
-
   } catch (e) {
     console.error("TTS Internal Error", e);
     return c.json({ error: "TTS Error" }, 500);
@@ -5526,15 +6916,16 @@ app.post(`${BASE_PATH}/ai/analyze-call`, async (c) => {
   try {
     const userId = getUserId(c);
     const { transcript, salesStyle, contact } = await c.req.json();
-    
+
     if (!transcript || transcript.length < 2) {
-        return c.json({
-          score: 0,
-          summary: "Hovor je příliš krátký na analýzu.",
-          strengths: [],
-          weaknesses: [],
-          coachingTip: "Příště si udělej aspoň 2–3 poznámky k situaci/problému a dalšímu kroku.",
-        });
+      return c.json({
+        score: 0,
+        summary: "Hovor je příliš krátký na analýzu.",
+        strengths: [],
+        weaknesses: [],
+        coachingTip:
+          "Příště si udělej aspoň 2–3 poznámky k situaci/problému a dalšímu kroku.",
+      });
     }
 
     const apiKey = await getOpenAiApiKeyForUser(userId);
@@ -5563,30 +6954,29 @@ app.post(`${BASE_PATH}/ai/analyze-call`, async (c) => {
     const userPrompt = `
     Contact: ${contact?.name} (${contact?.role})
     Transcript:
-    ${transcript.map((t: any) => `${t.speaker}: ${t.text}`).join('\n')}
+    ${transcript.map((t: any) => `${t.speaker}: ${t.text}`).join("\n")}
     `;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
-        response_format: { type: "json_object" }
+        response_format: { type: "json_object" },
       }),
     });
 
     const data = await response.json();
     const analysis = JSON.parse(data.choices[0].message.content);
-    
-    return c.json(analysis);
 
+    return c.json(analysis);
   } catch (e) {
     console.error("Analysis Error", e);
     return c.json({ error: "Analysis Failed" }, 500);
@@ -5620,15 +7010,18 @@ app.post(`${BASE_PATH}/mentor-chat`, async (c) => {
 
     // Convert history to OpenAI format
     const messages = [
-        { role: "system", content: systemPrompt },
-        ...(history || []).map((h: any) => ({ role: h.role, content: h.content })),
-        { role: "user", content: message }
+      { role: "system", content: systemPrompt },
+      ...(history || []).map((h: any) => ({
+        role: h.role,
+        content: h.content,
+      })),
+      { role: "user", content: message },
     ];
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -5643,12 +7036,11 @@ app.post(`${BASE_PATH}/mentor-chat`, async (c) => {
     // Analyze sentiment of the reply to determine mood
     // Simple heuristic: if it contains specific words, set mood.
     // In a real app, we'd ask LLM to output JSON with mood.
-    let mood = 'neutral';
-    if (reply.includes('!')) mood = 'happy';
-    if (reply.includes('?')) mood = 'concerned';
+    let mood = "neutral";
+    if (reply.includes("!")) mood = "happy";
+    if (reply.includes("?")) mood = "concerned";
 
     return c.json({ reply, mood });
-
   } catch (e) {
     console.error("Mentor Chat Error", e);
     return c.json({ error: "Mentor is offline" }, 500);
@@ -5673,11 +7065,12 @@ app.post(`${BASE_PATH}/knowledge`, async (c) => {
   try {
     const userId = getUserId(c);
     const { title, content, tags } = await c.req.json();
-    if (!title || !content) return c.json({ error: "Title and content required" }, 400);
+    if (!title || !content)
+      return c.json({ error: "Title and content required" }, 400);
 
     const id = crypto.randomUUID();
     const module = { id, title, content, tags: tags || [] };
-    
+
     await kv.set(userKey(userId, `knowledge:${id}`), module);
     return c.json({ success: true, module });
   } catch (e) {
@@ -5689,7 +7082,7 @@ app.post(`${BASE_PATH}/knowledge`, async (c) => {
 app.delete(`${BASE_PATH}/knowledge/:id`, async (c) => {
   try {
     const userId = getUserId(c);
-    const id = c.req.param('id');
+    const id = c.req.param("id");
     await kv.del(userKey(userId, `knowledge:${id}`));
     return c.json({ success: true });
   } catch (e) {
@@ -5699,7 +7092,11 @@ app.delete(`${BASE_PATH}/knowledge/:id`, async (c) => {
 
 // Health check
 app.get(`${BASE_PATH}/health`, (c) =>
-  c.json({ status: "ok", version: FUNCTION_VERSION, time: new Date().toISOString() }),
+  c.json({
+    status: "ok",
+    version: FUNCTION_VERSION,
+    time: new Date().toISOString(),
+  }),
 );
 
 app.get(`${BASE_PATH}/health/db`, async (c) => {
@@ -5731,7 +7128,7 @@ app.post(`${BASE_PATH}/campaigns`, async (c) => {
     const userId = getUserId(c);
     const body = await c.req.json();
     const { name, description, contacts } = body;
-    
+
     if (!name) return c.json({ error: "Name is required" }, 400);
 
     const id = crypto.randomUUID();
@@ -5739,7 +7136,7 @@ app.post(`${BASE_PATH}/campaigns`, async (c) => {
       id,
       name,
       description: description || "",
-      contacts: contacts || []
+      contacts: contacts || [],
     };
 
     await kv.set(userKey(userId, `campaign:${id}`), campaign);
@@ -5754,7 +7151,7 @@ app.post(`${BASE_PATH}/campaigns`, async (c) => {
 app.delete(`${BASE_PATH}/campaigns/:id`, async (c) => {
   try {
     const userId = getUserId(c);
-    const id = c.req.param('id');
+    const id = c.req.param("id");
     await kv.del(userKey(userId, `campaign:${id}`));
     return c.json({ success: true });
   } catch (error) {
@@ -5766,11 +7163,12 @@ app.delete(`${BASE_PATH}/campaigns/:id`, async (c) => {
 app.post(`${BASE_PATH}/pipedrive/notes`, async (c) => {
   try {
     const userId = getUserId(c);
-    let apiKey = (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
+    let apiKey =
+      (await getPipedriveKey(userId)) || Deno.env.get("PIPEDRIVE_API_KEY");
     if (!apiKey) return c.json({ error: "No Pipedrive API Key" }, 500);
 
     const { personId, orgId, content } = await c.req.json();
-    if (!content || typeof content !== 'string' || content.trim().length < 3) {
+    if (!content || typeof content !== "string" || content.trim().length < 3) {
       return c.json({ error: "Content is required (min 3 chars)" }, 400);
     }
 
@@ -5778,23 +7176,26 @@ app.post(`${BASE_PATH}/pipedrive/notes`, async (c) => {
     if (personId) noteBody.person_id = Number(personId);
     if (orgId) noteBody.org_id = Number(orgId);
 
-    const resp = await fetch(`https://api.pipedrive.com/v1/notes?api_token=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(noteBody),
-    });
+    const resp = await fetch(
+      `https://api.pipedrive.com/v1/notes?api_token=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(noteBody),
+      },
+    );
 
     if (!resp.ok) {
       const text = await resp.text();
-      console.error('Pipedrive note error:', resp.status, text);
+      console.error("Pipedrive note error:", resp.status, text);
       return c.json({ error: `Pipedrive returned ${resp.status}` }, 502);
     }
 
     const result = await resp.json();
     return c.json({ success: true, noteId: result?.data?.id || null });
   } catch (e) {
-    console.error('Pipedrive note error:', e);
-    return c.json({ error: 'Failed to create note' }, 500);
+    console.error("Pipedrive note error:", e);
+    return c.json({ error: "Failed to create note" }, 500);
   }
 });
 
@@ -5803,7 +7204,15 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
   try {
     const userId = getUserId(c);
     const body = await c.req.json();
-    const { campaignId, contactId, contactName, companyName, disposition, notes, duration } = body;
+    const {
+      campaignId,
+      contactId,
+      contactName,
+      companyName,
+      disposition,
+      notes,
+      duration,
+    } = body;
 
     const logId = crypto.randomUUID();
     const log: CallLog = {
@@ -5839,8 +7248,10 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
     // Save to DB calls table (best-effort)
     if (admin) {
       try {
-        const connected = disposition === "connected" || disposition === "meeting";
-        const durationSec = typeof duration === "number" ? duration : Number(duration);
+        const connected =
+          disposition === "connected" || disposition === "meeting";
+        const durationSec =
+          typeof duration === "number" ? duration : Number(duration);
         await admin.from("calls").insert({
           contact_id: resolved?.contactId || null,
           status: "completed",
@@ -5856,7 +7267,12 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
 
     // --- PIPEDRIVE SYNC START ---
     const pipedriveKey = await getPipedriveApiKeyForUser(userId);
-    const pipedriveResult: { attempted: boolean; synced: boolean; activity_id?: number; error?: string } = {
+    const pipedriveResult: {
+      attempted: boolean;
+      synced: boolean;
+      activity_id?: number;
+      error?: string;
+    } = {
       attempted: false,
       synced: false,
     };
@@ -5870,18 +7286,29 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
         let dealId: number | null = null;
 
         if (resolved && admin) {
-          const pd = await resolvePipedrivePersonAndDeal({ admin, userId, rawContactId: rawId, resolved });
+          const pd = await resolvePipedrivePersonAndDeal({
+            admin,
+            userId,
+            rawContactId: rawId,
+            resolved,
+          });
           personId = pd.personId;
           orgId = pd.orgId;
         } else {
           const directPersonId = Number(rawId);
-          if (Number.isFinite(directPersonId) && !Number.isNaN(directPersonId)) {
+          if (
+            Number.isFinite(directPersonId) &&
+            !Number.isNaN(directPersonId)
+          ) {
             personId = directPersonId;
           } else {
             const leadMatch = rawId.match(/^(lead:|lead-|lead_)?(\d+)$/i);
             const leadId = leadMatch?.[2] || null;
             if (leadId) {
-              const leadJson: any = await pipedriveJson(pipedriveKey, `leads/${encodeURIComponent(leadId)}`);
+              const leadJson: any = await pipedriveJson(
+                pipedriveKey,
+                `leads/${encodeURIComponent(leadId)}`,
+              );
               const lead = leadJson?.data || {};
               const personIdRaw =
                 lead.person_id?.value ??
@@ -5896,9 +7323,55 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
                 lead.org_id ??
                 null;
               const candidate = Number(personIdRaw);
-              if (Number.isFinite(candidate) && !Number.isNaN(candidate)) personId = candidate;
+              if (Number.isFinite(candidate) && !Number.isNaN(candidate))
+                personId = candidate;
               const candidateOrg = orgIdRaw ? Number(orgIdRaw) : null;
-              if (candidateOrg !== null && Number.isFinite(candidateOrg) && !Number.isNaN(candidateOrg)) orgId = candidateOrg;
+              if (
+                candidateOrg !== null &&
+                Number.isFinite(candidateOrg) &&
+                !Number.isNaN(candidateOrg)
+              )
+                orgId = candidateOrg;
+            }
+
+            // Handle Pipedrive lead UUIDs (e.g. "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+            // The /pipedrive/contacts endpoint returns lead.id (UUID) as the contact id
+            if (!personId && rawId.length > 8 && rawId.includes("-")) {
+              try {
+                console.log("Trying Pipedrive lead UUID lookup:", rawId);
+                const leadJson: any = await pipedriveJson(
+                  pipedriveKey,
+                  `leads/${encodeURIComponent(rawId)}`,
+                );
+                const lead = leadJson?.data || {};
+                const personIdRaw =
+                  lead.person_id?.value ??
+                  lead.person_id ??
+                  lead.person?.id ??
+                  lead.person?.value ??
+                  null;
+                const orgIdRaw =
+                  lead.organization_id?.value ??
+                  lead.organization_id ??
+                  lead.org_id?.value ??
+                  lead.org_id ??
+                  null;
+                const candidate = Number(personIdRaw);
+                if (Number.isFinite(candidate) && !Number.isNaN(candidate))
+                  personId = candidate;
+                const candidateOrg = orgIdRaw ? Number(orgIdRaw) : null;
+                if (
+                  !orgId &&
+                  candidateOrg !== null &&
+                  Number.isFinite(candidateOrg) &&
+                  !Number.isNaN(candidateOrg)
+                )
+                  orgId = candidateOrg;
+                if (personId)
+                  console.log("Resolved lead UUID to person_id:", personId);
+              } catch (e) {
+                console.error("Pipedrive lead UUID resolve failed:", e);
+              }
             }
           }
         }
@@ -5914,12 +7387,25 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
             );
             const deal = dealsJson?.data?.[0] || null;
             const candidateDealId = Number(deal?.id);
-            if (Number.isFinite(candidateDealId) && !Number.isNaN(candidateDealId)) dealId = candidateDealId;
+            if (
+              Number.isFinite(candidateDealId) &&
+              !Number.isNaN(candidateDealId)
+            )
+              dealId = candidateDealId;
             const orgRaw = deal?.org_id?.value ?? deal?.org_id ?? null;
             const candidateOrg = orgRaw ? Number(orgRaw) : null;
-            if (!orgId && candidateOrg !== null && Number.isFinite(candidateOrg) && !Number.isNaN(candidateOrg)) orgId = candidateOrg;
+            if (
+              !orgId &&
+              candidateOrg !== null &&
+              Number.isFinite(candidateOrg) &&
+              !Number.isNaN(candidateOrg)
+            )
+              orgId = candidateOrg;
           } catch (e) {
-            console.error("Pipedrive open-deal lookup failed (non-blocking):", e);
+            console.error(
+              "Pipedrive open-deal lookup failed (non-blocking):",
+              e,
+            );
           }
 
           let subject = `Echo Call: ${disposition}`;
@@ -5930,24 +7416,28 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
           }
 
           const safeNotes = typeof notes === "string" ? notes.trim() : "";
-          const aiNote =
-            await Promise.race([
-              generateCallNoteForPipedrive({
-                language: "cs",
-                disposition: typeof disposition === "string" ? disposition : "call",
-                durationSec: duration,
-                notes: safeNotes,
-                openaiApiKey: await getOpenAiApiKeyForUser(userId),
-                contact: {
-                  name: resolved?.contact?.name || contactName || null,
-                  title: resolved?.contact?.title || null,
-                  company: resolved?.contact?.company || companyName || null,
-                },
-              }),
-              sleep(2500).then(() => null),
-            ]);
+          const aiNote = await Promise.race([
+            generateCallNoteForPipedrive({
+              language: "cs",
+              disposition:
+                typeof disposition === "string" ? disposition : "call",
+              durationSec: duration,
+              notes: safeNotes,
+              openaiApiKey: await getOpenAiApiKeyForUser(userId),
+              contact: {
+                name: resolved?.contact?.name || contactName || null,
+                title: resolved?.contact?.title || null,
+                company: resolved?.contact?.company || companyName || null,
+              },
+            }),
+            sleep(2500).then(() => null),
+          ]);
 
-          const noteText = (aiNote || safeNotes || `Logged via Echo. Disposition: ${disposition}`).toString();
+          const noteText = (
+            aiNote ||
+            safeNotes ||
+            `Logged via Echo. Disposition: ${disposition}`
+          ).toString();
           const htmlNote = formatActivityNoteHtml(noteText);
 
           const activityBody: any = {
@@ -5963,11 +7453,17 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
 
           let lastErr: string | null = null;
           for (let attempt = 0; attempt < 3; attempt++) {
-            const pdRes = await fetch(`https://api.pipedrive.com/v1/activities?api_token=${pipedriveKey}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Accept: "application/json" },
-              body: JSON.stringify(activityBody),
-            });
+            const pdRes = await fetch(
+              `https://api.pipedrive.com/v1/activities?api_token=${pipedriveKey}`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+                body: JSON.stringify(activityBody),
+              },
+            );
             const parsed = await pdRes.json().catch(() => null);
             if (pdRes.ok && parsed?.data?.id) {
               pipedriveResult.synced = true;
@@ -5976,7 +7472,8 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
               break;
             }
 
-            lastErr = parsed?.error || parsed?.message || `HTTP ${pdRes.status}`;
+            lastErr =
+              parsed?.error || parsed?.message || `HTTP ${pdRes.status}`;
             const retryable = pdRes.status === 429 || pdRes.status >= 500;
             if (!retryable || attempt === 2) break;
             await sleep(350 * (attempt + 1) + Math.floor(Math.random() * 250));
@@ -5990,7 +7487,8 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
             const followUpDate = new Date();
             followUpDate.setDate(followUpDate.getDate() + 2);
             const dueDateStr = followUpDate.toISOString().split("T")[0];
-            const followUpName = contactName || resolved?.contact?.name || "Lead";
+            const followUpName =
+              contactName || resolved?.contact?.name || "Lead";
             const followUpBody: Record<string, any> = {
               subject: `2nd attempt – ${followUpName}`,
               type: "call",
@@ -6003,10 +7501,14 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
             if (dealId) followUpBody.deal_id = dealId;
             if (orgId) followUpBody.org_id = orgId;
 
-            fetch(`https://api.pipedrive.com/v1/activities?api_token=${pipedriveKey}`,
+            fetch(
+              `https://api.pipedrive.com/v1/activities?api_token=${pipedriveKey}`,
               {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Accept: "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
                 body: JSON.stringify(followUpBody),
               },
             ).catch(() => {});
@@ -6014,7 +7516,8 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
         }
       } catch (pdErr) {
         console.error("Pipedrive Sync Error:", pdErr);
-        pipedriveResult.error = pdErr instanceof Error ? pdErr.message : String(pdErr);
+        pipedriveResult.error =
+          pdErr instanceof Error ? pdErr.message : String(pdErr);
       }
     }
     // --- PIPEDRIVE SYNC END ---
@@ -6022,7 +7525,7 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
     // Verify campaign and update contact status if needed (simplified logic)
     // In a real app, we'd find the campaign and update the specific contact's status inside it
     // For this MVP, we will rely on the frontend to filter 'pending' vs 'called' based on local state or reload.
-    
+
     return c.json({
       success: true,
       logId,
@@ -6047,84 +7550,110 @@ app.get(`${BASE_PATH}/analytics`, async (c) => {
     const userId = getUserId(c);
     // Fetch all logs
     const logs = await kv.getByPrefix(userPrefix(userId, "log:"));
-    
+
     if (!logs || logs.length === 0) {
-        return c.json({
-            totalCalls: 0,
-            connectRate: 0,
-            revenue: 0,
-            dispositionBreakdown: [],
-            dailyVolume: []
-        });
+      return c.json({
+        totalCalls: 0,
+        connectRate: 0,
+        revenue: 0,
+        dispositionBreakdown: [],
+        dailyVolume: [],
+      });
     }
 
     // 1. Calculate KPIs
     const totalCalls = logs.length;
-    
-    // Calculate Today's Calls
-    const today = new Date().toLocaleDateString('en-US');
-    const callsToday = logs.filter((l: any) => new Date(l.timestamp).toLocaleDateString('en-US') === today).length;
 
-    const connectedDispositions = new Set(['connected', 'meeting', 'callback', 'not-interested']);
-    const connected = logs.filter((l: any) => connectedDispositions.has(l.disposition)).length;
-    const sent = logs.filter((l: any) => l.disposition === 'sent').length;
-    const connectRate = totalCalls > 0 ? Math.round((connected / totalCalls) * 100) : 0;
-    
+    // Calculate Today's Calls
+    const today = new Date().toLocaleDateString("en-US");
+    const callsToday = logs.filter(
+      (l: any) => new Date(l.timestamp).toLocaleDateString("en-US") === today,
+    ).length;
+
+    const connectedDispositions = new Set([
+      "connected",
+      "meeting",
+      "callback",
+      "not-interested",
+    ]);
+    const connected = logs.filter((l: any) =>
+      connectedDispositions.has(l.disposition),
+    ).length;
+    const sent = logs.filter((l: any) => l.disposition === "sent").length;
+    const connectRate =
+      totalCalls > 0 ? Math.round((connected / totalCalls) * 100) : 0;
+
     // Estimated revenue based on €500 per connected call
-    const revenue = connected * 500; 
-    
+    const revenue = connected * 500;
+
     // 2. Breakdown
     const breakdownMap: Record<string, number> = {};
     logs.forEach((l: any) => {
-        const d = l.disposition || 'unknown';
-        breakdownMap[d] = (breakdownMap[d] || 0) + 1;
+      const d = l.disposition || "unknown";
+      breakdownMap[d] = (breakdownMap[d] || 0) + 1;
     });
-    const dispositionBreakdown = Object.entries(breakdownMap).map(([name, value]) => ({ name, value }));
+    const dispositionBreakdown = Object.entries(breakdownMap).map(
+      ([name, value]) => ({ name, value }),
+    );
 
     // 3. Daily Volume (Last 7 days)
     const volumeMap: Record<string, number> = {};
     logs.forEach((l: any) => {
-        const date = new Date(l.timestamp).toLocaleDateString('en-US', { weekday: 'short' });
-        volumeMap[date] = (volumeMap[date] || 0) + 1;
+      const date = new Date(l.timestamp).toLocaleDateString("en-US", {
+        weekday: "short",
+      });
+      volumeMap[date] = (volumeMap[date] || 0) + 1;
     });
-    
-    const dailyVolume = Object.entries(volumeMap).map(([time, value]) => ({ time, value }));
+
+    const dailyVolume = Object.entries(volumeMap).map(([time, value]) => ({
+      time,
+      value,
+    }));
 
     // 4. Recent Activity Feed (Last 5 items)
     const recentActivity = logs
-        .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, 5)
-        .map((l: any) => {
-            const disposition = l.disposition || 'unknown';
-            const isConnected = connectedDispositions.has(disposition);
-            const labelName = l.contactName || `contact ${l.contactId}`;
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      )
+      .slice(0, 5)
+      .map((l: any) => {
+        const disposition = l.disposition || "unknown";
+        const isConnected = connectedDispositions.has(disposition);
+        const labelName = l.contactName || `contact ${l.contactId}`;
 
-            let text = `Attempted contact ${labelName} (${disposition})`;
-            if (disposition === 'sent') text = `Email sent to ${labelName}`;
-            if (disposition === 'meeting') text = `Meeting booked with ${labelName}`;
-            if (disposition === 'callback') text = `Callback scheduled with ${labelName}`;
-            if (disposition === 'not-interested') text = `Not interested: ${labelName}`;
-            if (disposition === 'connected') text = `Connected with ${labelName}`;
+        let text = `Attempted contact ${labelName} (${disposition})`;
+        if (disposition === "sent") text = `Email sent to ${labelName}`;
+        if (disposition === "meeting")
+          text = `Meeting booked with ${labelName}`;
+        if (disposition === "callback")
+          text = `Callback scheduled with ${labelName}`;
+        if (disposition === "not-interested")
+          text = `Not interested: ${labelName}`;
+        if (disposition === "connected") text = `Connected with ${labelName}`;
 
-            return {
-                id: l.timestamp, // use timestamp as ID
-                type: disposition === 'sent' ? 'email' : isConnected ? 'call' : 'alert',
-                text,
-                time: new Date(l.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                action: 'View'
-            };
-        });
+        return {
+          id: l.timestamp, // use timestamp as ID
+          type:
+            disposition === "sent" ? "email" : isConnected ? "call" : "alert",
+          text,
+          time: new Date(l.timestamp).toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          action: "View",
+        };
+      });
 
     return c.json({
-        totalCalls,
-        callsToday,
-        connectRate,
-        revenue,
-        dispositionBreakdown,
-        dailyVolume,
-        recentActivity
+      totalCalls,
+      callsToday,
+      connectRate,
+      revenue,
+      dispositionBreakdown,
+      dailyVolume,
+      recentActivity,
     });
-
   } catch (e) {
     console.error("Analytics Error", e);
     return c.json({ error: "Failed to calc analytics" }, 500);
@@ -6140,13 +7669,31 @@ app.post(`${BASE_PATH}/seed`, async (c) => {
 
 // Czech filler words to detect
 const FILLER_WORDS_CZ = [
-  "uhm", "uh", "um", "hm", "hmm", "ehm", "eee", "eeh", "ee",
-  "jako", "prostě", "vlastně", "jakoby", "takže", "no",
-  "v podstatě", "víceméně", "tak nějak", "řekněme",
+  "uhm",
+  "uh",
+  "um",
+  "hm",
+  "hmm",
+  "ehm",
+  "eee",
+  "eeh",
+  "ee",
+  "jako",
+  "prostě",
+  "vlastně",
+  "jakoby",
+  "takže",
+  "no",
+  "v podstatě",
+  "víceméně",
+  "tak nějak",
+  "řekněme",
 ];
 
 // Parse tLDV transcript (multiple formats supported)
-function parseTldvTranscript(raw: string): { speaker: string; text: string; timestamp?: string }[] {
+function parseTldvTranscript(
+  raw: string,
+): { speaker: string; text: string; timestamp?: string }[] {
   const lines = raw.trim().split("\n");
   const turns: { speaker: string; text: string; timestamp?: string }[] = [];
 
@@ -6162,7 +7709,10 @@ function parseTldvTranscript(raw: string): { speaker: string; text: string; time
   let i = 0;
   while (i < lines.length) {
     const line = lines[i].trim();
-    if (!line) { i++; continue; }
+    if (!line) {
+      i++;
+      continue;
+    }
 
     // Try Format 1: [00:15] Josef: Dobrý den
     let m = line.match(fmt1);
@@ -6216,20 +7766,23 @@ function parseTldvTranscript(raw: string): { speaker: string; text: string; time
 function identifyMeSpeaker(turns: { speaker: string; text: string }[]): string {
   // Heuristic: the first speaker is usually "me" (the rep starts the call)
   // Also check for common self-identification patterns
-  const speakers = [...new Set(turns.map(t => t.speaker))];
+  const speakers = [...new Set(turns.map((t) => t.speaker))];
   if (speakers.length <= 1) return speakers[0] || "Me";
   return speakers[0]; // First speaker = rep
 }
 
 // Count words per speaker
-function computeTalkMetrics(turns: { speaker: string; text: string }[], meSpeaker: string) {
+function computeTalkMetrics(
+  turns: { speaker: string; text: string }[],
+  meSpeaker: string,
+) {
   let wordsByMe = 0;
   let wordsByProspect = 0;
   const fillerCounts: Record<string, number> = {};
   let myTotalWords = 0;
 
   for (const turn of turns) {
-    const words = turn.text.split(/\s+/).filter(w => w.length > 0);
+    const words = turn.text.split(/\s+/).filter((w) => w.length > 0);
     const isMe = turn.speaker === meSpeaker;
 
     if (isMe) {
@@ -6240,7 +7793,10 @@ function computeTalkMetrics(turns: { speaker: string; text: string }[], meSpeake
       const lowerText = turn.text.toLowerCase();
       for (const filler of FILLER_WORDS_CZ) {
         // Count occurrences using word boundary-ish matching
-        const regex = new RegExp(`\\b${filler.replace(/\s+/g, "\\s+")}\\b`, "gi");
+        const regex = new RegExp(
+          `\\b${filler.replace(/\s+/g, "\\s+")}\\b`,
+          "gi",
+        );
         const matches = lowerText.match(regex);
         if (matches) {
           fillerCounts[filler] = (fillerCounts[filler] || 0) + matches.length;
@@ -6257,10 +7813,17 @@ function computeTalkMetrics(turns: { speaker: string; text: string }[], meSpeake
   return {
     totalWordsMe: wordsByMe,
     totalWordsProspect: wordsByProspect,
-    talkRatioMe: totalWords > 0 ? Math.round((wordsByMe / totalWords) * 10000) / 100 : 50,
-    talkRatioProspect: totalWords > 0 ? Math.round((wordsByProspect / totalWords) * 10000) / 100 : 50,
+    talkRatioMe:
+      totalWords > 0 ? Math.round((wordsByMe / totalWords) * 10000) / 100 : 50,
+    talkRatioProspect:
+      totalWords > 0
+        ? Math.round((wordsByProspect / totalWords) * 10000) / 100
+        : 50,
     fillerWords: fillerCounts,
-    fillerWordRate: myTotalWords > 0 ? Math.round((totalFillers / myTotalWords) * 10000) / 100 : 0,
+    fillerWordRate:
+      myTotalWords > 0
+        ? Math.round((totalFillers / myTotalWords) * 10000) / 100
+        : 0,
   };
 }
 
@@ -6268,7 +7831,14 @@ function computeTalkMetrics(turns: { speaker: string; text: string }[], meSpeake
 app.post(`${BASE_PATH}/transcript/analyze`, async (c) => {
   try {
     const userId = getUserId(c);
-    const { rawTranscript, contactName, contactCompany, contactRole, durationSeconds, meSpeakerOverride } = await c.req.json();
+    const {
+      rawTranscript,
+      contactName,
+      contactCompany,
+      contactRole,
+      durationSeconds,
+      meSpeakerOverride,
+    } = await c.req.json();
 
     if (!rawTranscript || rawTranscript.trim().length < 50) {
       return c.json({ error: "Transcript too short (minimum 50 chars)" }, 400);
@@ -6280,7 +7850,10 @@ app.post(`${BASE_PATH}/transcript/analyze`, async (c) => {
     // 1. Parse transcript
     const parsed = parseTldvTranscript(rawTranscript);
     if (parsed.length < 2) {
-      return c.json({ error: "Could not parse transcript — need at least 2 turns" }, 400);
+      return c.json(
+        { error: "Could not parse transcript — need at least 2 turns" },
+        400,
+      );
     }
 
     // 2. Identify speakers & compute metrics
@@ -6288,10 +7861,12 @@ app.post(`${BASE_PATH}/transcript/analyze`, async (c) => {
     const metrics = computeTalkMetrics(parsed, meSpeaker);
 
     // 3. Format transcript for AI
-    const formattedTranscript = parsed.map(t => {
-      const role = t.speaker === meSpeaker ? "[REP]" : "[PROSPECT]";
-      return `${role} ${t.speaker}: ${t.text}`;
-    }).join("\n");
+    const formattedTranscript = parsed
+      .map((t) => {
+        const role = t.speaker === meSpeaker ? "[REP]" : "[PROSPECT]";
+        return `${role} ${t.speaker}: ${t.text}`;
+      })
+      .join("\n");
 
     // 4. Call OpenAI for comprehensive analysis
     const systemPrompt = `Jsi přísný ale férový Sales Coach. Analyzuješ transkripty sales hovorů.
@@ -6360,14 +7935,14 @@ OUTPUT JSON (strict):
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `PŘEPIS HOVORU:\n\n${formattedTranscript}` }
+          { role: "user", content: `PŘEPIS HOVORU:\n\n${formattedTranscript}` },
         ],
         response_format: { type: "json_object" },
         temperature: 0.3,
@@ -6434,13 +8009,12 @@ OUTPUT JSON (strict):
         fillerWords: metrics.fillerWords,
         fillerWordRate: metrics.fillerWordRate,
         turnCount: parsed.length,
-        speakers: [...new Set(parsed.map(t => t.speaker))],
+        speakers: [...new Set(parsed.map((t) => t.speaker))],
         meSpeaker,
       },
       analysis,
       saved: !!savedId,
     });
-
   } catch (e) {
     console.error("Transcript Analysis Error", e);
     return c.json({ error: "Transcript analysis failed" }, 500);
@@ -6459,7 +8033,10 @@ app.get(`${BASE_PATH}/transcript/analyses`, async (c) => {
 
     const { data, error, count } = await admin
       .from("call_analyses")
-      .select("id, contact_name, contact_company, contact_role, call_date, duration_seconds, ai_score, ai_summary, talk_ratio_me, talk_ratio_prospect, filler_word_rate, spin_stage_coverage, created_at", { count: "exact" })
+      .select(
+        "id, contact_name, contact_company, contact_role, call_date, duration_seconds, ai_score, ai_summary, talk_ratio_me, talk_ratio_prospect, filler_word_rate, spin_stage_coverage, created_at",
+        { count: "exact" },
+      )
       .eq("user_id", userId)
       .order("call_date", { ascending: false })
       .range(offset, offset + limit - 1);
@@ -6470,7 +8047,6 @@ app.get(`${BASE_PATH}/transcript/analyses`, async (c) => {
     }
 
     return c.json({ analyses: data || [], total: count || 0 });
-
   } catch (e) {
     console.error("List Analyses Error", e);
     return c.json({ error: "Failed to list analyses" }, 500);
@@ -6497,7 +8073,6 @@ app.get(`${BASE_PATH}/transcript/analyses/:id`, async (c) => {
     }
 
     return c.json(data);
-
   } catch (e) {
     console.error("Get Analysis Error", e);
     return c.json({ error: "Failed to get analysis" }, 500);
@@ -6516,7 +8091,9 @@ app.get(`${BASE_PATH}/transcript/stats`, async (c) => {
 
     const { data, error } = await admin
       .from("call_analyses")
-      .select("ai_score, talk_ratio_me, filler_word_rate, call_date, spin_stage_coverage, questions_asked, objections_handled")
+      .select(
+        "ai_score, talk_ratio_me, filler_word_rate, call_date, spin_stage_coverage, questions_asked, objections_handled",
+      )
       .eq("user_id", userId)
       .gte("call_date", since)
       .order("call_date", { ascending: true });
@@ -6528,16 +8105,36 @@ app.get(`${BASE_PATH}/transcript/stats`, async (c) => {
 
     const analyses = data || [];
     if (analyses.length === 0) {
-      return c.json({ totalCalls: 0, avgScore: 0, avgTalkRatio: 0, avgFillerRate: 0, trend: [], questionStats: {}, objectionStats: {} });
+      return c.json({
+        totalCalls: 0,
+        avgScore: 0,
+        avgTalkRatio: 0,
+        avgFillerRate: 0,
+        trend: [],
+        questionStats: {},
+        objectionStats: {},
+      });
     }
 
     // Aggregate
-    const avgScore = Math.round(analyses.reduce((s, a) => s + (a.ai_score || 0), 0) / analyses.length);
-    const avgTalkRatio = Math.round(analyses.reduce((s, a) => s + (a.talk_ratio_me || 0), 0) / analyses.length * 100) / 100;
-    const avgFillerRate = Math.round(analyses.reduce((s, a) => s + (a.filler_word_rate || 0), 0) / analyses.length * 100) / 100;
+    const avgScore = Math.round(
+      analyses.reduce((s, a) => s + (a.ai_score || 0), 0) / analyses.length,
+    );
+    const avgTalkRatio =
+      Math.round(
+        (analyses.reduce((s, a) => s + (a.talk_ratio_me || 0), 0) /
+          analyses.length) *
+          100,
+      ) / 100;
+    const avgFillerRate =
+      Math.round(
+        (analyses.reduce((s, a) => s + (a.filler_word_rate || 0), 0) /
+          analyses.length) *
+          100,
+      ) / 100;
 
     // Score trend over time
-    const trend = analyses.map(a => ({
+    const trend = analyses.map((a) => ({
       date: a.call_date,
       score: a.ai_score,
       talkRatio: a.talk_ratio_me,
@@ -6545,11 +8142,15 @@ app.get(`${BASE_PATH}/transcript/stats`, async (c) => {
     }));
 
     // Question type distribution
-    const questionStats: Record<string, { total: number; strong: number; weak: number }> = {};
+    const questionStats: Record<
+      string,
+      { total: number; strong: number; weak: number }
+    > = {};
     for (const a of analyses) {
-      for (const q of (a.questions_asked || [])) {
+      for (const q of a.questions_asked || []) {
         const phase = q.phase || "other";
-        if (!questionStats[phase]) questionStats[phase] = { total: 0, strong: 0, weak: 0 };
+        if (!questionStats[phase])
+          questionStats[phase] = { total: 0, strong: 0, weak: 0 };
         questionStats[phase].total++;
         if (q.quality === "strong") questionStats[phase].strong++;
         if (q.quality === "weak") questionStats[phase].weak++;
@@ -6557,9 +8158,12 @@ app.get(`${BASE_PATH}/transcript/stats`, async (c) => {
     }
 
     // Objection handling stats
-    let objTotal = 0, objGood = 0, objWeak = 0, objMissed = 0;
+    let objTotal = 0,
+      objGood = 0,
+      objWeak = 0,
+      objMissed = 0;
     for (const a of analyses) {
-      for (const o of (a.objections_handled || [])) {
+      for (const o of a.objections_handled || []) {
         objTotal++;
         if (o.quality === "good") objGood++;
         if (o.quality === "weak") objWeak++;
@@ -6574,9 +8178,13 @@ app.get(`${BASE_PATH}/transcript/stats`, async (c) => {
       avgFillerRate,
       trend,
       questionStats,
-      objectionStats: { total: objTotal, good: objGood, weak: objWeak, missed: objMissed },
+      objectionStats: {
+        total: objTotal,
+        good: objGood,
+        weak: objWeak,
+        missed: objMissed,
+      },
     });
-
   } catch (e) {
     console.error("Stats Error", e);
     return c.json({ error: "Failed to compute stats" }, 500);

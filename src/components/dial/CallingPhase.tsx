@@ -15,14 +15,14 @@ interface CallingPhaseProps {
   notes: string;
   onAnswerChange: (index: number, value: string) => void;
   onNotesChange: (value: string) => void;
-  /** Full CRM save — logs call activity + note. Returns true on success. */
+  /** Full CRM save — logs call activity + note. Returns { ok, message }. */
   onLogCallAndNote: (
     contact: Contact,
     outcome: CallOutcome,
     duration: number,
     qualAnswers: string[],
     notes: string,
-  ) => Promise<boolean>;
+  ) => Promise<{ ok: boolean; message: string }>;
   /** Move to next contact (called after successful save). */
   onNextContact: () => void;
   /** Record session stats for this call. */
@@ -96,8 +96,8 @@ export function CallingPhase({
         // Record call in session stats
         onRecordCall(outcome);
 
-        // Save to Pipedrive — returns true ONLY on success
-        const success = await onLogCallAndNote(
+        // Save to Pipedrive — returns { ok, message } with details
+        const crmResult = await onLogCallAndNote(
           contact,
           outcome,
           callDuration,
@@ -105,21 +105,12 @@ export function CallingPhase({
           notes,
         );
 
-        if (success) {
-          setSaveResult({
-            ok: true,
-            msg:
-              outcome === "no-answer"
-                ? "✓ Nedovoláno zapsáno do Pipedrive"
-                : "✓ Dovoláno + poznámka uložena do Pipedrive",
-          });
+        if (crmResult.ok) {
+          setSaveResult({ ok: true, msg: crmResult.message });
           // Advance to next contact after brief confirmation
           setTimeout(() => onNextContact(), 600);
         } else {
-          setSaveResult({
-            ok: false,
-            msg: "✗ Chyba při ukládání do Pipedrive — zkuste znovu",
-          });
+          setSaveResult({ ok: false, msg: `✗ ${crmResult.message}` });
           setSaving("none");
         }
       } catch (e) {
