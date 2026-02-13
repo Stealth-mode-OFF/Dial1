@@ -50,7 +50,7 @@ type ScheduleRow = {
   status?: string;
 };
 
-const SCHEDULER_URL = 'https://behavera.pipedrive.com/scheduler/GX27Q8iw/konzultace-jak-ziskat-jasna-data-o-svem-tymu-30-minutes';
+import { useUserSettingsCtx } from '../../contexts/UserSettingsContext';
 
 export function SummaryHero({
   lead,
@@ -73,6 +73,7 @@ export function SummaryHero({
   crmResult,
   onSaveCrm,
 }: SummaryHeroProps) {
+  const { schedulerUrl: SCHEDULER_URL } = useUserSettingsCtx();
   const [showScheduler, setShowScheduler] = useState(false);
   const [emailLogStatus, setEmailLogStatus] = useState<string | null>(null);
   const [emailHistory, setEmailHistory] = useState<EmailHistoryItem[]>([]);

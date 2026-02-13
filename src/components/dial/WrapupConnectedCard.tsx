@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { formatTime } from "../../features/dialer/helpers";
 import type { CallOutcome, Contact } from "../../features/dialer/types";
-import { QUAL_QUESTIONS } from "../../features/dialer/config";
+import { useUserSettingsCtx } from "../../contexts/UserSettingsContext";
 import type { CrmResult } from "../../features/dialer/usePipedriveCRM";
 
 interface WrapupConnectedCardProps {
@@ -31,6 +31,7 @@ export function WrapupConnectedCard({
   onSave,
   onShowScheduler,
 }: WrapupConnectedCardProps) {
+  const { qualQuestions: QUAL_QUESTIONS } = useUserSettingsCtx();
   const firstEmptyRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(
     null,
   );

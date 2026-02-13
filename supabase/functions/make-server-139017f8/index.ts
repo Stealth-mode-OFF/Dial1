@@ -917,10 +917,25 @@ const resolveContactForUser = async (
     .from("contacts")
     .select(CONTACT_SELECT_FIELDS)
     .eq("id", rawContactId)
+    .eq("owner_user_id", userId)
     .single();
   if (contactById) {
     contact = contactById;
     contactId = contactById.id;
+  }
+
+  // Fallback: try without owner filter (legacy data or shared contacts)
+  if (!contact) {
+    const { data: contactByIdNoOwner } = await admin
+      .from("contacts")
+      .select(CONTACT_SELECT_FIELDS)
+      .eq("id", rawContactId)
+      .is("owner_user_id", null)
+      .single();
+    if (contactByIdNoOwner) {
+      contact = contactByIdNoOwner;
+      contactId = contactByIdNoOwner.id;
+    }
   }
 
   if (!contact) {
@@ -928,6 +943,7 @@ const resolveContactForUser = async (
       .from("contacts")
       .select(CONTACT_SELECT_FIELDS)
       .eq("external_id", rawContactId)
+      .eq("owner_user_id", userId)
       .limit(1);
     const contactExternal = Array.isArray(contactByExternal)
       ? contactByExternal[0]
@@ -963,6 +979,7 @@ const resolveContactForUser = async (
             source: "pipedrive_person",
             external_id: String(personId),
             last_touch: person.update_time || null,
+            owner_user_id: userId,
           };
           const { data: upserted, error: upsertError } = await admin
             .from("contacts")
@@ -1015,6 +1032,7 @@ const resolveContactForUser = async (
                 source: "pipedrive",
                 external_id: rawContactId,
                 last_touch: person.update_time || null,
+                owner_user_id: userId,
               };
               const { data: upserted, error: upsertError } = await admin
                 .from("contacts")
@@ -1046,6 +1064,7 @@ const resolveContactForUser = async (
               source: "pipedrive",
               external_id: rawContactId,
               last_touch: null,
+              owner_user_id: userId,
             };
             const { data: upserted, error: upsertError } = await admin
               .from("contacts")
@@ -4158,6 +4177,7 @@ app.post(`${BASE_PATH}/pipedrive/import`, async (c) => {
       source: "pipedrive",
       external_id: lead.id?.toString() || null,
       last_touch: lead.update_time || null,
+      owner_user_id: userId,
     }));
 
     const { error } = await admin
@@ -4977,6 +4997,92 @@ app.delete(`${BASE_PATH}/integrations/openai`, async (c) => {
   } catch (e) {
     console.error("Failed to delete OpenAI key", e);
     return c.json({ error: "Failed to delete integration" }, 500);
+  }
+});
+
+// --- USER SETTINGS (per-user dialer config) ---
+app.get(`${BASE_PATH}/user-settings`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    const settings = await kv.get(userKey(userId, "dialer-settings"));
+    return c.json({ ok: true, settings: settings || null });
+  } catch (e) {
+    console.error("Failed to get user settings:", e);
+    return c.json({ ok: false, settings: null });
+  }
+});
+
+app.put(`${BASE_PATH}/user-settings`, async (c) => {
+  try {
+    const userId = getUserId(c);
+    const body = await c.req.json();
+    const { settings } = body;
+    if (!settings || typeof settings !== "object") {
+      return c.json({ error: "settings object required" }, 400);
+    }
+
+    // Validate and sanitise the settings object
+    const sanitised: Record<string, any> = {};
+
+    // Opening script
+    if (typeof settings.openingScript === "string") {
+      sanitised.openingScript = settings.openingScript.trim().slice(0, 2000);
+    }
+    // SMS template
+    if (typeof settings.smsTemplate === "string") {
+      sanitised.smsTemplate = settings.smsTemplate.trim().slice(0, 500);
+    }
+    // Scheduler URL
+    if (typeof settings.schedulerUrl === "string") {
+      sanitised.schedulerUrl = settings.schedulerUrl.trim().slice(0, 500);
+    }
+    // Pipedrive domain
+    if (typeof settings.pipedriveDomain === "string") {
+      sanitised.pipedriveDomain = settings.pipedriveDomain
+        .trim()
+        .replace(/^https?:\/\//, "")
+        .replace(/\/+$/, "")
+        .slice(0, 200);
+    }
+    // Qualification questions (array of objects)
+    if (Array.isArray(settings.qualQuestions)) {
+      sanitised.qualQuestions = settings.qualQuestions
+        .slice(0, 10)
+        .map((q: any) => ({
+          id: String(q.id || "").slice(0, 50),
+          label: String(q.label || "").slice(0, 100),
+          prompt: String(q.prompt || "").slice(0, 500),
+          script: String(q.script || "").slice(0, 1000),
+          placeholder: String(q.placeholder || "").slice(0, 200),
+          icon: String(q.icon || "❓").slice(0, 10),
+          ...(q.followUp ? { followUp: String(q.followUp).slice(0, 500) } : {}),
+          ...(q.followUpYes
+            ? { followUpYes: String(q.followUpYes).slice(0, 500) }
+            : {}),
+          ...(q.followUpNo
+            ? { followUpNo: String(q.followUpNo).slice(0, 500) }
+            : {}),
+        }));
+    }
+    // Sales style
+    if (
+      settings.salesStyle === "hunter" ||
+      settings.salesStyle === "consultative"
+    ) {
+      sanitised.salesStyle = settings.salesStyle;
+    }
+
+    sanitised.updatedAt = Date.now();
+
+    // Merge with existing settings (partial update)
+    const existing = (await kv.get(userKey(userId, "dialer-settings"))) || {};
+    const merged = { ...existing, ...sanitised };
+
+    await kv.set(userKey(userId, "dialer-settings"), merged);
+    return c.json({ ok: true, settings: merged });
+  } catch (e) {
+    console.error("Failed to save user settings:", e);
+    return c.json({ error: "Failed to save settings" }, 500);
   }
 });
 
@@ -7260,6 +7366,7 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
           connected,
           duration_sec: Number.isFinite(durationSec) ? durationSec : null,
           notes: typeof notes === "string" ? notes : null,
+          owner_user_id: userId,
         });
       } catch (e) {
         console.error("DB calls insert failed (non-blocking):", e);
@@ -7499,16 +7606,13 @@ app.post(`${BASE_PATH}/call-logs`, async (c) => {
             const followUpDate = new Date();
             followUpDate.setDate(followUpDate.getDate() + 2);
             const dueDateStr = followUpDate.toISOString().split("T")[0];
-            const followUpName =
-              contactName || resolved?.contact?.name || "Lead";
             const followUpBody: Record<string, any> = {
-              subject: `2nd attempt – ${followUpName}`,
+              subject: "2nd attempt",
               type: "call",
               person_id: personId,
               done: 0,
               due_date: dueDateStr,
               due_time: "09:00",
-              note: `<b>Automatický follow-up</b><br>Nedovoláno dne ${new Date().toLocaleDateString("cs-CZ")}. Naplánován 2. pokus.`,
             };
             if (dealId) followUpBody.deal_id = dealId;
             if (orgId) followUpBody.org_id = orgId;

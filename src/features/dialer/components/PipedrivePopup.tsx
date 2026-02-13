@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PIPEDRIVE_DOMAIN } from "../config";
+import { useUserSettingsCtx } from "../../../contexts/UserSettingsContext";
 
 interface PipedrivePopupProps {
   open: boolean;
@@ -19,6 +19,7 @@ export function PipedrivePopup({
   contactId,
   contactName,
 }: PipedrivePopupProps) {
+  const { pipedriveDomain: PIPEDRIVE_DOMAIN } = useUserSettingsCtx();
   const pipedriveUrl = `https://${PIPEDRIVE_DOMAIN}/person/${contactId}`;
 
   return (

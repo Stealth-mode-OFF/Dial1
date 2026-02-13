@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { SCHEDULER_URL } from "../config";
+import { useUserSettingsCtx } from "../../../contexts/UserSettingsContext";
 
 const CONFETTI_COLORS = [
   "#f59e0b",
@@ -56,6 +56,7 @@ export function BookDemoModal({
   onClose: () => void;
   contactName?: string;
 }) {
+  const { schedulerUrl: SCHEDULER_URL } = useUserSettingsCtx();
   const [showScheduler, setShowScheduler] = useState(false);
 
   useEffect(() => {

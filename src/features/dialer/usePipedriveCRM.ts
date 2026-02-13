@@ -6,7 +6,7 @@ import { useState, useCallback } from "react";
 import { echoApi } from "../../utils/echoApi";
 import { isSupabaseConfigured } from "../../utils/supabase/info";
 import { formatTime, outcomeLabel } from "./helpers";
-import { QUAL_QUESTIONS } from "./config";
+import { useUserSettingsCtx } from "../../contexts/UserSettingsContext";
 import type { CallOutcome, Contact } from "./types";
 import type { CallLogResult } from "../../utils/echoApi";
 
@@ -44,6 +44,7 @@ async function resolvePipedrivePersonId(
 export function usePipedriveCRM() {
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<CrmResult | null>(null);
+  const { qualQuestions: QUAL_QUESTIONS } = useUserSettingsCtx();
 
   const resetResult = useCallback(() => setResult(null), []);
 
@@ -210,7 +211,7 @@ export function usePipedriveCRM() {
         setSaving(false);
       }
     },
-    [],
+    [QUAL_QUESTIONS],
   );
 
   /**

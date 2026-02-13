@@ -5,6 +5,29 @@ import {
 } from "./supabase/info";
 import { supabaseClient } from "./supabase/client";
 
+/** Per-user dialer configuration stored server-side */
+export type QualQuestion = {
+  id: string;
+  label: string;
+  prompt: string;
+  script: string;
+  placeholder: string;
+  icon: string;
+  followUp?: string;
+  followUpYes?: string;
+  followUpNo?: string;
+};
+
+export type UserSettings = {
+  openingScript?: string;
+  smsTemplate?: string;
+  schedulerUrl?: string;
+  pipedriveDomain?: string;
+  qualQuestions?: QualQuestion[];
+  salesStyle?: "hunter" | "consultative";
+  updatedAt?: number;
+};
+
 type FetchOptions = Omit<RequestInit, "headers"> & {
   headers?: Record<string, string>;
 };
@@ -620,6 +643,15 @@ export const echoApi = {
     apiFetch<{ success: boolean }>("integrations/openai", { method: "DELETE" }),
   testOpenAi: () =>
     apiFetch<{ ok: boolean; model_count?: number }>("integrations/openai/test"),
+
+  // --- User Settings ---
+  getUserSettings: () =>
+    apiFetch<{ ok: boolean; settings: UserSettings | null }>("user-settings"),
+  saveUserSettings: (settings: Partial<UserSettings>) =>
+    apiFetch<{ ok: boolean; settings: UserSettings }>("user-settings", {
+      method: "PUT",
+      body: JSON.stringify({ settings }),
+    }),
 
   logCall: (payload: CallLogPayload) =>
     apiFetch<CallLogResult>("call-logs", {

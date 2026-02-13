@@ -23,7 +23,7 @@ import { formatTime } from "./features/dialer/helpers";
 import { useDialerSession } from "./features/dialer/useDialerSession";
 import { useAutoDial } from "./features/dialer/useAutoDial";
 import { usePipedriveCRM } from "./features/dialer/usePipedriveCRM";
-import { DEFAULT_SMS_TEMPLATE, SCHEDULER_URL } from "./features/dialer/config";
+import { useUserSettingsCtx } from "./contexts/UserSettingsContext";
 import type { CallOutcome, Contact } from "./features/dialer/types";
 
 import { FloatingWhisper } from "./features/dialer/components/FloatingWhisper";
@@ -94,16 +94,21 @@ export function DialerApp() {
 
   // ─── Form state ───
   const [notes, setNotes] = useState("");
-  const [aiQualAnswers, setAiQualAnswers] = useState<string[]>(["", "", ""]);
+  const [aiQualAnswers, setAiQualAnswers] = useState<string[]>(
+    () => Array(userSettings.qualQuestions.length).fill(""),
+  );
   const [showSettings, setShowSettings] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
   const [importing, setImporting] = useState(false);
   const [smsTemplate, setSmsTemplate] = useState(
-    () => localStorage.getItem("dial1.smsTemplate") || DEFAULT_SMS_TEMPLATE,
+    () => localStorage.getItem("dial1.smsTemplate") || userSettings.smsTemplate,
   );
 
   // ─── CRM ───
   const crm = usePipedriveCRM();
+
+  // ─── User settings (per-user config) ───
+  const userSettings = useUserSettingsCtx();
 
   // ─── Brief / Script ───
   const { brief, generate: generateBrief, clear: clearBrief } = useBrief();
@@ -158,7 +163,7 @@ export function DialerApp() {
       normalizeCompanyDomain(contact.website || "");
     setCompanyDomain(normalizeCompanyDomain(fromSession || inferred));
     clearBrief();
-    setAiQualAnswers(["", "", ""]);
+    setAiQualAnswers(Array(userSettings.qualQuestions.length).fill(""));
     crm.resetResult();
     setShowScheduler(false);
     setWrapupOutcome(null);

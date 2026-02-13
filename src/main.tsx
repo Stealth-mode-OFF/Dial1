@@ -2,6 +2,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { SalesProvider } from "./contexts/SalesContext";
+import { UserSettingsProvider } from "./contexts/UserSettingsContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AuthGate } from "./components/AuthGate";
 import { checkEnvironment } from "./utils/env";
@@ -17,7 +18,9 @@ createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <AuthGate>
       <SalesProvider>
-        <App />
+        <UserSettingsProvider>
+          <App />
+        </UserSettingsProvider>
       </SalesProvider>
     </AuthGate>
   </ErrorBoundary>
