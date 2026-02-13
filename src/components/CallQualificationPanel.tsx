@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { echoApi } from '../utils/echoApi';
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { echoApi } from "../utils/echoApi";
 
 // ============ TYPES ============
 export interface CallQualification {
@@ -30,31 +30,33 @@ export function generatePipedriveNote(
 ): string {
   const lines: string[] = [];
 
-  lines.push('CALL NOTE');
-  lines.push('');
-  lines.push('🟦 Situation');
-  lines.push(`• Volal jsem ${companyName}${contactName ? ` / ${contactName}` : ''}.`);
-  lines.push(`• Velikost firmy: ${q.companySize || '—'}`);
-  lines.push('');
-  lines.push('🟧 Problem');
-  lines.push('• Zjišťování nálady / engagementu:');
-  lines.push(`  ${q.engagementMeasurement || '—'}`);
-  lines.push('');
-  lines.push('🟥 Implication');
-  lines.push(`• Pozdní informace o problémech: ${q.lateInfo || '—'}`);
-  lines.push('');
-  lines.push('🟩 Need/Payoff');
-  lines.push('• —');
-  lines.push('');
-  lines.push('Další rozhodující osoby:');
-  lines.push(q.decisionMakers || '—');
-  lines.push('');
-  lines.push('Důležité pro demo:');
-  lines.push(q.demoNotes || '—');
-  lines.push('');
-  lines.push(`Kvalifikace: ${q.qualified ? 'ANO' : 'NE'}`);
+  lines.push("CALL NOTE");
+  lines.push("");
+  lines.push("🟦 Situation");
+  lines.push(
+    `• Volal jsem ${companyName}${contactName ? ` / ${contactName}` : ""}.`,
+  );
+  lines.push(`• Velikost firmy: ${q.companySize || "—"}`);
+  lines.push("");
+  lines.push("🟧 Problem");
+  lines.push("• Zjišťování nálady / engagementu:");
+  lines.push(`  ${q.engagementMeasurement || "—"}`);
+  lines.push("");
+  lines.push("🟥 Implication");
+  lines.push(`• Pozdní informace o problémech: ${q.lateInfo || "—"}`);
+  lines.push("");
+  lines.push("🟩 Need/Payoff");
+  lines.push("• —");
+  lines.push("");
+  lines.push("Další rozhodující osoby:");
+  lines.push(q.decisionMakers || "—");
+  lines.push("");
+  lines.push("Důležité pro demo:");
+  lines.push(q.demoNotes || "—");
+  lines.push("");
+  lines.push(`Kvalifikace: ${q.qualified ? "ANO" : "NE"}`);
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // ============ NOTE PREVIEW MODAL ============
@@ -88,24 +90,24 @@ function PipedriveNotePreview({
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 24 }}
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="qual-preview-header">
           <span className="qual-preview-badge">📋 Pipedrive Note Preview</span>
-          <button className="qual-preview-close" onClick={onClose}>×</button>
+          <button className="qual-preview-close" onClick={onClose}>
+            ×
+          </button>
         </div>
 
         <textarea
           className="qual-preview-textarea"
           value={noteText}
-          onChange={e => onEdit(e.target.value)}
+          onChange={(e) => onEdit(e.target.value)}
           rows={18}
           spellCheck={false}
         />
 
-        {error && (
-          <div className="qual-preview-error">{error}</div>
-        )}
+        {error && <div className="qual-preview-error">{error}</div>}
 
         <div className="qual-preview-actions">
           <button className="qual-btn qual-btn-ghost" onClick={onClose}>
@@ -119,7 +121,7 @@ function PipedriveNotePreview({
               onClick={onSend}
               disabled={sending}
             >
-              {sending ? 'Odesílám…' : 'Odeslat do Pipedrive'}
+              {sending ? "Odesílám…" : "Odeslat do Pipedrive"}
             </button>
           )}
         </div>
@@ -129,16 +131,23 @@ function PipedriveNotePreview({
 }
 
 // ============ MAIN PANEL — COLD CALL SCRIPT ============
-export function CallQualificationPanel({ contactName, companyName, contactId, personId, orgId, visible }: Props) {
-  const [companySize, setCompanySize] = useState('');
-  const [engagement, setEngagement] = useState('');
-  const [lateInfo, setLateInfo] = useState('');
-  const [decisionMakers, setDecisionMakers] = useState('');
-  const [demoNotes, setDemoNotes] = useState('');
+export function CallQualificationPanel({
+  contactName,
+  companyName,
+  contactId,
+  personId,
+  orgId,
+  visible,
+}: Props) {
+  const [companySize, setCompanySize] = useState("");
+  const [engagement, setEngagement] = useState("");
+  const [lateInfo, setLateInfo] = useState("");
+  const [decisionMakers, setDecisionMakers] = useState("");
+  const [demoNotes, setDemoNotes] = useState("");
   const [qualified, setQualified] = useState(false);
 
   const [showPreview, setShowPreview] = useState(false);
-  const [previewText, setPreviewText] = useState('');
+  const [previewText, setPreviewText] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -148,11 +157,11 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
   // Reset when contact changes
   useEffect(() => {
     if (contactId !== prevContactId.current) {
-      setCompanySize('');
-      setEngagement('');
-      setLateInfo('');
-      setDecisionMakers('');
-      setDemoNotes('');
+      setCompanySize("");
+      setEngagement("");
+      setLateInfo("");
+      setDecisionMakers("");
+      setDemoNotes("");
       setQualified(false);
       setShowPreview(false);
       setSent(false);
@@ -161,11 +170,16 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
     }
   }, [contactId]);
 
-  const hasAnyContent = companySize.trim() || engagement.trim() || lateInfo.trim() || decisionMakers.trim() || demoNotes.trim();
+  const hasAnyContent =
+    companySize.trim() ||
+    engagement.trim() ||
+    lateInfo.trim() ||
+    decisionMakers.trim() ||
+    demoNotes.trim();
 
   // Extract name parts for salutation
   const nameParts = contactName.trim().split(/\s+/);
-  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
   const salutation = lastName ? `pane ${lastName}` : contactName;
 
   const handleSave = useCallback(() => {
@@ -183,9 +197,24 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
     setShowPreview(true);
     setSent(false);
     setSendError(null);
-  }, [companySize, engagement, lateInfo, decisionMakers, demoNotes, qualified, contactName, companyName]);
+  }, [
+    companySize,
+    engagement,
+    lateInfo,
+    decisionMakers,
+    demoNotes,
+    qualified,
+    contactName,
+    companyName,
+  ]);
 
   const handleSend = useCallback(async () => {
+    if (!personId && !orgId) {
+      setSendError(
+        "Kontakt nemá Pipedrive person_id ani org_id — poznámku nelze přiřadit.",
+      );
+      return;
+    }
     setSending(true);
     setSendError(null);
     try {
@@ -196,7 +225,7 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
       });
       setSent(true);
     } catch (e) {
-      setSendError(e instanceof Error ? e.message : 'Nepodařilo se odeslat');
+      setSendError(e instanceof Error ? e.message : "Nepodařilo se odeslat");
     } finally {
       setSending(false);
     }
@@ -222,16 +251,15 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
 
         <div className="qual-script-section">
           <p className="qual-script-line qual-script-line-pitch">
-            Pomáháme CEO a vedoucím ve firmách podobného typu,
-            aby <strong>včas viděli, kde se týmy začínají přetěžovat
-            nebo ztrácet motivaci</strong>,
-            aniž by museli dělat další HR procesy.
+            Pomáháme CEO a vedoucím ve firmách podobného typu, aby{" "}
+            <strong>
+              včas viděli, kde se týmy začínají přetěžovat nebo ztrácet motivaci
+            </strong>
+            , aniž by museli dělat další HR procesy.
           </p>
         </div>
 
-        <div className="qual-script-transition">
-          Můžu se jen rychle zeptat…
-        </div>
+        <div className="qual-script-transition">Můžu se jen rychle zeptat…</div>
 
         <div className="qual-script-warnings">
           <span>⚠️ žádná statistika</span>
@@ -244,7 +272,9 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
           <div className="qual-script-q-row">
             <span className="qual-script-q-num">1</span>
             <div className="qual-script-q-text">
-              <p className="qual-script-q-main">Kolik je vás dnes přibližně ve firmě?</p>
+              <p className="qual-script-q-main">
+                Kolik je vás dnes přibližně ve firmě?
+              </p>
               <p className="qual-script-q-why">→ relevance: hledáme 50+ lidí</p>
             </div>
           </div>
@@ -252,7 +282,7 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
             type="text"
             className="qual-script-input"
             value={companySize}
-            onChange={e => setCompanySize(e.target.value)}
+            onChange={(e) => setCompanySize(e.target.value)}
             placeholder="např. 120 lidí"
             autoComplete="off"
           />
@@ -263,15 +293,19 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
           <div className="qual-script-q-row">
             <span className="qual-script-q-num">2</span>
             <div className="qual-script-q-text">
-              <p className="qual-script-q-main">Zjišťujete nějak pravidelně náladu nebo spokojenost týmů?</p>
-              <p className="qual-script-q-why">→ zjistím jestli to řeší a jak</p>
+              <p className="qual-script-q-main">
+                Zjišťujete nějak pravidelně náladu nebo spokojenost týmů?
+              </p>
+              <p className="qual-script-q-why">
+                → zjistím jestli to řeší a jak
+              </p>
             </div>
           </div>
           <input
             type="text"
             className="qual-script-input"
             value={engagement}
-            onChange={e => setEngagement(e.target.value)}
+            onChange={(e) => setEngagement(e.target.value)}
             placeholder="Ano / Ne / Částečně + jak?"
             autoComplete="off"
           />
@@ -282,7 +316,10 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
           <div className="qual-script-q-row">
             <span className="qual-script-q-num">3</span>
             <div className="qual-script-q-text">
-              <p className="qual-script-q-main">Jak často se k vám dostane informace, že je někde problém, až pozdě?</p>
+              <p className="qual-script-q-main">
+                Jak často se k vám dostane informace, že je někde problém, až
+                pozdě?
+              </p>
               <p className="qual-script-q-why">→ bolest = naše příležitost</p>
             </div>
           </div>
@@ -290,7 +327,7 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
             type="text"
             className="qual-script-input"
             value={lateInfo}
-            onChange={e => setLateInfo(e.target.value)}
+            onChange={(e) => setLateInfo(e.target.value)}
             placeholder="Stává se / Občas / Ne…"
             autoComplete="off"
           />
@@ -306,14 +343,16 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
           <div className="qual-script-q-row">
             <span className="qual-script-q-icon">👥</span>
             <div className="qual-script-q-text">
-              <p className="qual-script-q-main">Je potřeba přizvat někoho dalšího k rozhodnutí?</p>
+              <p className="qual-script-q-main">
+                Je potřeba přizvat někoho dalšího k rozhodnutí?
+              </p>
             </div>
           </div>
           <input
             type="text"
             className="qual-script-input"
             value={decisionMakers}
-            onChange={e => setDecisionMakers(e.target.value)}
+            onChange={(e) => setDecisionMakers(e.target.value)}
             placeholder="Kdo konkrétně? (jméno + role)"
             autoComplete="off"
           />
@@ -328,7 +367,7 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
           <textarea
             className="qual-script-textarea"
             value={demoNotes}
-            onChange={e => setDemoNotes(e.target.value)}
+            onChange={(e) => setDemoNotes(e.target.value)}
             placeholder="Co zmínili, na co navázat při demu…"
             rows={2}
           />
@@ -340,11 +379,13 @@ export function CallQualificationPanel({ contactName, companyName, contactId, pe
             <input
               type="checkbox"
               checked={qualified}
-              onChange={e => setQualified(e.target.checked)}
+              onChange={(e) => setQualified(e.target.checked)}
               className="qual-checkbox"
             />
-            <span className={`qual-checkbox-text ${qualified ? 'qual-yes' : ''}`}>
-              {qualified ? '✓ Kvalifikovaný' : 'Kvalifikovaný lead'}
+            <span
+              className={`qual-checkbox-text ${qualified ? "qual-yes" : ""}`}
+            >
+              {qualified ? "✓ Kvalifikovaný" : "Kvalifikovaný lead"}
             </span>
           </label>
 

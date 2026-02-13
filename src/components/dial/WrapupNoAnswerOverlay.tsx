@@ -1,4 +1,6 @@
-import type { Contact } from '../../features/dialer/types';
+import { useEffect, useRef } from "react";
+import type { Contact } from "../../features/dialer/types";
+import { AUTO_DIAL_SECONDS } from "../../features/dialer/config";
 
 interface WrapupNoAnswerOverlayProps {
   contact: Contact;
@@ -18,34 +20,89 @@ export function WrapupNoAnswerOverlay({
   onAutoDialNext,
 }: WrapupNoAnswerOverlayProps) {
   const smsDisabled = !smsUrl;
+  const nextBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Auto-focus the next action when countdown ends
+  useEffect(() => {
+    if (autoDialCountdown === 0) {
+      nextBtnRef.current?.focus();
+    }
+  }, [autoDialCountdown]);
 
   return (
-    <div className="seq-overlay">
+    <div className="seq-overlay" data-phase="wrapup-noanswer">
       <div className="seq-overlay-card">
-        <div className="seq-overlay-icon">📵</div>
-        <h2 className="seq-overlay-title">Nedovoláno</h2>
-        <p className="seq-overlay-name">{contact.name} · {contact.company}</p>
-
-        <div className="seq-overlay-status">
-          <span className="seq-check">✅ Zalogováno do CRM</span>
-          <span className="seq-check">📅 Follow-up naplánován</span>
+        <div className="noanswer-header">
+          <span className="noanswer-icon">📵</span>
+          <div className="noanswer-info">
+            <h2 className="noanswer-title">Nedovoláno</h2>
+            <p className="noanswer-contact">
+              {contact.name} · {contact.company}
+            </p>
+          </div>
         </div>
 
-        <div className="seq-overlay-actions">
-          <button className="seq-sms-btn" onClick={onSendSms} disabled={smsDisabled}>
-            📱 Odeslat SMS
+        <div className="noanswer-status">
+          <span className="noanswer-check">✅ Zalogováno do CRM</span>
+          <span className="noanswer-check">📅 Follow-up za 2 dny</span>
+        </div>
+
+        <div className="noanswer-actions">
+          <button
+            className="noanswer-sms-btn"
+            onClick={onSendSms}
+            disabled={smsDisabled}
+          >
+            📱 SMS <kbd>S</kbd>
           </button>
         </div>
 
         {autoDialCountdown > 0 ? (
-          <div className="seq-countdown">
-            <div className="seq-countdown-num">{autoDialCountdown}</div>
-            <p style={{ margin: '4px 0 8px', color: '#64748b', fontSize: 13 }}>Další hovor za {autoDialCountdown}s</p>
-            <button className="seq-pause-btn" onClick={onPauseAutoDial}>⏸️ Pozastavit</button>
+          <div className="noanswer-countdown">
+            <div className="noanswer-countdown-ring">
+              <svg viewBox="0 0 36 36" className="noanswer-countdown-svg">
+                <circle
+                  cx="18"
+                  cy="18"
+                  r="16"
+                  fill="none"
+                  stroke="#e5e5e5"
+                  strokeWidth="2"
+                />
+                <circle
+                  cx="18"
+                  cy="18"
+                  r="16"
+                  fill="none"
+                  stroke="var(--success)"
+                  strokeWidth="2.5"
+                  strokeDasharray="100.5"
+                  strokeDashoffset={
+                    100.5 * (1 - autoDialCountdown / AUTO_DIAL_SECONDS)
+                  }
+                  strokeLinecap="round"
+                  transform="rotate(-90 18 18)"
+                  style={{ transition: "stroke-dashoffset 1s linear" }}
+                />
+              </svg>
+              <span className="noanswer-countdown-num">
+                {autoDialCountdown}
+              </span>
+            </div>
+            <p className="noanswer-countdown-text">
+              Další hovor za {autoDialCountdown}s
+            </p>
+            <button className="noanswer-pause-btn" onClick={onPauseAutoDial}>
+              ⏸ Pozastavit <kbd>Space</kbd>
+            </button>
           </div>
         ) : (
-          <button className="seq-next-btn" onClick={onAutoDialNext} style={{ marginTop: 16, width: '100%' }}>
-            📞 Zavolat dalšímu →
+          <button
+            ref={nextBtnRef}
+            className="noanswer-next-btn"
+            onClick={onAutoDialNext}
+          >
+            📞 Zavolat dalšímu → <kbd>Enter</kbd>
           </button>
         )}
       </div>

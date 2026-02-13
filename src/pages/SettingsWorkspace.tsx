@@ -1,12 +1,29 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Bot, Database, KeyRound, Mail, RefreshCw, Server, ShieldCheck } from 'lucide-react';
-import { useSales } from '../contexts/SalesContext';
-import { echoApi } from '../utils/echoApi';
-import { getExtensionStatus, listenToExtension, type ExtensionStatus } from '../utils/extensionBridge';
-import { functionsBase, publicAnonKey, supabaseConfigError, supabaseUrl } from '../utils/supabase/info';
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Bot,
+  Database,
+  KeyRound,
+  Mail,
+  RefreshCw,
+  Server,
+  ShieldCheck,
+} from "lucide-react";
+import { useSales } from "../contexts/SalesContext";
+import { echoApi } from "../utils/echoApi";
+import {
+  getExtensionStatus,
+  listenToExtension,
+  type ExtensionStatus,
+} from "../utils/extensionBridge";
+import {
+  functionsBase,
+  publicAnonKey,
+  supabaseConfigError,
+  supabaseUrl,
+} from "../utils/supabase/info";
 
 type CheckState = {
-  state: 'idle' | 'checking' | 'ok' | 'error';
+  state: "idle" | "checking" | "ok" | "error";
   checkedAt: number | null;
   message: string | null;
 };
@@ -17,7 +34,7 @@ type FunctionsCheckState = CheckState & {
 };
 
 function fmtSince(ts: number | null): string {
-  if (!ts) return '—';
+  if (!ts) return "—";
   const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
@@ -27,13 +44,14 @@ function fmtSince(ts: number | null): string {
 }
 
 function shortPublicKey(key: string): string {
-  const v = (key || '').toString().trim();
-  if (!v) return 'missing';
-  if (v.length <= 12) return 'present';
+  const v = (key || "").toString().trim();
+  if (!v) return "missing";
+  if (v.length <= 12) return "present";
   return `${v.slice(0, 8)}…${v.slice(-4)}`;
 }
 
-const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+const errorMessage = (e: unknown, fallback: string) =>
+  e instanceof Error ? e.message : fallback;
 
 export function SettingsWorkspace() {
   const {
@@ -55,39 +73,42 @@ export function SettingsWorkspace() {
     name: user.name,
     role: user.role,
     dailyCallGoal: settings.dailyCallGoal || 0,
-    smartBccAddress: settings.smartBccAddress || '',
-    sequenceSendTime: settings.sequenceSendTime || '09:00',
+    smartBccAddress: settings.smartBccAddress || "",
+    sequenceSendTime: settings.sequenceSendTime || "09:00",
   }));
 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
 
-  const [pipedriveKeyInput, setPipedriveKeyInput] = useState('');
-  const [openAiKeyInput, setOpenAiKeyInput] = useState('');
+  const [pipedriveKeyInput, setPipedriveKeyInput] = useState("");
+  const [openAiKeyInput, setOpenAiKeyInput] = useState("");
 
   const [openAiConfigured, setOpenAiConfigured] = useState(false);
   const [gmailConfigured, setGmailConfigured] = useState(false);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
 
-  const [functionsCheck, setFunctionsCheck] = useState<FunctionsCheckState>(() => ({
-    state: 'idle',
-    checkedAt: null,
-    message: null,
-    version: null,
-    dbOk: null,
-  }));
+  const [functionsCheck, setFunctionsCheck] = useState<FunctionsCheckState>(
+    () => ({
+      state: "idle",
+      checkedAt: null,
+      message: null,
+      version: null,
+      dbOk: null,
+    }),
+  );
   const [pipedriveCheck, setPipedriveCheck] = useState<CheckState>(() => ({
-    state: 'idle',
+    state: "idle",
     checkedAt: null,
     message: null,
   }));
   const [openAiCheck, setOpenAiCheck] = useState<CheckState>(() => ({
-    state: 'idle',
+    state: "idle",
     checkedAt: null,
     message: null,
   }));
   const [gmailCheck, setGmailCheck] = useState<CheckState>(() => ({
-    state: 'idle',
+    state: "idle",
     checkedAt: null,
     message: null,
   }));
@@ -95,8 +116,10 @@ export function SettingsWorkspace() {
   const [sequenceRows, setSequenceRows] = useState<any[]>([]);
   const [sequenceLoading, setSequenceLoading] = useState(false);
 
-  const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(() => getExtensionStatus());
-  const [lastCaption, setLastCaption] = useState<string>('');
+  const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(() =>
+    getExtensionStatus(),
+  );
+  const [lastCaption, setLastCaption] = useState<string>("");
   const [lastCaptionAt, setLastCaptionAt] = useState<number | null>(null);
 
   useEffect(() => {
@@ -111,50 +134,75 @@ export function SettingsWorkspace() {
   }, []);
 
   const extensionHint = useMemo(() => {
-    if (extensionStatus.connected && extensionStatus.capabilities.meetCaptions) {
-      if (!lastCaption) return 'Extension je připojená. Pokud nevidíš titulky, zapni CC v Google Meet.';
-      return 'Extension běží a posílá titulky.';
+    if (
+      extensionStatus.connected &&
+      extensionStatus.capabilities.meetCaptions
+    ) {
+      if (!lastCaption)
+        return "Extension je připojená. Pokud nevidíš titulky, zapni CC v Google Meet.";
+      return "Extension běží a posílá titulky.";
     }
-    return 'Extension není připojená. Otevři meet.google.com v aktivní kartě a reloadni stránku.';
-  }, [extensionStatus.connected, extensionStatus.capabilities.meetCaptions, lastCaption]);
+    return "Extension není připojená. Otevři meet.google.com v aktivní kartě a reloadni stránku.";
+  }, [
+    extensionStatus.connected,
+    extensionStatus.capabilities.meetCaptions,
+    lastCaption,
+  ]);
 
   useEffect(() => {
     setProfile({
       name: user.name,
       role: user.role,
       dailyCallGoal: settings.dailyCallGoal || 0,
-      smartBccAddress: settings.smartBccAddress || '',
-      sequenceSendTime: settings.sequenceSendTime || '09:00',
+      smartBccAddress: settings.smartBccAddress || "",
+      sequenceSendTime: settings.sequenceSendTime || "09:00",
     });
-  }, [user.name, user.role, settings.dailyCallGoal, settings.smartBccAddress, settings.sequenceSendTime]);
+  }, [
+    user.name,
+    user.role,
+    settings.dailyCallGoal,
+    settings.smartBccAddress,
+    settings.sequenceSendTime,
+  ]);
 
   const runFunctionsCheck = async () => {
     if (!supabaseConfigured) {
       setFunctionsCheck({
-        state: 'error',
+        state: "error",
         checkedAt: Date.now(),
-        message: supabaseConfigError || 'Supabase is not configured.',
+        message: supabaseConfigError || "Supabase is not configured.",
         version: null,
         dbOk: null,
       });
       return;
     }
 
-    setFunctionsCheck({ state: 'checking', checkedAt: Date.now(), message: null, version: null, dbOk: null });
+    setFunctionsCheck({
+      state: "checking",
+      checkedAt: Date.now(),
+      message: null,
+      version: null,
+      dbOk: null,
+    });
     try {
-      const [health, db] = await Promise.all([echoApi.health(), echoApi.healthDb()]);
+      const [health, db] = await Promise.all([
+        echoApi.health(),
+        echoApi.healthDb(),
+      ]);
       setFunctionsCheck({
-        state: db?.ok ? 'ok' : 'error',
+        state: db?.ok ? "ok" : "error",
         checkedAt: Date.now(),
-        message: db?.ok ? 'Edge functions reachable, DB ok.' : db?.error || 'DB check failed.',
+        message: db?.ok
+          ? "Edge functions reachable, DB ok."
+          : db?.error || "DB check failed.",
         version: health?.version || null,
         dbOk: Boolean(db?.ok),
       });
     } catch (e) {
       setFunctionsCheck({
-        state: 'error',
+        state: "error",
         checkedAt: Date.now(),
-        message: errorMessage(e, 'Health check failed'),
+        message: errorMessage(e, "Health check failed"),
         version: null,
         dbOk: null,
       });
@@ -163,27 +211,51 @@ export function SettingsWorkspace() {
 
   const runPipedriveTest = async () => {
     if (!pipedriveConfigured) {
-      setPipedriveCheck({ state: 'error', checkedAt: Date.now(), message: 'Not configured.' });
+      setPipedriveCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: "Not configured.",
+      });
       return;
     }
-    setPipedriveCheck({ state: 'checking', checkedAt: Date.now(), message: null });
+    setPipedriveCheck({
+      state: "checking",
+      checkedAt: Date.now(),
+      message: null,
+    });
     try {
       const res = await echoApi.testPipedrive();
       if (res?.ok) {
-        const who = res?.user?.name || res?.user?.email || 'OK';
-        setPipedriveCheck({ state: 'ok', checkedAt: Date.now(), message: `OK (${who})` });
+        const who = res?.user?.name || res?.user?.email || "OK";
+        setPipedriveCheck({
+          state: "ok",
+          checkedAt: Date.now(),
+          message: `OK (${who})`,
+        });
       } else {
-        setPipedriveCheck({ state: 'error', checkedAt: Date.now(), message: 'Key configured, but test failed.' });
+        setPipedriveCheck({
+          state: "error",
+          checkedAt: Date.now(),
+          message: "Key configured, but test failed.",
+        });
       }
     } catch (e) {
-      setPipedriveCheck({ state: 'error', checkedAt: Date.now(), message: errorMessage(e, 'Pipedrive test failed') });
+      setPipedriveCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: errorMessage(e, "Pipedrive test failed"),
+      });
     }
   };
 
   const loadOpenAiStatus = async () => {
     if (!supabaseConfigured) {
       setOpenAiConfigured(false);
-      setOpenAiCheck({ state: 'error', checkedAt: Date.now(), message: 'Supabase not configured.' });
+      setOpenAiCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: "Supabase not configured.",
+      });
       return;
     }
     try {
@@ -191,30 +263,53 @@ export function SettingsWorkspace() {
       const configured = Boolean(res?.configured);
       setOpenAiConfigured(configured);
       if (!configured) {
-        setOpenAiCheck({ state: 'error', checkedAt: Date.now(), message: 'Not configured.' });
+        setOpenAiCheck({
+          state: "error",
+          checkedAt: Date.now(),
+          message: "Not configured.",
+        });
       }
     } catch (e) {
       setOpenAiConfigured(false);
-      setOpenAiCheck({ state: 'error', checkedAt: Date.now(), message: errorMessage(e, 'Failed to load status') });
+      setOpenAiCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: errorMessage(e, "Failed to load status"),
+      });
     }
   };
 
   const runOpenAiTest = async () => {
     if (!openAiConfigured) {
-      setOpenAiCheck({ state: 'error', checkedAt: Date.now(), message: 'Not configured.' });
+      setOpenAiCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: "Not configured.",
+      });
       return;
     }
-    setOpenAiCheck({ state: 'checking', checkedAt: Date.now(), message: null });
+    setOpenAiCheck({ state: "checking", checkedAt: Date.now(), message: null });
     try {
       const res = await echoApi.testOpenAi();
       if (res?.ok) {
-        const meta = typeof res?.model_count === 'number' ? `Models: ${res.model_count}` : 'OK';
-        setOpenAiCheck({ state: 'ok', checkedAt: Date.now(), message: meta });
+        const meta =
+          typeof res?.model_count === "number"
+            ? `Models: ${res.model_count}`
+            : "OK";
+        setOpenAiCheck({ state: "ok", checkedAt: Date.now(), message: meta });
       } else {
-        setOpenAiCheck({ state: 'error', checkedAt: Date.now(), message: 'Key configured, but test failed.' });
+        setOpenAiCheck({
+          state: "error",
+          checkedAt: Date.now(),
+          message: "Key configured, but test failed.",
+        });
       }
     } catch (e) {
-      setOpenAiCheck({ state: 'error', checkedAt: Date.now(), message: errorMessage(e, 'OpenAI test failed') });
+      setOpenAiCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: errorMessage(e, "OpenAI test failed"),
+      });
     }
   };
 
@@ -222,7 +317,11 @@ export function SettingsWorkspace() {
     if (!supabaseConfigured) {
       setGmailConfigured(false);
       setGmailEmail(null);
-      setGmailCheck({ state: 'error', checkedAt: Date.now(), message: 'Supabase není nakonfigurovaný.' });
+      setGmailCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: "Supabase není nakonfigurovaný.",
+      });
       return;
     }
     try {
@@ -231,30 +330,54 @@ export function SettingsWorkspace() {
       setGmailConfigured(configured);
       setGmailEmail(res?.email || null);
       if (!configured) {
-        setGmailCheck({ state: 'error', checkedAt: Date.now(), message: 'Nepřipojeno.' });
+        setGmailCheck({
+          state: "error",
+          checkedAt: Date.now(),
+          message: "Nepřipojeno.",
+        });
       }
     } catch (e) {
       setGmailConfigured(false);
       setGmailEmail(null);
-      setGmailCheck({ state: 'error', checkedAt: Date.now(), message: errorMessage(e, 'Nepodařilo se načíst stav Gmailu') });
+      setGmailCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: errorMessage(e, "Nepodařilo se načíst stav Gmailu"),
+      });
     }
   };
 
   const runGmailTest = async () => {
     if (!gmailConfigured) {
-      setGmailCheck({ state: 'error', checkedAt: Date.now(), message: 'Nepřipojeno.' });
+      setGmailCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: "Nepřipojeno.",
+      });
       return;
     }
-    setGmailCheck({ state: 'checking', checkedAt: Date.now(), message: null });
+    setGmailCheck({ state: "checking", checkedAt: Date.now(), message: null });
     try {
       const res = await echoApi.gmail.test();
       if (res?.ok) {
-        setGmailCheck({ state: 'ok', checkedAt: Date.now(), message: gmailEmail ? `OK (${gmailEmail})` : 'OK' });
+        setGmailCheck({
+          state: "ok",
+          checkedAt: Date.now(),
+          message: gmailEmail ? `OK (${gmailEmail})` : "OK",
+        });
       } else {
-        setGmailCheck({ state: 'error', checkedAt: Date.now(), message: res?.error || 'Test selhal.' });
+        setGmailCheck({
+          state: "error",
+          checkedAt: Date.now(),
+          message: res?.error || "Test selhal.",
+        });
       }
     } catch (e) {
-      setGmailCheck({ state: 'error', checkedAt: Date.now(), message: errorMessage(e, 'Gmail test selhal') });
+      setGmailCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: errorMessage(e, "Gmail test selhal"),
+      });
     }
   };
 
@@ -263,7 +386,7 @@ export function SettingsWorkspace() {
       const url = echoApi.gmail.buildAuthUrl(window.location.href);
       window.location.href = url;
     } catch (e) {
-      setStatus(errorMessage(e, 'Nepodařilo se spustit připojení Gmailu'));
+      setStatus(errorMessage(e, "Nepodařilo se spustit připojení Gmailu"));
     }
   };
 
@@ -274,10 +397,14 @@ export function SettingsWorkspace() {
       await echoApi.gmail.disconnect();
       setGmailConfigured(false);
       setGmailEmail(null);
-      setGmailCheck({ state: 'error', checkedAt: Date.now(), message: 'Odpojeno.' });
-      setStatus('Gmail odpojen.');
+      setGmailCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: "Odpojeno.",
+      });
+      setStatus("Gmail odpojen.");
     } catch (e) {
-      setStatus(errorMessage(e, 'Nepodařilo se odpojit Gmail'));
+      setStatus(errorMessage(e, "Nepodařilo se odpojit Gmail"));
     } finally {
       setBusy(false);
     }
@@ -319,11 +446,11 @@ export function SettingsWorkspace() {
   useEffect(() => {
     try {
       const u = new URL(window.location.href);
-      const flag = u.searchParams.get('gmail');
-      if (flag === 'connected') {
-        setStatus('Gmail připojen ✓');
-        u.searchParams.delete('gmail');
-        window.history.replaceState({}, '', u.toString());
+      const flag = u.searchParams.get("gmail");
+      if (flag === "connected") {
+        setStatus("Gmail připojen ✓");
+        u.searchParams.delete("gmail");
+        window.history.replaceState({}, "", u.toString());
         void loadGmailStatus();
       }
     } catch {
@@ -337,9 +464,11 @@ export function SettingsWorkspace() {
     updateSettings({
       dailyCallGoal: Number(profile.dailyCallGoal) || 0,
       smartBccAddress: profile.smartBccAddress.trim(),
-      sequenceSendTime: (profile.sequenceSendTime || '09:00').toString().trim() || '09:00',
+      sequenceSendTime:
+        (profile.sequenceSendTime || "09:00").toString().trim() || "09:00",
     });
-    setStatus('Profile saved.');
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 3000);
   };
 
   const savePipedrive = async () => {
@@ -349,12 +478,12 @@ export function SettingsWorkspace() {
     setStatus(null);
     try {
       await setPipedriveKey(key);
-      setPipedriveKeyInput('');
+      setPipedriveKeyInput("");
       await refresh();
       await runPipedriveTest();
-      setStatus('Pipedrive key saved + verified.');
+      setStatus("Pipedrive key saved + verified.");
     } catch (e) {
-      setStatus(errorMessage(e, 'Failed to save Pipedrive key'));
+      setStatus(errorMessage(e, "Failed to save Pipedrive key"));
     } finally {
       setBusy(false);
     }
@@ -365,12 +494,16 @@ export function SettingsWorkspace() {
     setStatus(null);
     try {
       await clearPipedriveKey();
-      setPipedriveKeyInput('');
+      setPipedriveKeyInput("");
       await refresh();
-      setPipedriveCheck({ state: 'error', checkedAt: Date.now(), message: 'Not configured.' });
-      setStatus('Pipedrive key removed.');
+      setPipedriveCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: "Not configured.",
+      });
+      setStatus("Pipedrive key removed.");
     } catch (e) {
-      setStatus(errorMessage(e, 'Failed to remove Pipedrive key'));
+      setStatus(errorMessage(e, "Failed to remove Pipedrive key"));
     } finally {
       setBusy(false);
     }
@@ -384,7 +517,7 @@ export function SettingsWorkspace() {
       await refresh();
       setStatus(`Imported ${res?.count ?? 0} contacts.`);
     } catch (e) {
-      setStatus(errorMessage(e, 'Import failed'));
+      setStatus(errorMessage(e, "Import failed"));
     } finally {
       setBusy(false);
     }
@@ -397,12 +530,12 @@ export function SettingsWorkspace() {
     setStatus(null);
     try {
       await echoApi.saveOpenAiKey(key);
-      setOpenAiKeyInput('');
+      setOpenAiKeyInput("");
       await loadOpenAiStatus();
       await runOpenAiTest();
-      setStatus('OpenAI key saved + verified.');
+      setStatus("OpenAI key saved + verified.");
     } catch (e) {
-      setStatus(errorMessage(e, 'Failed to save OpenAI key'));
+      setStatus(errorMessage(e, "Failed to save OpenAI key"));
     } finally {
       setBusy(false);
     }
@@ -413,27 +546,45 @@ export function SettingsWorkspace() {
     setStatus(null);
     try {
       await echoApi.deleteOpenAiKey();
-      setOpenAiKeyInput('');
+      setOpenAiKeyInput("");
       setOpenAiConfigured(false);
-      setOpenAiCheck({ state: 'error', checkedAt: Date.now(), message: 'Not configured.' });
-      setStatus('OpenAI key removed.');
+      setOpenAiCheck({
+        state: "error",
+        checkedAt: Date.now(),
+        message: "Not configured.",
+      });
+      setStatus("OpenAI key removed.");
     } catch (e) {
-      setStatus(errorMessage(e, 'Failed to remove OpenAI key'));
+      setStatus(errorMessage(e, "Failed to remove OpenAI key"));
     } finally {
       setBusy(false);
     }
   };
 
   const supabasePill =
-    functionsCheck.state === 'ok'
-      ? 'success'
-      : functionsCheck.state === 'checking'
-        ? 'warning'
-        : 'warning';
+    functionsCheck.state === "ok"
+      ? "success"
+      : functionsCheck.state === "checking"
+        ? "warning"
+        : "warning";
   const pipedrivePill =
-    pipedriveCheck.state === 'ok' ? 'success' : pipedriveCheck.state === 'checking' ? 'warning' : 'warning';
-  const openAiPill = openAiCheck.state === 'ok' ? 'success' : openAiCheck.state === 'checking' ? 'warning' : 'warning';
-  const gmailPill = gmailCheck.state === 'ok' ? 'success' : gmailCheck.state === 'checking' ? 'warning' : 'warning';
+    pipedriveCheck.state === "ok"
+      ? "success"
+      : pipedriveCheck.state === "checking"
+        ? "warning"
+        : "warning";
+  const openAiPill =
+    openAiCheck.state === "ok"
+      ? "success"
+      : openAiCheck.state === "checking"
+        ? "warning"
+        : "warning";
+  const gmailPill =
+    gmailCheck.state === "ok"
+      ? "success"
+      : gmailCheck.state === "checking"
+        ? "warning"
+        : "warning";
 
   return (
     <div className="workspace column settings-workspace">
@@ -448,32 +599,56 @@ export function SettingsWorkspace() {
 
         <div className="form-grid">
           <label className="field">
-            <span className="label">Name</span>
-            <input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
+            <span className="label">Jméno</span>
+            <input
+              value={profile.name}
+              onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+              className={profile.name.trim() ? "field-filled" : "field-empty"}
+            />
           </label>
           <label className="field">
             <span className="label">Role</span>
-            <input value={profile.role} onChange={(e) => setProfile({ ...profile, role: e.target.value })} />
+            <input
+              value={profile.role}
+              onChange={(e) => setProfile({ ...profile, role: e.target.value })}
+              className={profile.role.trim() ? "field-filled" : "field-empty"}
+            />
           </label>
           <label className="field">
-            <span className="label">Daily call goal</span>
+            <span className="label">Denní cíl hovorů</span>
             <input
               type="number"
               min={0}
               value={profile.dailyCallGoal}
-              onChange={(e) => setProfile({ ...profile, dailyCallGoal: Number(e.target.value) })}
+              onChange={(e) =>
+                setProfile({
+                  ...profile,
+                  dailyCallGoal: Number(e.target.value),
+                })
+              }
+              className={
+                profile.dailyCallGoal > 0 ? "field-filled" : "field-empty"
+              }
             />
           </label>
           <label className="field">
             <span className="label">Pipedrive SmartBCC</span>
             <input
               type="email"
-              placeholder="abc123@pipedrivemail.com"
               value={profile.smartBccAddress}
-              onChange={(e) => setProfile({ ...profile, smartBccAddress: e.target.value })}
+              onChange={(e) =>
+                setProfile({ ...profile, smartBccAddress: e.target.value })
+              }
+              className={
+                profile.smartBccAddress.trim() ? "field-filled" : "field-empty"
+              }
             />
-            <span className="muted" style={{ fontSize: '11px', marginTop: '2px' }}>
-              Najdeš v Pipedrive → E-mail sync → Smart BCC. E-maily se automaticky zalogují.
+            <span
+              className="muted"
+              style={{ fontSize: "11px", marginTop: "2px" }}
+            >
+              Najdeš v Pipedrive → E-mail sync → Smart BCC. E-maily se
+              automaticky zalogují.
             </span>
           </label>
           <label className="field">
@@ -481,17 +656,28 @@ export function SettingsWorkspace() {
             <input
               type="time"
               value={profile.sequenceSendTime}
-              onChange={(e) => setProfile({ ...profile, sequenceSendTime: e.target.value })}
+              onChange={(e) =>
+                setProfile({ ...profile, sequenceSendTime: e.target.value })
+              }
+              className="field-filled"
             />
-            <span className="muted" style={{ fontSize: '11px', marginTop: '2px' }}>
-              Default: 09:00. Použije se pro D+1 / D+3 follow‑up koncepty (Europe/Prague).
+            <span
+              className="muted"
+              style={{ fontSize: "11px", marginTop: "2px" }}
+            >
+              Použije se pro D+1 / D+3 follow‑up koncepty (Europe/Prague).
             </span>
           </label>
         </div>
 
         <div className="button-row wrap">
-          <button className="btn primary" onClick={saveProfile} disabled={busy} type="button">
-            Save profile
+          <button
+            className={`btn primary ${profileSaved ? "btn-saved" : ""}`}
+            onClick={saveProfile}
+            disabled={busy}
+            type="button"
+          >
+            {profileSaved ? "✓ Uloženo" : "Uložit profil"}
           </button>
           <label className="settings-checkbox">
             <input
@@ -499,10 +685,15 @@ export function SettingsWorkspace() {
               checked={showCompletedLeads}
               onChange={(e) => setShowCompletedLeads(e.target.checked)}
             />
-            <span>Show completed leads in queues</span>
+            <span>Zobrazit dokončené leady</span>
           </label>
-          <button className="btn ghost sm" onClick={clearCompletedLeads} type="button" disabled={busy}>
-            Clear completed list
+          <button
+            className="btn ghost sm"
+            onClick={clearCompletedLeads}
+            type="button"
+            disabled={busy}
+          >
+            Vymazat dokončené
           </button>
         </div>
       </div>
@@ -512,7 +703,9 @@ export function SettingsWorkspace() {
           <div>
             <p className="eyebrow">Connections</p>
             <h2>Data & keys</h2>
-            <p className="muted">All keys are stored server-side and tested immediately.</p>
+            <p className="muted">
+              All keys are stored server-side and tested immediately.
+            </p>
           </div>
         </div>
 
@@ -524,21 +717,29 @@ export function SettingsWorkspace() {
             </div>
 
             <div className="pill-row">
-              <span className={`pill ${supabasePill}`}>{functionsCheck.state === 'ok' ? 'Connected' : 'Check'}</span>
-              <span className="muted">Last check: {fmtSince(functionsCheck.checkedAt)}</span>
+              <span className={`pill ${supabasePill}`}>
+                {functionsCheck.state === "ok" ? "Connected" : "Check"}
+              </span>
+              <span className="muted">
+                Last check: {fmtSince(functionsCheck.checkedAt)}
+              </span>
             </div>
 
             <div className="kv">
               <span className="kv-label">URL</span>
-              <span className="kv-value mono">{supabaseUrl || 'missing'}</span>
+              <span className="kv-value mono">{supabaseUrl || "missing"}</span>
             </div>
             <div className="kv">
               <span className="kv-label">Anon key</span>
-              <span className="kv-value mono">{shortPublicKey(publicAnonKey)}</span>
+              <span className="kv-value mono">
+                {shortPublicKey(publicAnonKey)}
+              </span>
             </div>
             <div className="kv">
               <span className="kv-label">Functions base</span>
-              <span className="kv-value mono">{functionsBase || 'missing'}</span>
+              <span className="kv-value mono">
+                {functionsBase || "missing"}
+              </span>
             </div>
 
             {functionsCheck.version ? (
@@ -548,14 +749,26 @@ export function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {functionsCheck.message ? <div className="status-line">{functionsCheck.message}</div> : null}
-            {!supabaseConfigured && supabaseConfigError ? <div className="status-line">{supabaseConfigError}</div> : null}
+            {functionsCheck.message ? (
+              <div className="status-line">{functionsCheck.message}</div>
+            ) : null}
+            {!supabaseConfigured && supabaseConfigError ? (
+              <div className="status-line">{supabaseConfigError}</div>
+            ) : null}
 
             <div className="button-row wrap">
-              <button className="btn outline" onClick={() => void runFunctionsCheck()} disabled={busy}>
+              <button
+                className="btn outline"
+                onClick={() => void runFunctionsCheck()}
+                disabled={busy}
+              >
                 <ShieldCheck size={14} /> Test
               </button>
-              <button className="btn ghost" onClick={() => void refresh()} disabled={busy || !supabaseConfigured}>
+              <button
+                className="btn ghost"
+                onClick={() => void refresh()}
+                disabled={busy || !supabaseConfigured}
+              >
                 <RefreshCw size={14} /> Refresh data
               </button>
             </div>
@@ -568,34 +781,72 @@ export function SettingsWorkspace() {
             </div>
 
             <div className="pill-row">
-              <span className={`pill ${pipedrivePill}`}>{pipedriveCheck.state === 'ok' ? 'Connected' : pipedriveConfigured ? 'Check' : 'Not configured'}</span>
-              <span className="muted">Last check: {fmtSince(pipedriveCheck.checkedAt)}</span>
+              <span className={`pill ${pipedrivePill}`}>
+                {pipedriveCheck.state === "ok"
+                  ? "Connected"
+                  : pipedriveConfigured
+                    ? "Check"
+                    : "Not configured"}
+              </span>
+              <span className="muted">
+                Last check: {fmtSince(pipedriveCheck.checkedAt)}
+              </span>
             </div>
 
-            {pipedriveCheck.message ? <div className="status-line">{pipedriveCheck.message}</div> : null}
+            {pipedriveCheck.message ? (
+              <div className="status-line">{pipedriveCheck.message}</div>
+            ) : null}
 
+            {pipedriveConfigured && !pipedriveKeyInput && (
+              <div className="key-saved-indicator">✓ API klíč uložen</div>
+            )}
             <label className="field">
-              <span className="label">API key</span>
+              <span className="label">
+                {pipedriveConfigured ? "Nový API klíč (přepsat)" : "API klíč"}
+              </span>
               <input
-                type="password"
+                type="text"
                 value={pipedriveKeyInput}
                 onChange={(e) => setPipedriveKeyInput(e.target.value)}
                 autoComplete="off"
+                className={
+                  pipedriveKeyInput.trim()
+                    ? "field-filled"
+                    : pipedriveConfigured
+                      ? "field-filled"
+                      : "field-empty"
+                }
               />
             </label>
 
             <div className="button-row wrap">
-              <button className="btn primary" onClick={() => void savePipedrive()} disabled={busy || !pipedriveKeyInput.trim()}>
-                <KeyRound size={14} /> Save & verify
+              <button
+                className="btn primary"
+                onClick={() => void savePipedrive()}
+                disabled={busy || !pipedriveKeyInput.trim()}
+              >
+                <KeyRound size={14} /> Uložit a ověřit
               </button>
-              <button className="btn ghost" onClick={() => void removePipedrive()} disabled={busy || !pipedriveConfigured}>
-                Remove
+              <button
+                className="btn ghost"
+                onClick={() => void removePipedrive()}
+                disabled={busy || !pipedriveConfigured}
+              >
+                Odebrat
               </button>
-              <button className="btn outline" onClick={() => void runPipedriveTest()} disabled={busy || !pipedriveConfigured}>
+              <button
+                className="btn outline"
+                onClick={() => void runPipedriveTest()}
+                disabled={busy || !pipedriveConfigured}
+              >
                 Test
               </button>
-              <button className="btn outline" onClick={() => void importContacts()} disabled={busy || !pipedriveConfigured}>
-                Import contacts
+              <button
+                className="btn outline"
+                onClick={() => void importContacts()}
+                disabled={busy || !pipedriveConfigured}
+              >
+                Import kontaktů
               </button>
             </div>
           </div>
@@ -607,30 +858,64 @@ export function SettingsWorkspace() {
             </div>
 
             <div className="pill-row">
-              <span className={`pill ${openAiPill}`}>{openAiCheck.state === 'ok' ? 'Connected' : openAiConfigured ? 'Check' : 'Not configured'}</span>
-              <span className="muted">Last check: {fmtSince(openAiCheck.checkedAt)}</span>
+              <span className={`pill ${openAiPill}`}>
+                {openAiCheck.state === "ok"
+                  ? "Připojeno"
+                  : openAiConfigured
+                    ? "Zkontrolovat"
+                    : "Nenastaveno"}
+              </span>
+              <span className="muted">
+                Last check: {fmtSince(openAiCheck.checkedAt)}
+              </span>
             </div>
 
-            {openAiCheck.message ? <div className="status-line">{openAiCheck.message}</div> : null}
+            {openAiCheck.message ? (
+              <div className="status-line">{openAiCheck.message}</div>
+            ) : null}
 
+            {openAiConfigured && !openAiKeyInput && (
+              <div className="key-saved-indicator">✓ API klíč uložen</div>
+            )}
             <label className="field">
-              <span className="label">API key</span>
+              <span className="label">
+                {openAiConfigured ? "Nový API klíč (přepsat)" : "API klíč"}
+              </span>
               <input
-                type="password"
+                type="text"
                 value={openAiKeyInput}
                 onChange={(e) => setOpenAiKeyInput(e.target.value)}
                 autoComplete="off"
+                className={
+                  openAiKeyInput.trim()
+                    ? "field-filled"
+                    : openAiConfigured
+                      ? "field-filled"
+                      : "field-empty"
+                }
               />
             </label>
 
             <div className="button-row wrap">
-              <button className="btn primary" onClick={() => void saveOpenAi()} disabled={busy || !openAiKeyInput.trim()}>
-                <KeyRound size={14} /> Save & verify
+              <button
+                className="btn primary"
+                onClick={() => void saveOpenAi()}
+                disabled={busy || !openAiKeyInput.trim()}
+              >
+                <KeyRound size={14} /> Uložit a ověřit
               </button>
-              <button className="btn ghost" onClick={() => void removeOpenAi()} disabled={busy || !openAiConfigured}>
-                Remove
+              <button
+                className="btn ghost"
+                onClick={() => void removeOpenAi()}
+                disabled={busy || !openAiConfigured}
+              >
+                Odebrat
               </button>
-              <button className="btn outline" onClick={() => void runOpenAiTest()} disabled={busy || !openAiConfigured}>
+              <button
+                className="btn outline"
+                onClick={() => void runOpenAiTest()}
+                disabled={busy || !openAiConfigured}
+              >
                 Test
               </button>
             </div>
@@ -643,8 +928,16 @@ export function SettingsWorkspace() {
             </div>
 
             <div className="pill-row">
-              <span className={`pill ${gmailPill}`}>{gmailCheck.state === 'ok' ? 'Připojeno' : gmailConfigured ? 'Zkontrolovat' : 'Nepřipojeno'}</span>
-              <span className="muted">Last check: {fmtSince(gmailCheck.checkedAt)}</span>
+              <span className={`pill ${gmailPill}`}>
+                {gmailCheck.state === "ok"
+                  ? "Připojeno"
+                  : gmailConfigured
+                    ? "Zkontrolovat"
+                    : "Nepřipojeno"}
+              </span>
+              <span className="muted">
+                Last check: {fmtSince(gmailCheck.checkedAt)}
+              </span>
             </div>
 
             {gmailEmail ? (
@@ -654,23 +947,42 @@ export function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {gmailCheck.message ? <div className="status-line">{gmailCheck.message}</div> : null}
+            {gmailCheck.message ? (
+              <div className="status-line">{gmailCheck.message}</div>
+            ) : null}
 
-            <div className="muted" style={{ fontSize: '12px' }}>
-              V aplikaci nikdy nic automaticky neodesíláme. Vždy jen vytvoříme koncept (draft) v Gmailu.
+            <div className="muted" style={{ fontSize: "12px" }}>
+              V aplikaci nikdy nic automaticky neodesíláme. Vždy jen vytvoříme
+              koncept (draft) v Gmailu.
             </div>
 
             <div className="button-row wrap">
-              <button className="btn primary" onClick={connectGmail} disabled={busy || !supabaseConfigured}>
+              <button
+                className="btn primary"
+                onClick={connectGmail}
+                disabled={busy || !supabaseConfigured}
+              >
                 Připojit Gmail
               </button>
-              <button className="btn ghost" onClick={() => void disconnectGmail()} disabled={busy || !gmailConfigured}>
+              <button
+                className="btn ghost"
+                onClick={() => void disconnectGmail()}
+                disabled={busy || !gmailConfigured}
+              >
                 Odpojit
               </button>
-              <button className="btn outline" onClick={() => void runGmailTest()} disabled={busy || !gmailConfigured}>
+              <button
+                className="btn outline"
+                onClick={() => void runGmailTest()}
+                disabled={busy || !gmailConfigured}
+              >
                 Test
               </button>
-              <button className="btn ghost" onClick={() => void loadGmailStatus()} disabled={busy || !supabaseConfigured}>
+              <button
+                className="btn ghost"
+                onClick={() => void loadGmailStatus()}
+                disabled={busy || !supabaseConfigured}
+              >
                 <RefreshCw size={14} /> Refresh
               </button>
             </div>
@@ -683,27 +995,36 @@ export function SettingsWorkspace() {
             </div>
 
             <div className="pill-row">
-              <span className={`pill ${extensionStatus.connected ? 'success' : 'warning'}`}>
-                {extensionStatus.connected ? 'Connected' : 'Not connected'}
+              <span
+                className={`pill ${extensionStatus.connected ? "success" : "warning"}`}
+              >
+                {extensionStatus.connected ? "Připojeno" : "Nepřipojeno"}
               </span>
               <span className="muted">
-                Last seen:{' '}
-                {extensionStatus.last_seen_at ? new Date(extensionStatus.last_seen_at).toLocaleString() : '—'}
+                Naposledy:{" "}
+                {extensionStatus.last_seen_at
+                  ? new Date(extensionStatus.last_seen_at).toLocaleString()
+                  : "—"}
               </span>
             </div>
 
             <div className="kv">
               <span className="kv-label">Capabilities</span>
               <span className="kv-value">
-                dial {extensionStatus.capabilities.dial ? '✓' : '—'} · meet captions{' '}
-                {extensionStatus.capabilities.meetCaptions ? '✓' : '—'}
+                dial {extensionStatus.capabilities.dial ? "✓" : "—"} · meet
+                captions {extensionStatus.capabilities.meetCaptions ? "✓" : "—"}
               </span>
             </div>
 
             <div className="button-row wrap">
               <button
                 className="btn outline"
-                onClick={() => window.postMessage({ type: 'ECHO_WEBAPP_PING', sent_at: Date.now() }, window.location.origin)}
+                onClick={() =>
+                  window.postMessage(
+                    { type: "ECHO_WEBAPP_PING", sent_at: Date.now() },
+                    window.location.origin,
+                  )
+                }
                 type="button"
               >
                 Ping extension
@@ -713,7 +1034,11 @@ export function SettingsWorkspace() {
             {lastCaption ? (
               <div className="status-line">
                 Poslední titulek: {lastCaption}
-                {lastCaptionAt ? <div className="muted">Před {Math.round((Date.now() - lastCaptionAt) / 1000)}s</div> : null}
+                {lastCaptionAt ? (
+                  <div className="muted">
+                    Před {Math.round((Date.now() - lastCaptionAt) / 1000)}s
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -721,7 +1046,9 @@ export function SettingsWorkspace() {
           </div>
         </div>
 
-        {status ? <div className="status-line">{status}</div> : null}
+        {status ? (
+          <div className="status-line settings-status-toast">{status}</div>
+        ) : null}
       </div>
 
       <div className="panel settings-panel">
@@ -729,12 +1056,19 @@ export function SettingsWorkspace() {
           <div>
             <p className="eyebrow">Email</p>
             <h2>Sekvence</h2>
-            <p className="muted">Aktivní D+1 / D+3 follow‑up koncepty (drafty). Nikdy nic neodesíláme automaticky.</p>
+            <p className="muted">
+              Aktivní D+1 / D+3 follow‑up koncepty (drafty). Nikdy nic
+              neodesíláme automaticky.
+            </p>
           </div>
         </div>
 
         <div className="button-row wrap">
-          <button className="btn outline" onClick={() => void loadSequences()} disabled={busy || !supabaseConfigured || sequenceLoading}>
+          <button
+            className="btn outline"
+            onClick={() => void loadSequences()}
+            disabled={busy || !supabaseConfigured || sequenceLoading}
+          >
             <RefreshCw size={14} /> Refresh
           </button>
         </div>
@@ -742,32 +1076,62 @@ export function SettingsWorkspace() {
         {sequenceLoading ? (
           <div className="status-line">⏳ Načítám sekvence…</div>
         ) : sequenceRows.length ? (
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: "grid", gap: 8 }}>
             {sequenceRows.map((row: any) => {
-              const when = row?.scheduled_for ? new Date(String(row.scheduled_for)).toLocaleString('cs-CZ', { timeZone: 'Europe/Prague' }) : '—';
-              const type = String(row?.email_type || '');
-              const contactId = String(row?.contact_id || '');
-              const contactName = row?.context?.contactName ? String(row.context.contactName) : '';
-              const company = row?.context?.company ? String(row.context.company) : '';
-              const status = String(row?.status || '');
+              const when = row?.scheduled_for
+                ? new Date(String(row.scheduled_for)).toLocaleString("cs-CZ", {
+                    timeZone: "Europe/Prague",
+                  })
+                : "—";
+              const type = String(row?.email_type || "");
+              const contactId = String(row?.contact_id || "");
+              const contactName = row?.context?.contactName
+                ? String(row.context.contactName)
+                : "";
+              const company = row?.context?.company
+                ? String(row.context.company)
+                : "";
+              const status = String(row?.status || "");
               const gmailUrl = row?.context?.generated?.gmailUrl || null;
               return (
-                <div key={String(row?.id)} className="status-line" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                <div
+                  key={String(row?.id)}
+                  className="status-line"
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    alignItems: "center",
+                  }}
+                >
                   <div>
                     <div>
                       <span className="mono">{contactId}</span>
-                      {contactName ? ` · ${contactName}` : ''}
-                      {company ? ` (${company})` : ''}
-                      {' · '}
-                      <span className="mono">{type}</span> · {when} · <span className="mono">{status}</span>
+                      {contactName ? ` · ${contactName}` : ""}
+                      {company ? ` (${company})` : ""}
+                      {" · "}
+                      <span className="mono">{type}</span> · {when} ·{" "}
+                      <span className="mono">{status}</span>
                     </div>
                     {gmailUrl ? (
-                      <div className="muted" style={{ fontSize: 12 }}>Draft: {String(gmailUrl)}</div>
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        Draft: {String(gmailUrl)}
+                      </div>
                     ) : null}
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8 }}>
                     {gmailUrl ? (
-                      <button className="btn ghost sm" type="button" onClick={() => window.open(String(gmailUrl), '_blank', 'noopener,noreferrer')}>
+                      <button
+                        className="btn ghost sm"
+                        type="button"
+                        onClick={() =>
+                          window.open(
+                            String(gmailUrl),
+                            "_blank",
+                            "noopener,noreferrer",
+                          )
+                        }
+                      >
                         Otevřít draft
                       </button>
                     ) : null}
@@ -777,7 +1141,9 @@ export function SettingsWorkspace() {
                       onClick={async () => {
                         setBusy(true);
                         try {
-                          await echoApi.emailSchedule.cancel({ scheduleId: String(row?.id) });
+                          await echoApi.emailSchedule.cancel({
+                            scheduleId: String(row?.id),
+                          });
                           await loadSequences();
                         } finally {
                           setBusy(false);

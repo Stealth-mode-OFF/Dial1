@@ -9,12 +9,12 @@ export function EmptyState({ importing, pipedriveConfigured, onImport, onShowSet
   return (
     <div className="phase-empty">
       <div className="empty-card">
-        <span className="empty-icon">📞</span>
-        <h2>Připraven k volání</h2>
-        <p>Importuj leady z Pipedrive a spusť svůj calling blok.</p>
+        <span className="empty-icon">◎</span>
+        <h2>Žádné kontakty</h2>
+        <p>Importuj 30 leadů z Pipedrive a začni volat.</p>
         <div className="empty-actions">
           <button onClick={onImport} disabled={importing || !pipedriveConfigured}>
-            {importing ? 'Importuji…' : '↓ Importovat leady'}
+            {importing ? 'Importuji…' : '↓ Importovat 30 leadů'}
           </button>
           <button onClick={onShowSettings}>⚙ Nastavení</button>
         </div>

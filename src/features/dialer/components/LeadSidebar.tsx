@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { CallOutcome, Contact } from '../types';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import type { CallOutcome, Contact } from "../types";
 
 export function LeadSidebar({
   contacts,
@@ -18,22 +18,28 @@ export function LeadSidebar({
 
   const doneCount = contacts.filter((c) => c.id in completedOutcomes).length;
   const connectedCount = contacts.filter(
-    (c) => completedOutcomes[c.id] === 'connected' || completedOutcomes[c.id] === 'meeting',
+    (c) =>
+      completedOutcomes[c.id] === "connected" ||
+      completedOutcomes[c.id] === "meeting",
   ).length;
 
   useEffect(() => {
     if (open && activeItemRef.current) {
-      activeItemRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      activeItemRef.current.scrollIntoView({
+        block: "nearest",
+        behavior: "smooth",
+      });
     }
   }, [open, activeIndex]);
 
   const handleMouseEnter = useCallback(() => {
     clearTimeout(timeoutRef.current);
-    setOpen(true);
+    timeoutRef.current = setTimeout(() => setOpen(true), 180);
   }, []);
 
   const handleMouseLeave = useCallback(() => {
-    timeoutRef.current = setTimeout(() => setOpen(false), 300);
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => setOpen(false), 400);
   }, []);
 
   useEffect(() => () => clearTimeout(timeoutRef.current), []);
@@ -42,7 +48,7 @@ export function LeadSidebar({
     <>
       <div className="sidebar-trigger" onMouseEnter={handleMouseEnter} />
       <div
-        className={`lead-sidebar ${open ? 'open' : ''}`}
+        className={`lead-sidebar ${open ? "open" : ""}`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -55,16 +61,30 @@ export function LeadSidebar({
         <div className="sidebar-list">
           {contacts.map((c, i) => {
             const outcome = completedOutcomes[c.id];
-            const stateClass = outcome ? (outcome === 'no-answer' ? 'missed' : 'reached') : '';
+            const stateClass = outcome
+              ? outcome === "no-answer"
+                ? "missed"
+                : outcome === "meeting"
+                  ? "booked"
+                  : "reached"
+              : "";
             return (
               <button
                 key={c.id}
                 ref={i === activeIndex ? activeItemRef : undefined}
-                className={`sidebar-lead ${i === activeIndex ? 'active' : ''} ${stateClass}`}
+                className={`sidebar-lead ${i === activeIndex ? "active" : ""} ${stateClass}`}
                 onClick={() => onSelect(i)}
               >
                 <span className="sidebar-lead-indicator">
-                  {outcome ? outcome === 'no-answer' ? '✗' : '✓' : i === activeIndex ? '▸' : '○'}
+                  {outcome
+                    ? outcome === "no-answer"
+                      ? "✗"
+                      : outcome === "meeting"
+                        ? "★"
+                        : "✓"
+                    : i === activeIndex
+                      ? "▸"
+                      : "○"}
                 </span>
                 <span className="sidebar-lead-info">
                   <span className="sidebar-lead-name">{c.name}</span>
@@ -78,4 +98,3 @@ export function LeadSidebar({
     </>
   );
 }
-
