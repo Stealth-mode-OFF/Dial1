@@ -4685,7 +4685,7 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
     if (!apiToken) return c.json({ error: "No API Key" }, 500);
     apiToken = apiToken.trim();
 
-    const maxLeads = Math.min(Number(c.req.query("limit")) || 30, 100);
+    const maxLeads = Math.min(Number(c.req.query("limit")) || 100, 200);
 
     // 1. Resolve the current Pipedrive user (owner) ID
     let pipedriveUserId: number | null = null;
@@ -4702,32 +4702,33 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
       /* ignore */
     }
 
-    // 2. Fetch leads from inbox (non-archived), filtered by owner
-    let leadsUrl = `https://api.pipedrive.com/v1/leads?limit=${maxLeads}&api_token=${apiToken}`;
-    if (pipedriveUserId) leadsUrl += `&owner_id=${pipedriveUserId}`;
+    // 2. Fetch activities scheduled for TODAY (undone only)
+    const todayStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    let activitiesUrl = `https://api.pipedrive.com/v1/activities?start_date=${todayStr}&end_date=${todayStr}&done=0&limit=200&api_token=${apiToken}`;
+    if (pipedriveUserId) activitiesUrl += `&user_id=${pipedriveUserId}`;
 
-    const leadsRes = await fetch(leadsUrl, {
+    const actRes = await fetch(activitiesUrl, {
       headers: { Accept: "application/json" },
     });
-    if (!leadsRes.ok) return c.json({ error: "Pipedrive Leads Error" }, 500);
-    const leadsData = await leadsRes.json();
-    const leads: any[] = leadsData?.data || [];
+    if (!actRes.ok) return c.json({ error: "Pipedrive Activities Error" }, actRes.status);
+    const actData = await actRes.json();
+    const activities: any[] = actData?.data || [];
 
-    if (leads.length === 0) return c.json([]);
+    if (activities.length === 0) return c.json([]);
 
-    // 3. Collect unique person IDs and org IDs from the leads
-    const personIds = [
-      ...new Set(leads.map((l: any) => l.person_id).filter(Boolean)),
-    ] as number[];
-    const orgIds = [
-      ...new Set(leads.map((l: any) => l.organization_id).filter(Boolean)),
+    // 3. Collect unique person IDs from today's activities
+    const personIdsFromActivities = [
+      ...new Set(activities.map((a: any) => a.person_id).filter(Boolean)),
     ] as number[];
 
-    // 4. Batch-fetch persons (up to 100 in parallel chunks of 25)
+    if (personIdsFromActivities.length === 0) return c.json([]);
+
+    // 4. Batch-fetch persons (up to 200, in chunks of 25)
     const personMap: Record<number, any> = {};
+    const limitedPersonIds = personIdsFromActivities.slice(0, maxLeads);
     const chunks = [];
-    for (let i = 0; i < personIds.length; i += 25)
-      chunks.push(personIds.slice(i, i + 25));
+    for (let i = 0; i < limitedPersonIds.length; i += 25)
+      chunks.push(limitedPersonIds.slice(i, i + 25));
     for (const chunk of chunks) {
       const results = await Promise.all(
         chunk.map((pid: number) =>
@@ -4746,7 +4747,14 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
       }
     }
 
-    // 5. Batch-fetch organisations
+    // 5. Batch-fetch organisations from person data
+    const orgIds = [
+      ...new Set(
+        Object.values(personMap)
+          .map((p: any) => p?.org_id?.value || p?.org_id)
+          .filter((v) => typeof v === "number" && v > 0),
+      ),
+    ] as number[];
     const orgMap: Record<number, any> = {};
     const orgChunks = [];
     for (let i = 0; i < orgIds.length; i += 25)
@@ -4769,38 +4777,46 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
       }
     }
 
-    // 6. Map leads → contacts shape the frontend expects
-    const contacts = leads
-      .map((lead: any) => {
-        const person = lead.person_id ? personMap[lead.person_id] : null;
-        const org = lead.organization_id ? orgMap[lead.organization_id] : null;
+    // 6. Build an activity-info map (first activity per person for context)
+    const activityByPerson: Record<number, any> = {};
+    for (const act of activities) {
+      if (act.person_id && !activityByPerson[act.person_id]) {
+        activityByPerson[act.person_id] = act;
+      }
+    }
 
-        // Phone / email from person
-        const phones =
-          person && Array.isArray(person.phone) ? person.phone : [];
+    // 7. Map persons → contacts shape the frontend expects
+    const contacts = limitedPersonIds
+      .map((pid: number) => {
+        const person = personMap[pid];
+        if (!person) return null;
+        const orgId = person.org_id?.value || person.org_id || null;
+        const org = typeof orgId === "number" ? orgMap[orgId] : null;
+
+        const phones = Array.isArray(person.phone) ? person.phone : [];
         const phone =
           phones.map((ph: any) => ph?.value?.trim()).filter(Boolean)[0] || null;
-        const emails =
-          person && Array.isArray(person.email) ? person.email : [];
+        const emails = Array.isArray(person.email) ? person.email : [];
         const email =
           emails.map((em: any) => em?.value?.trim()).filter(Boolean)[0] || null;
 
         return {
-          id: String(lead.id), // lead UUID
-          name: person?.name || lead.title || "Unnamed lead",
-          company: org?.name || person?.org_name || null,
-          org_id: lead.organization_id || person?.org_id?.value || null,
+          id: String(pid),
+          name: person.name || "Unnamed contact",
+          company: org?.name || person.org_name || null,
+          org_id: typeof orgId === "number" ? orgId : null,
           phone,
           email,
-          role: person?.job_title || null,
+          role: person.job_title || null,
           aiScore: null,
           status: "active",
         };
       })
-      .filter((c: any) => c.name);
+      .filter(Boolean);
 
     return c.json(contacts);
   } catch (e) {
+    console.error("pipedrive/contacts error:", e);
     return c.json({ error: "Internal Error" }, 500);
   }
 });

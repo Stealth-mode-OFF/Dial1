@@ -75,6 +75,10 @@ const STORAGE_SETTINGS_KEY = 'echo.settings';
 const STORAGE_COMPLETED_LEADS_KEY = 'echo.completed_leads';
 const STORAGE_SHOW_COMPLETED_KEY = 'echo.show_completed_leads';
 const STORAGE_ACTIVE_CONTACT_KEY = 'echo.active_contact_id';
+const STORAGE_LAST_DAY_KEY = 'echo.last_active_day';
+
+/** Return today as YYYY-MM-DD string */
+const todayStr = () => new Date().toISOString().split('T')[0];
 
 const defaultStats: Stats = {
   callsToday: 0,
@@ -192,6 +196,23 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  // ─── Daily reset: clear completed leads & contacts when the day changes ───
+  useEffect(() => {
+    const today = todayStr();
+    const lastDay = loadStringFromStorage(STORAGE_LAST_DAY_KEY);
+    if (lastDay && lastDay !== today) {
+      // New day — clear yesterday's data so the front starts empty
+      setCompletedLeadIds([]);
+      setContacts([]);
+      setActiveContactId(null);
+      try {
+        window.localStorage.removeItem(STORAGE_COMPLETED_LEADS_KEY);
+        window.localStorage.removeItem(STORAGE_ACTIVE_CONTACT_KEY);
+      } catch { /* ignore */ }
+    }
+    saveToStorage(STORAGE_LAST_DAY_KEY, today);
+  }, []); // run once on mount
 
   // Keep a ref to contacts so callbacks don't go stale
   const contactsRef = useRef(contacts);

@@ -617,7 +617,7 @@ export const echoApi = {
       ok: boolean;
       user?: { id?: number; name?: string; email?: string | null };
     }>("integrations/pipedrive/test"),
-  fetchContacts: () => apiFetch<EchoContact[]>("pipedrive/contacts?limit=30"),
+  fetchContacts: () => apiFetch<EchoContact[]>("pipedrive/contacts?limit=100"),
   importPipedrive: () =>
     apiFetch<{ ok?: boolean; count?: number }>("pipedrive/import", {
       method: "POST",
