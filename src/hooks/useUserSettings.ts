@@ -56,18 +56,13 @@ export function useUserSettings() {
   }, []);
 
   // Resolved values with defaults
-  const openingScript =
-    settings?.openingScript || DEFAULT_OPENING_SCRIPT;
-  const smsTemplate =
-    settings?.smsTemplate || DEFAULT_SMS_TEMPLATE;
-  const schedulerUrl =
-    settings?.schedulerUrl || DEFAULT_SCHEDULER_URL;
-  const pipedriveDomain =
-    settings?.pipedriveDomain || DEFAULT_PIPEDRIVE_DOMAIN;
-  const qualQuestions: readonly QualQuestion[] =
-    settings?.qualQuestions?.length
-      ? settings.qualQuestions
-      : DEFAULT_QUAL_QUESTIONS;
+  const openingScript = settings?.openingScript || DEFAULT_OPENING_SCRIPT;
+  const smsTemplate = settings?.smsTemplate || DEFAULT_SMS_TEMPLATE;
+  const schedulerUrl = settings?.schedulerUrl || DEFAULT_SCHEDULER_URL;
+  const pipedriveDomain = settings?.pipedriveDomain || DEFAULT_PIPEDRIVE_DOMAIN;
+  const qualQuestions: readonly QualQuestion[] = settings?.qualQuestions?.length
+    ? settings.qualQuestions
+    : DEFAULT_QUAL_QUESTIONS;
   const salesStyle = settings?.salesStyle || "hunter";
 
   return {

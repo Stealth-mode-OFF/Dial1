@@ -1,4 +1,3 @@
-
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { SalesProvider } from "./contexts/SalesContext";
@@ -23,5 +22,5 @@ createRoot(document.getElementById("root")!).render(
         </UserSettingsProvider>
       </SalesProvider>
     </AuthGate>
-  </ErrorBoundary>
+  </ErrorBoundary>,
 );

@@ -1,9 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { formatTime } from "../../features/dialer/helpers";
 import type { CallOutcome, Contact } from "../../features/dialer/types";
-import {
-  CALL_FOCUS_DELAY_MS,
-} from "../../features/dialer/config";
+import { CALL_FOCUS_DELAY_MS } from "../../features/dialer/config";
 import { BookDemoModal } from "../../features/dialer/components/BookDemoModal";
 import { useUserSettingsCtx } from "../../contexts/UserSettingsContext";
 
@@ -41,7 +39,8 @@ export function CallingPhase({
   onRecordCall,
   pipedriveConfigured,
 }: CallingPhaseProps) {
-  const { qualQuestions: QUAL_QUESTIONS, openingScript: OPENING_SCRIPT } = useUserSettingsCtx();
+  const { qualQuestions: QUAL_QUESTIONS, openingScript: OPENING_SCRIPT } =
+    useUserSettingsCtx();
   const firstInputRef = useRef<HTMLInputElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [scriptCollapsed, setScriptCollapsed] = useState(false);

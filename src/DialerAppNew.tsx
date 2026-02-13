@@ -60,6 +60,9 @@ function mapContacts(
 
 // ─── Component ────────────────────────────────────────────────
 export function DialerApp() {
+  // ─── User settings (per-user config) — must be before any state that uses it ───
+  const userSettings = useUserSettingsCtx();
+
   const {
     contacts: salesContacts,
     isLoading,
@@ -94,8 +97,8 @@ export function DialerApp() {
 
   // ─── Form state ───
   const [notes, setNotes] = useState("");
-  const [aiQualAnswers, setAiQualAnswers] = useState<string[]>(
-    () => Array(userSettings.qualQuestions.length).fill(""),
+  const [aiQualAnswers, setAiQualAnswers] = useState<string[]>(() =>
+    Array(userSettings.qualQuestions.length).fill(""),
   );
   const [showSettings, setShowSettings] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
@@ -106,9 +109,6 @@ export function DialerApp() {
 
   // ─── CRM ───
   const crm = usePipedriveCRM();
-
-  // ─── User settings (per-user config) ───
-  const userSettings = useUserSettingsCtx();
 
   // ─── Brief / Script ───
   const { brief, generate: generateBrief, clear: clearBrief } = useBrief();
