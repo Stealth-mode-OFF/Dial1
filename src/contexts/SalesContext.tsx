@@ -1,6 +1,23 @@
-import React, { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { echoApi, type AnalyticsSummary, type CallLogPayload, type CallLogResult, type EchoContact } from '../utils/echoApi';
-import { isSupabaseConfigured, supabaseConfigError } from '../utils/supabase/info';
+import React, {
+  createContext,
+  useContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  echoApi,
+  type AnalyticsSummary,
+  type CallLogPayload,
+  type CallLogResult,
+  type EchoContact,
+} from "../utils/echoApi";
+import {
+  isSupabaseConfigured,
+  supabaseConfigError,
+} from "../utils/supabase/info";
 
 export type Stats = {
   callsToday: number;
@@ -36,10 +53,23 @@ export type CallRecord = {
   notes?: string;
 };
 
-export type Deal = { id: string; value?: number; status?: string; stage?: string };
+export type Deal = {
+  id: string;
+  value?: number;
+  status?: string;
+  stage?: string;
+};
 
-export type UserProfile = { name: string; role: string; avatarInitials: string };
-export type UserSettings = { dailyCallGoal?: number; smartBccAddress?: string; sequenceSendTime?: string };
+export type UserProfile = {
+  name: string;
+  role: string;
+  avatarInitials: string;
+};
+export type UserSettings = {
+  dailyCallGoal?: number;
+  smartBccAddress?: string;
+  sequenceSendTime?: string;
+};
 
 type SalesContextType = {
   isConfigured: boolean;
@@ -70,15 +100,15 @@ type SalesContextType = {
 
 const SalesContext = createContext<SalesContextType | undefined>(undefined);
 
-const STORAGE_USER_KEY = 'echo.user';
-const STORAGE_SETTINGS_KEY = 'echo.settings';
-const STORAGE_COMPLETED_LEADS_KEY = 'echo.completed_leads';
-const STORAGE_SHOW_COMPLETED_KEY = 'echo.show_completed_leads';
-const STORAGE_ACTIVE_CONTACT_KEY = 'echo.active_contact_id';
-const STORAGE_LAST_DAY_KEY = 'echo.last_active_day';
+const STORAGE_USER_KEY = "echo.user";
+const STORAGE_SETTINGS_KEY = "echo.settings";
+const STORAGE_COMPLETED_LEADS_KEY = "echo.completed_leads";
+const STORAGE_SHOW_COMPLETED_KEY = "echo.show_completed_leads";
+const STORAGE_ACTIVE_CONTACT_KEY = "echo.active_contact_id";
+const STORAGE_LAST_DAY_KEY = "echo.last_active_day";
 
 /** Return today as YYYY-MM-DD string */
-const todayStr = () => new Date().toISOString().split('T')[0];
+const todayStr = () => new Date().toISOString().split("T")[0];
 
 const defaultStats: Stats = {
   callsToday: 0,
@@ -88,17 +118,20 @@ const defaultStats: Stats = {
   activeLeads: 0,
 };
 
-const defaultUser: UserProfile = { name: '', role: '', avatarInitials: '' };
-const defaultSettings: UserSettings = { dailyCallGoal: 0, sequenceSendTime: '09:00' };
+const defaultUser: UserProfile = { name: "", role: "", avatarInitials: "" };
+const defaultSettings: UserSettings = {
+  dailyCallGoal: 0,
+  sequenceSendTime: "09:00",
+};
 
 const initialsFromName = (name: string) => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || '');
-  return letters.join('') || '';
+  const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "");
+  return letters.join("") || "";
 };
 
 const loadFromStorage = <T,>(key: string, fallback: T): T => {
-  if (typeof window === 'undefined') return fallback;
+  if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(key);
     if (!raw) return fallback;
@@ -109,19 +142,21 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
 };
 
 const loadArrayFromStorage = (key: string): string[] => {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map((value) => String(value)).filter(Boolean) : [];
+    return Array.isArray(parsed)
+      ? parsed.map((value) => String(value)).filter(Boolean)
+      : [];
   } catch {
     return [];
   }
 };
 
 const loadBooleanFromStorage = (key: string, fallback = false): boolean => {
-  if (typeof window === 'undefined') return fallback;
+  if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(key);
     if (!raw) return fallback;
@@ -132,7 +167,7 @@ const loadBooleanFromStorage = (key: string, fallback = false): boolean => {
 };
 
 const loadStringFromStorage = (key: string): string | null => {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(key);
     return raw ? String(raw) : null;
@@ -142,7 +177,7 @@ const loadStringFromStorage = (key: string): string | null => {
 };
 
 const saveToStorage = (key: string, value: unknown) => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
@@ -152,25 +187,36 @@ const saveToStorage = (key: string, value: unknown) => {
 
 const mapContact = (row: EchoContact, index: number): Contact => ({
   id: row.id || String(index),
-  name: row.name || 'Unnamed contact',
-  title: row.role || '',
-  company: row.company || '',
-  phone: row.phone || '',
-  email: row.email || '',
-  status: row.status || '',
-  location: '',
+  name: row.name || "Unnamed contact",
+  title: row.role || "",
+  company: row.company || "",
+  phone: row.phone || "",
+  email: row.email || "",
+  status: row.status || "",
+  location: "",
   score: row.aiScore ?? null,
   orgId: row.org_id ?? null,
 });
 
-const deriveStats = (analytics: AnalyticsSummary | null, contactsCount: number): Stats => {
+const deriveStats = (
+  analytics: AnalyticsSummary | null,
+  contactsCount: number,
+): Stats => {
   const callsToday = analytics?.callsToday ?? analytics?.totalCalls ?? 0;
   const connectRate = analytics?.connectRate ?? 0;
   const meetingsBooked =
-    analytics?.dispositionBreakdown?.find((d) => d.name?.toLowerCase() === 'meeting')?.value || 0;
+    analytics?.dispositionBreakdown?.find(
+      (d) => d.name?.toLowerCase() === "meeting",
+    )?.value || 0;
   const pipelineValue = analytics?.revenue ?? 0;
   const activeLeads = contactsCount;
-  return { callsToday, connectRate, meetingsBooked, pipelineValue, activeLeads };
+  return {
+    callsToday,
+    connectRate,
+    meetingsBooked,
+    pipelineValue,
+    activeLeads,
+  };
 };
 
 export function SalesProvider({ children }: { children: React.ReactNode }) {
@@ -182,7 +228,9 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
   );
   const [pipedriveConfigured, setPipedriveConfigured] = useState(false);
 
-  const [user, setUser] = useState<UserProfile>(() => loadFromStorage(STORAGE_USER_KEY, defaultUser));
+  const [user, setUser] = useState<UserProfile>(() =>
+    loadFromStorage(STORAGE_USER_KEY, defaultUser),
+  );
   const [settings, setSettings] = useState<UserSettings>(() =>
     loadFromStorage(STORAGE_SETTINGS_KEY, defaultSettings),
   );
@@ -209,7 +257,9 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
       try {
         window.localStorage.removeItem(STORAGE_COMPLETED_LEADS_KEY);
         window.localStorage.removeItem(STORAGE_ACTIVE_CONTACT_KEY);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     saveToStorage(STORAGE_LAST_DAY_KEY, today);
   }, []); // run once on mount
@@ -235,9 +285,9 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
   }, [showCompletedLeads]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    const lead = params.get('lead');
+    const lead = params.get("lead");
     if (lead) setActiveContactId(lead);
   }, []);
 
@@ -271,7 +321,9 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = async () => {
     if (!isSupabaseConfigured) {
-      setError(supabaseConfigError || 'Add Supabase URL and anon key to enable data.');
+      setError(
+        supabaseConfigError || "Add Supabase URL and anon key to enable data.",
+      );
       return;
     }
 
@@ -281,19 +333,21 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
 
     const [contactsResult] = await Promise.all([
       fetchContacts().catch((e) => {
-        errors.push(e?.message || 'Contacts unavailable');
+        errors.push(e?.message || "Contacts unavailable");
         return contacts;
       }),
-      fetchPipedriveStatus().catch((e) => errors.push(e?.message || 'Pipedrive unavailable')),
+      fetchPipedriveStatus().catch((e) =>
+        errors.push(e?.message || "Pipedrive unavailable"),
+      ),
     ]);
 
     await fetchAnalytics((contactsResult || contacts).length).catch((e) =>
-      errors.push(e?.message || 'Analytics unavailable'),
+      errors.push(e?.message || "Analytics unavailable"),
     );
 
     setLastUpdated(new Date().toISOString());
     setIsLoading(false);
-    setError(errors.length ? errors.join(' • ') : null);
+    setError(errors.length ? errors.join(" • ") : null);
   };
 
   const markLeadCompleted = useCallback((id: string) => {
@@ -305,12 +359,15 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
     setCompletedLeadIds([]);
   }, []);
 
-  const logCall = useCallback(async (payload: CallLogPayload): Promise<CallLogResult> => {
-    const res = await echoApi.logCall(payload);
-    markLeadCompleted(payload.contactId);
-    await fetchAnalytics(contactsRef.current.length).catch(() => null);
-    return res;
-  }, [markLeadCompleted]);
+  const logCall = useCallback(
+    async (payload: CallLogPayload): Promise<CallLogResult> => {
+      const res = await echoApi.logCall(payload);
+      markLeadCompleted(payload.contactId);
+      await fetchAnalytics(contactsRef.current.length).catch(() => null);
+      return res;
+    },
+    [markLeadCompleted],
+  );
 
   const setPipedriveKey = useCallback(async (apiKey: string) => {
     await echoApi.savePipedriveKey(apiKey);
@@ -330,8 +387,9 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
   const updateUser = useCallback((updates: Partial<UserProfile>) => {
     setUser((prev) => {
       const next = { ...prev, ...updates };
-      const initials = updates.avatarInitials || initialsFromName(next.name || '');
-      return { ...next, avatarInitials: initials || next.avatarInitials || '' };
+      const initials =
+        updates.avatarInitials || initialsFromName(next.name || "");
+      return { ...next, avatarInitials: initials || next.avatarInitials || "" };
     });
   }, []);
 
@@ -341,7 +399,11 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
 
   const activeContact = useMemo(() => {
     if (!activeContactId) return contacts[0] || null;
-    return contacts.find((contact) => contact.id === activeContactId) || contacts[0] || null;
+    return (
+      contacts.find((contact) => contact.id === activeContactId) ||
+      contacts[0] ||
+      null
+    );
   }, [activeContactId, contacts]);
 
   const visibleContacts = useMemo(() => {
@@ -403,13 +465,15 @@ export function SalesProvider({ children }: { children: React.ReactNode }) {
     ],
   );
 
-  return <SalesContext.Provider value={value}>{children}</SalesContext.Provider>;
+  return (
+    <SalesContext.Provider value={value}>{children}</SalesContext.Provider>
+  );
 }
 
 export function useSales() {
   const context = useContext(SalesContext);
   if (!context) {
-    throw new Error('useSales must be used within a SalesProvider');
+    throw new Error("useSales must be used within a SalesProvider");
   }
   return context;
 }

@@ -8,32 +8,63 @@
   --bg: #f5f0e8;
   --surface: #ffffff;
   --border: #1a1a1a;
+  --border-light: #e5e5e5;
   --text: #1a1a1a;
   --text-muted: #737373;
+  --text-secondary: #a3a3a3;
   --primary: #3b82f6;
   --success: #22c55e;
+  --success-light: #dcfce7;
   --danger: #ef4444;
+  --danger-light: #fee2e2;
   --gold: #f59e0b;
+  --purple-500: #8b5cf6;
+  --amber-600: #d97706;
 
   /* Neo accents */
   --neo-yellow: #fef08a;
   --neo-mint: #a7f3d0;
   --neo-lavender: #ddd6fe;
+  --neo-blue: #3b82f6;
+
+  /* Neutral scale */
+  --gray-100: #f5f5f5;
+  --gray-200: #e5e5e5;
+  --gray-300: #d4d4d4;
+  --gray-400: #a3a3a3;
+  --gray-500: #737373;
+  --green-50: #f0fdf4;
+  --red-50: #fef2f2;
 
   /* Shadows */
   --shadow-neo: 4px 4px 0 #1a1a1a;
   --shadow-neo-sm: 2px 2px 0 #1a1a1a;
 
+  /* Transitions */
+  --transition: 0.15s ease;
+  --transition-fast: 0.1s ease;
+
   /* Typography */
   --font: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: "SF Mono", "Fira Code", monospace;
 
   /* Radius */
   --radius: 8px;
+  --radius-sm: 6px;
   --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
 
   /* App Nav */
-  --nav-h: 44px;
+  --nav-h: 48px;
 }
 
 *,
@@ -91,8 +122,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   background: var(--neo-yellow);
   border: 2px solid var(--border);
   border-radius: var(--radius);
@@ -117,7 +148,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 8px 14px;
   background: transparent;
   border: 2px solid transparent;
   border-radius: var(--radius);
@@ -418,7 +449,7 @@ body {
 /* ============ PREP: AI BRIEF ============ */
 .prep-ai {
   width: 100%;
-  padding: 18px;
+  padding: 16px;
   background: var(--surface);
   border: 3px solid var(--border);
   border-radius: var(--radius-lg);
@@ -628,7 +659,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 6px 12px;
   background: var(--bg);
   border: 2px solid var(--border);
   border-radius: 999px;
@@ -661,7 +692,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 6px 12px;
   border: 2px solid var(--border);
   border-radius: 999px;
   font-size: 11px;
@@ -891,7 +922,7 @@ body {
 }
 
 .td-stat-lbl {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   color: #888;
   text-transform: uppercase;
@@ -1268,7 +1299,7 @@ body {
 
 .td-input {
   width: 100%;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border: 2px solid #e5e7eb;
   border-radius: var(--radius);
   font-family: var(--font);
@@ -1293,7 +1324,7 @@ body {
 
 .td-textarea {
   width: 100%;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border: 2px solid #e5e7eb;
   border-radius: var(--radius);
   font-family: var(--font);
@@ -1389,7 +1420,7 @@ body {
 }
 
 .td-opening-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1412,7 +1443,7 @@ body {
 }
 
 .td-qual-title {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1490,7 +1521,7 @@ body {
 
 .td-q-input {
   width: 100%;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border: 2px solid #e5e7eb;
   border-radius: var(--radius);
   font-family: var(--font);
@@ -1712,7 +1743,7 @@ body {
 .seq-q-answer {
   margin-top: 2px;
   width: 100%;
-  padding: 5px 8px;
+  padding: 6px 10px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   font-family: inherit;
@@ -1736,7 +1767,7 @@ body {
 
 .seq-script-label {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1760,7 +1791,7 @@ body {
 }
 
 .seq-notes-label {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -2739,8 +2770,8 @@ body {
   border-top: 1px solid var(--border-light);
 }
 .whisper-quick-btn {
-  padding: 3px 8px;
-  font-size: 11px;
+  padding: 6px 12px;
+  font-size: 12px;
   font-weight: 600;
   font-family: var(--font);
   background: var(--surface);
@@ -5383,4 +5414,76 @@ body {
 .td-q-card--done .td-q-num {
   background: var(--success);
   border-color: var(--success);
+}
+
+/* ─── DESIGN AUDIT: RESPONSIVE FIXES ───
+   Standardized breakpoints: 480 / 768 / 1024 */
+
+/* Stats bar: scroll on small screens */
+.td-stats-bar {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  /* Stats bar: allow wrapping */
+  .td-stats-bar {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 10px;
+  }
+  .td-stat {
+    padding: 4px 10px;
+    min-width: 48px;
+  }
+  .td-stat-val {
+    font-size: 15px;
+  }
+
+  /* Call action buttons: stack on mobile */
+  .call-action-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  /* Whisper stack: full width on mobile */
+  .whisper-stack {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    bottom: 16px;
+  }
+
+  /* Nav: tighter on mobile */
+  .app-nav {
+    padding: 0 10px;
+  }
+  .app-nav-left {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Even tighter stats */
+  .td-stat {
+    padding: 4px 8px;
+    min-width: 42px;
+  }
+  .td-stat-val {
+    font-size: 14px;
+  }
+  .td-stat-lbl {
+    font-size: 10px;
+  }
+
+  /* Prep chips: allow wrapping */
+  .prep-links-row,
+  .prep-chips-row {
+    gap: 4px;
+  }
+  .prep-link,
+  .prep-chip {
+    max-width: 200px;
+    font-size: 10px;
+  }
 }

@@ -4710,7 +4710,8 @@ app.get(`${BASE_PATH}/pipedrive/contacts`, async (c) => {
     const actRes = await fetch(activitiesUrl, {
       headers: { Accept: "application/json" },
     });
-    if (!actRes.ok) return c.json({ error: "Pipedrive Activities Error" }, actRes.status);
+    if (!actRes.ok)
+      return c.json({ error: "Pipedrive Activities Error" }, actRes.status);
     const actData = await actRes.json();
     const activities: any[] = actData?.data || [];
 
