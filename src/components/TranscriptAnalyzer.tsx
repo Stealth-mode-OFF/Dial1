@@ -1,12 +1,14 @@
 /**
  * TranscriptAnalyzer - Paste tLDV transcript → get AI analysis
  * 
+ * Pipeline: transcript → LLM interpretation → summary → coaching narrative
  * Used in wrapup phases of both Dialer and MeetCoach.
  * Also accessible as standalone dashboard via #analyze route.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { echoApi, type TranscriptAnalysisResult, type TranscriptAnalysisSummary, type TranscriptDashboardStats } from '../utils/echoApi';
+import { echoApi, type TranscriptAnalysisResult, type TranscriptAnalysisSummary, type TranscriptDashboardStats, type CoachingNarrative } from '../utils/echoApi';
+import { buildFallbackCoachingNarrative } from '../lib/analysisEngine';
 
 /* ============ TRANSCRIPT INPUT ============ */
 interface TranscriptInputProps {
@@ -116,7 +118,31 @@ interface AnalysisResultProps {
 export const AnalysisResult: React.FC<AnalysisResultProps> = ({ result, onCopyPipedrive, onBack }) => {
   const { metrics, analysis } = result;
   const [copiedNotes, setCopiedNotes] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'questions' | 'objections' | 'spin'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'coaching' | 'questions' | 'objections' | 'spin'>('overview');
+
+  // Resolve coaching narrative — use backend LLM result, fallback to local builder
+  const coaching: CoachingNarrative = result.coaching || buildFallbackCoachingNarrative(
+    {
+      score: analysis.score,
+      categoryScores: analysis.categoryScores,
+      strengths: analysis.strengths,
+      weaknesses: analysis.weaknesses,
+      fillerWordsAnalysis: analysis.fillerWordsAnalysis,
+      talkRatioAnalysis: analysis.talkRatioAnalysis,
+      spinCoverage: analysis.spinCoverage,
+      questionsAsked: analysis.questionsAsked as any,
+      objectionsHandled: analysis.objectionsHandled as any,
+    },
+    {
+      talkRatioMe: metrics.talkRatioMe,
+      talkRatioProspect: metrics.talkRatioProspect,
+      totalWordsMe: metrics.totalWordsMe,
+      totalWordsProspect: metrics.totalWordsProspect,
+      fillerWords: metrics.fillerWords,
+      fillerWordRate: metrics.fillerWordRate,
+      turnCount: metrics.turnCount,
+    },
+  );
 
   const handleCopyNotes = useCallback(() => {
     navigator.clipboard.writeText(analysis.spinNotesPipedrive || '');
@@ -215,10 +241,13 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({ result, onCopyPi
         </div>
       </div>
 
-      {/* Tabs: Overview / Questions / Objections / SPIN */}
+      {/* Tabs: Overview / Coaching / Questions / Objections / SPIN */}
       <div className="ta-tabs">
         <button className={`ta-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
           📊 Přehled
+        </button>
+        <button className={`ta-tab ${activeTab === 'coaching' ? 'active' : ''}`} onClick={() => setActiveTab('coaching')}>
+          🎯 Coaching
         </button>
         <button className={`ta-tab ${activeTab === 'questions' ? 'active' : ''}`} onClick={() => setActiveTab('questions')}>
           ❓ Otázky ({analysis.questionsAsked?.length || 0})
@@ -245,6 +274,61 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({ result, onCopyPi
             <div className="ta-coaching">
               <h4>💡 Tip pro příště</h4>
               <p>{analysis.coachingTip}</p>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'coaching' && (
+          <div className="ta-coaching-narrative">
+            {/* Narrative story */}
+            <div className="ta-narrative-story">
+              <h4>📖 Coaching příběh</h4>
+              <p className="ta-narrative-text">{coaching.narrative}</p>
+            </div>
+
+            {/* Action items */}
+            {coaching.actions?.length > 0 && (
+              <div className="ta-narrative-actions">
+                <h4>🎯 Akční kroky</h4>
+                {coaching.actions.map((action, i) => (
+                  <div key={i} className={`ta-action-item ta-priority-${action.priority}`}>
+                    <div className="ta-action-header">
+                      <span className="ta-action-priority">
+                        {action.priority === 'high' ? '🔴' : action.priority === 'medium' ? '🟡' : '🟢'}
+                      </span>
+                      <strong>{action.title}</strong>
+                    </div>
+                    <p>{action.description}</p>
+                    {action.example && (
+                      <p className="ta-action-example">💬 „{action.example}"</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Practice scenarios */}
+            {coaching.practiceScenarios?.length > 0 && (
+              <div className="ta-narrative-practice">
+                <h4>🔄 Tréninkové scénáře</h4>
+                {coaching.practiceScenarios.map((scenario, i) => (
+                  <div key={i} className="ta-practice-item">
+                    <div className="ta-practice-situation">
+                      <span className="ta-practice-label">Situace:</span>
+                      <p>{scenario.situation}</p>
+                    </div>
+                    <div className="ta-practice-better">
+                      <span className="ta-practice-label">✨ Lepší přístup:</span>
+                      <p>{scenario.betterApproach}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Motivational close */}
+            <div className="ta-narrative-motivation">
+              <p className="ta-motivation-text">💪 {coaching.motivationalClose}</p>
             </div>
           </div>
         )}
@@ -383,6 +467,7 @@ export const AnalysisDashboard: React.FC = () => {
       objectionsHandled: detailData.objections_handled || [],
       spinNotesPipedrive: detailData.spin_notes_pipedrive || '',
     },
+    coaching: detailData.coaching_narrative || null,
     saved: true,
   } : null;
 

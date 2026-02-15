@@ -6382,7 +6382,81 @@ OUTPUT JSON (strict):
 
     const analysis = JSON.parse(data.choices[0].message.content);
 
-    // 5. Save to Supabase
+    // 5. Stage 2 — Generate coaching narrative via focused LLM call
+    let coaching = null;
+    try {
+      const coachingSystemPrompt = `Jsi empatický ale přímý Sales Coach. Na základě výsledků analýzy hovoru vytvoř coaching narrative.
+
+TVŮJ ÚKOL:
+Vytvoř osobní coaching příběh pro obchodníka. Ne suchý report, ale motivační a praktický narrativ.
+
+PRAVIDLA:
+- Piš v 2. osobě ("Ty jsi...", "Zkus příště...")
+- Buď konkrétní — cituj situace z hovoru
+- Každá akce musí být okamžitě aplikovatelná
+- Practice scenáře = přepiš konkrétní moment z hovoru lépe
+- Motivační závěr = upřímný, ne generický
+
+OUTPUT JSON (strict):
+{
+  "narrative": "3-5 vět coaching příběh — co se stalo, proč to je důležité, kam se posunout",
+  "actions": [
+    {
+      "title": "krátký název akce",
+      "description": "co přesně udělat jinak a proč",
+      "example": "konkrétní příklad fráze nebo techniky (volitelné)",
+      "priority": "high|medium|low"
+    }
+  ],
+  "practiceScenarios": [
+    {
+      "situation": "co klient řekl (citace z hovoru)",
+      "betterApproach": "jak reagovat příště — konkrétní fráze"
+    }
+  ],
+  "motivationalClose": "jedna věta — upřímná, motivační"
+}`;
+
+      const coachingContext = `SKÓRE: ${analysis.score}/100
+SILNÉ STRÁNKY: ${JSON.stringify(analysis.strengths)}
+SLABÉ STRÁNKY: ${JSON.stringify(analysis.weaknesses)}
+POMĚR MLUVENÍ: Rep ${metrics.talkRatioMe}% / Klient ${metrics.talkRatioProspect}%
+PARAZITNÍ SLOVA: ${JSON.stringify(metrics.fillerWords)} (${metrics.fillerWordRate}%)
+NÁMITKY: ${JSON.stringify(analysis.objectionsHandled)}
+OTÁZKY: ${JSON.stringify(analysis.questionsAsked)}
+SPIN POKRYTÍ: ${JSON.stringify(analysis.spinCoverage)}
+COACHING TIP: ${analysis.coachingTip}
+SHRNUTÍ: ${analysis.summary}
+
+KLÍČOVÉ MOMENTY Z PŘEPISU:
+${formattedTranscript.slice(0, 3000)}`;
+
+      const coachingResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: coachingSystemPrompt },
+            { role: "user", content: coachingContext },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.5,
+        }),
+      });
+
+      const coachingData = await coachingResponse.json();
+      if (coachingData.choices?.[0]?.message?.content) {
+        coaching = JSON.parse(coachingData.choices[0].message.content);
+      }
+    } catch (coachErr) {
+      console.error("Coaching narrative generation failed (non-blocking):", coachErr);
+    }
+
+    // 6. Save to Supabase
     const admin = getAdminClient();
     let savedId: string | null = null;
 
@@ -6412,6 +6486,7 @@ OUTPUT JSON (strict):
           spin_notes_pipedrive: analysis.spinNotesPipedrive,
           questions_asked: analysis.questionsAsked,
           objections_handled: analysis.objectionsHandled,
+          coaching_narrative: coaching,
         })
         .select("id")
         .single();
@@ -6423,7 +6498,7 @@ OUTPUT JSON (strict):
       }
     }
 
-    // 6. Return full result
+    // 7. Return full pipeline result
     return c.json({
       id: savedId,
       metrics: {
@@ -6438,6 +6513,7 @@ OUTPUT JSON (strict):
         meSpeaker,
       },
       analysis,
+      coaching,
       saved: !!savedId,
     });
 
