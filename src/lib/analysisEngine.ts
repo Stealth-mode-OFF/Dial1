@@ -49,15 +49,15 @@ export interface CategoryScore {
 
 export interface QuestionItem {
   text: string;
-  type: 'open' | 'closed';
+  type: string;
   phase: string;
-  quality: 'strong' | 'weak';
+  quality: string;
 }
 
 export interface ObjectionItem {
   objection: string;
   response: string;
-  quality: 'good' | 'weak' | 'missed';
+  quality: string;
 }
 
 export interface SpinPhaseDetail {
@@ -240,7 +240,7 @@ export function buildFallbackCoachingNarrative(
       .join(', ');
     actions.push({
       title: 'Redukovat parazitní slova',
-      description: `Filler rate ${metrics.fillerWordRate}%. Nejčastější: ${topFillers}. Nahraď tichy pauzy.`,
+      description: `Filler rate ${metrics.fillerWordRate}%. Nejčastější: ${topFillers}. Nahraď tiché pauzy.`,
       priority: metrics.fillerWordRate > 5 ? 'high' : 'medium',
     });
   }
@@ -267,7 +267,7 @@ export function buildFallbackCoachingNarrative(
     `Celkově ${level} hovor (${interpretation.score}/100).`,
     interpretation.strengths.length > 0 ? `Silná stránka: ${interpretation.strengths[0]}.` : '',
     interpretation.weaknesses.length > 0 ? `Největší příležitost ke zlepšení: ${interpretation.weaknesses[0]}.` : '',
-    actions.length > 0 ? `Zaměř se na ${actions.length} konkrétní${actions.length === 1 ? '' : 'ch'} akc${actions.length === 1 ? 'i' : 'í'} níže.` : '',
+    actions.length > 0 ? `Zaměř se na ${actions.length} ${actions.length === 1 ? 'konkrétní akci' : 'konkrétních akcí'} níže.` : '',
   ].filter(Boolean).join(' ');
 
   const motivationalClose = interpretation.score >= 70

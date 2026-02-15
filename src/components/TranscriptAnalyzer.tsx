@@ -130,8 +130,8 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({ result, onCopyPi
       fillerWordsAnalysis: analysis.fillerWordsAnalysis,
       talkRatioAnalysis: analysis.talkRatioAnalysis,
       spinCoverage: analysis.spinCoverage,
-      questionsAsked: analysis.questionsAsked as any,
-      objectionsHandled: analysis.objectionsHandled as any,
+      questionsAsked: analysis.questionsAsked,
+      objectionsHandled: analysis.objectionsHandled,
     },
     {
       talkRatioMe: metrics.talkRatioMe,
