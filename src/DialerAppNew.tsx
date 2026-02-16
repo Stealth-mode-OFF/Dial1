@@ -62,6 +62,7 @@ export function DialerApp() {
   const [showSettings, setShowSettings] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const [autoDialCountdown, setAutoDialCountdown] = useState(0);
   const [autoDialQueued, setAutoDialQueued] = useState(false);
   const autoDialTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -167,15 +168,19 @@ export function DialerApp() {
 
   const handleImport = useCallback(async () => {
     setImporting(true);
+    setImportError(null);
     try {
       await echoApi.importPipedrive();
-    } catch (e) {
-      console.error('Import POST failed:', e);
+    } catch (e: any) {
+      const msg = e?.message || 'Import selhal';
+      console.error('Import POST failed:', msg);
+      setImportError(msg);
     }
     try {
       await refresh();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Refresh failed:', e);
+      if (!importError) setImportError(e?.message || 'Nepodařilo se načíst kontakty');
     } finally {
       setImporting(false);
     }
@@ -484,6 +489,10 @@ export function DialerApp() {
             </button>
           </div>
         </div>
+      )}
+
+      {importError && (
+        <div className="import-error-banner">⚠ {importError}</div>
       )}
 
       <main className="main-v2">

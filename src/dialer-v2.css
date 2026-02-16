@@ -2263,6 +2263,98 @@ body {
   cursor: pointer;
 }
 
+/* ============ STATS (neo) ============ */
+@keyframes wow-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.wow-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-feature-settings: 'tnum';
+}
+.wow-stat-num {
+  font-weight: 800;
+  color: var(--text);
+  font-size: 14px;
+}
+.wow-stat-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.wow-stat-icon {
+  font-size: 13px;
+}
+.wow-stat-divider {
+  width: 2px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+  border-radius: 1px;
+}
+.wow-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 10px;
+  background: var(--neo-yellow);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: var(--shadow-neo-sm);
+}
+.wow-kbd {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.25);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+.seq-skip-btn .wow-kbd {
+  background: rgba(0,0,0,0.06);
+}
+
+/* ============ CELEBRATION (neo) ============ */
+.wow-celebrate {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+.wow-celebrate-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  font-weight: 900;
+  animation: neo-pop 1.2s ease-out forwards;
+}
+@keyframes neo-pop {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+}
+
+/* ============ IMPORT ERROR ============ */
+.import-error-banner {
+  padding: 8px 14px;
+  margin: 0 16px;
+  background: #fee2e2;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  color: #991b1b;
+  box-shadow: var(--shadow-neo-sm);
+}
+
 /* ============ RESPONSIVE ============ */
 @media (max-width: 600px) {
   .header-v2-stats {
