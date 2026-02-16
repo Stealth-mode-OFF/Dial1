@@ -4,7 +4,6 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import './dialer-v2.css';
 import './transcript-analyzer.css';
 import './battlecards.css';
-import './styles/wow.css';
 
 // Lazy load heavy components for better initial load
 const DialerApp = lazy(() => import('./DialerAppNew').then(m => ({ default: m.DialerApp })));
