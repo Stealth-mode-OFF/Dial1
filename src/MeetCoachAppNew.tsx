@@ -356,7 +356,93 @@ export function MeetCoachAppNew() {
     }
   }, [battlecards, captions]);
   
-  // Keyboard shortcuts
+  // Actions
+  const startDemo = useCallback(async () => {
+    setIsLoading(true);
+    clearLiveCoach();
+    setSpinOutput(null);
+    setSpinError(null);
+    setObjectionCount(0);
+    setWrapupAnalysis(null);
+    setWrapupAnalysisError(null);
+    setWrapupAnalysisLoading(false);
+    setWrapupEmailDraft('');
+    setWrapupEmailError(null);
+    setWrapupEmailLoading(false);
+    setWrapupEmailCopied(false);
+    setWrapupCrmSaving(false);
+    setWrapupCrmResult(null);
+    wrapupAnalysisKeyRef.current = '';
+    const blocks = await generateDemoScript(lead);
+    setScript(blocks);
+    setCurrentBlockIndex(0);
+    setSpinPhase('situation');
+    setTotalTime(0);
+    setPhaseTime(0);
+    setPhaseTimes({ situation: 0, problem: 0, implication: 0, 'need-payoff': 0 });
+    setAppPhase('live');
+    setIsLoading(false);
+  }, [clearLiveCoach, lead]);
+  
+  const endDemo = useCallback(() => {
+    setAppPhase('wrapup');
+  }, []);
+  
+  const nextBlock = useCallback(() => {
+    if (currentBlockIndex >= script.length - 1) {
+      endDemo();
+      return;
+    }
+    
+    const nextIdx = currentBlockIndex + 1;
+    setCurrentBlockIndex(nextIdx);
+    
+    // Auto-switch phase if block changes phase
+    const nextBlock = script[nextIdx];
+    if (nextBlock && nextBlock.phase !== spinPhase) {
+      changePhase(nextBlock.phase);
+    }
+  }, [currentBlockIndex, script, spinPhase, changePhase, endDemo]);
+  
+  const prevBlock = useCallback(() => {
+    if (currentBlockIndex <= 0) return;
+    
+    const prevIdx = currentBlockIndex - 1;
+    setCurrentBlockIndex(prevIdx);
+    
+    const prevBlock = script[prevIdx];
+    if (prevBlock && prevBlock.phase !== spinPhase) {
+      changePhase(prevBlock.phase);
+    }
+  }, [currentBlockIndex, script, spinPhase, changePhase]);
+  
+  const resetDemo = useCallback(() => {
+    setAppPhase('prep');
+    setScript([]);
+    setCurrentBlockIndex(0);
+    setSpinPhase('situation');
+    setTotalTime(0);
+    setPhaseTime(0);
+    setPhaseTimes({ situation: 0, problem: 0, implication: 0, 'need-payoff': 0 });
+    setCurrentWhisper(null);
+    setMatchedCard(null);
+    clearLiveCoach();
+    setSpinOutput(null);
+    setSpinError(null);
+    setObjectionCount(0);
+    setWrapupAnalysis(null);
+    setWrapupAnalysisError(null);
+    setWrapupAnalysisLoading(false);
+    setWrapupEmailDraft('');
+    setWrapupEmailError(null);
+    setWrapupEmailLoading(false);
+    setWrapupEmailCopied(false);
+    setWrapupCrmSaving(false);
+    setWrapupCrmResult(null);
+    wrapupAnalysisKeyRef.current = '';
+  }, [clearLiveCoach]);
+  
+  // Keyboard shortcuts (after all callback declarations)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // PREP phase
@@ -402,93 +488,7 @@ export function MeetCoachAppNew() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [appPhase, changePhase, endDemo, nextBlock, prevBlock, resetDemo, startDemo]);
-  
-  // Actions
-  const startDemo = useCallback(async () => {
-    setIsLoading(true);
-    clearLiveCoach();
-    setSpinOutput(null);
-    setSpinError(null);
-    setObjectionCount(0);
-    setWrapupAnalysis(null);
-    setWrapupAnalysisError(null);
-    setWrapupAnalysisLoading(false);
-    setWrapupEmailDraft('');
-    setWrapupEmailError(null);
-    setWrapupEmailLoading(false);
-    setWrapupEmailCopied(false);
-    setWrapupCrmSaving(false);
-    setWrapupCrmResult(null);
-    wrapupAnalysisKeyRef.current = '';
-    const blocks = await generateDemoScript(lead);
-    setScript(blocks);
-    setCurrentBlockIndex(0);
-    setSpinPhase('situation');
-    setTotalTime(0);
-    setPhaseTime(0);
-    setPhaseTimes({ situation: 0, problem: 0, implication: 0, 'need-payoff': 0 });
-    setAppPhase('live');
-    setIsLoading(false);
-  }, [clearLiveCoach, lead]);
-  
-  const nextBlock = useCallback(() => {
-    if (currentBlockIndex >= script.length - 1) {
-      endDemo();
-      return;
-    }
-    
-    const nextIdx = currentBlockIndex + 1;
-    setCurrentBlockIndex(nextIdx);
-    
-    // Auto-switch phase if block changes phase
-    const nextBlock = script[nextIdx];
-    if (nextBlock && nextBlock.phase !== spinPhase) {
-      changePhase(nextBlock.phase);
-    }
-  }, [currentBlockIndex, script, spinPhase]);
-  
-  const prevBlock = useCallback(() => {
-    if (currentBlockIndex <= 0) return;
-    
-    const prevIdx = currentBlockIndex - 1;
-    setCurrentBlockIndex(prevIdx);
-    
-    const prevBlock = script[prevIdx];
-    if (prevBlock && prevBlock.phase !== spinPhase) {
-      changePhase(prevBlock.phase);
-    }
-  }, [currentBlockIndex, script, spinPhase]);
-  
-  const endDemo = useCallback(() => {
-    setAppPhase('wrapup');
-  }, []);
-  
-  const resetDemo = useCallback(() => {
-    setAppPhase('prep');
-    setScript([]);
-    setCurrentBlockIndex(0);
-    setSpinPhase('situation');
-    setTotalTime(0);
-    setPhaseTime(0);
-    setPhaseTimes({ situation: 0, problem: 0, implication: 0, 'need-payoff': 0 });
-    setCurrentWhisper(null);
-    setMatchedCard(null);
-    clearLiveCoach();
-    setSpinOutput(null);
-    setSpinError(null);
-    setObjectionCount(0);
-    setWrapupAnalysis(null);
-    setWrapupAnalysisError(null);
-    setWrapupAnalysisLoading(false);
-    setWrapupEmailDraft('');
-    setWrapupEmailError(null);
-    setWrapupEmailLoading(false);
-    setWrapupEmailCopied(false);
-    setWrapupCrmSaving(false);
-    setWrapupCrmResult(null);
-    wrapupAnalysisKeyRef.current = '';
-  }, [clearLiveCoach]);
-  
+
   // Get current block
   const currentBlock = script[currentBlockIndex];
 
