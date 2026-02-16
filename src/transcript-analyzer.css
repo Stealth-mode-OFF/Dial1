@@ -918,3 +918,133 @@
     width: 100%;
   }
 }
+
+/* ============ COACHING NARRATIVE TAB ============ */
+.ta-coaching-narrative {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ta-narrative-story {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  border: 2px solid var(--border, #1a1a1a);
+  border-radius: var(--radius, 8px);
+  padding: 18px 20px;
+}
+
+.ta-narrative-story h4 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.ta-narrative-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  font-weight: 500;
+}
+
+.ta-narrative-actions h4,
+.ta-narrative-practice h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.ta-action-item {
+  padding: 14px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: var(--radius, 8px);
+  margin-bottom: 10px;
+  border-left-width: 4px;
+}
+
+.ta-action-item.ta-priority-high {
+  border-left-color: var(--danger, #ef4444);
+  background: #fef2f2;
+}
+
+.ta-action-item.ta-priority-medium {
+  border-left-color: var(--gold, #f59e0b);
+  background: #fffbeb;
+}
+
+.ta-action-item.ta-priority-low {
+  border-left-color: var(--success, #22c55e);
+  background: #f0fdf4;
+}
+
+.ta-action-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ta-action-header strong {
+  font-size: 13px;
+}
+
+.ta-action-item p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text, #1a1a1a);
+}
+
+.ta-action-example {
+  margin-top: 8px !important;
+  font-style: italic;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px !important;
+}
+
+.ta-practice-item {
+  padding: 14px 16px;
+  border: 2px solid #c7d2fe;
+  border-radius: var(--radius, 8px);
+  margin-bottom: 10px;
+  background: #eef2ff;
+}
+
+.ta-practice-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  color: var(--text-muted, #737373);
+}
+
+.ta-practice-situation p,
+.ta-practice-better p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ta-practice-better {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #a5b4fc;
+}
+
+.ta-narrative-motivation {
+  background: var(--neo-yellow, #fef08a);
+  border: 2px solid var(--border, #1a1a1a);
+  border-radius: var(--radius, 8px);
+  padding: 14px 18px;
+  text-align: center;
+}
+
+.ta-motivation-text {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+}
