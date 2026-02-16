@@ -168,9 +168,14 @@ export function DialerApp() {
   const handleImport = useCallback(async () => {
     setImporting(true);
     try {
+      await echoApi.importPipedrive();
+    } catch (e) {
+      console.error('Import POST failed:', e);
+    }
+    try {
       await refresh();
     } catch (e) {
-      console.error('Import failed:', e);
+      console.error('Refresh failed:', e);
     } finally {
       setImporting(false);
     }
@@ -437,7 +442,7 @@ export function DialerApp() {
         <div className="header-v2-right">
           <button
             onClick={handleImport}
-            disabled={importing || !pipedriveConfigured}
+            disabled={importing}
             className="header-btn header-btn-import"
           >
             {importing ? '...' : '↓ Import'}
@@ -573,7 +578,7 @@ export function DialerApp() {
         {showSettings && (
           <SettingsOverlay
             open={showSettings}
-            onClose={() => setShowSettings(false)}
+            onClose={() => { setShowSettings(false); void refresh(); }}
             smsTemplate={smsTemplate}
             onSmsTemplateChange={setSmsTemplate}
           />

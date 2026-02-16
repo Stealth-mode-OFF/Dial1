@@ -23,7 +23,7 @@ export function EmptyState({ importing, pipedriveConfigured, error, onImport, on
           </div>
         )}
         <div className="empty-actions">
-          <button onClick={onImport} disabled={importing || !pipedriveConfigured}>
+          <button onClick={onImport} disabled={importing}>
             {importing ? 'Importuji…' : '↓ Importovat leady'}
           </button>
           <button onClick={onShowSettings}>⚙ Nastavení</button>
