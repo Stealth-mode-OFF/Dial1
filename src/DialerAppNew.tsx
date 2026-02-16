@@ -23,7 +23,7 @@ const SCHEDULER_URL = 'https://behavera.pipedrive.com/scheduler/GX27Q8iw/konzult
 
 // (Types/utilities/components extracted to src/features/dialer)
 export function DialerApp() {
-  const { contacts: salesContacts, isLoading, pipedriveConfigured, refresh } = useSales();
+  const { contacts: salesContacts, isLoading, pipedriveConfigured, error: salesError, refresh } = useSales();
   const { progress: batchProgress, preload: batchPreload, skip: skipPreload, briefsByContactId } = useBatchBriefs();
 
   const contacts: Contact[] = useMemo(() => {
@@ -167,8 +167,13 @@ export function DialerApp() {
 
   const handleImport = useCallback(async () => {
     setImporting(true);
-    await refresh();
-    setImporting(false);
+    try {
+      await refresh();
+    } catch (e) {
+      console.error('Import failed:', e);
+    } finally {
+      setImporting(false);
+    }
   }, [refresh]);
 
   const startCall = useCallback(() => {
@@ -483,6 +488,7 @@ export function DialerApp() {
           <EmptyState
             importing={importing}
             pipedriveConfigured={pipedriveConfigured}
+            error={salesError}
             onImport={handleImport}
             onShowSettings={() => setShowSettings(true)}
           />

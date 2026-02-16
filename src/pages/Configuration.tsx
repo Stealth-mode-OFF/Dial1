@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Database, Save } from 'lucide-react';
 import { useSales } from '../contexts/SalesContext';
-import { supabaseConfigError, isSupabaseConfigured, supabaseUrl, publicAnonKey } from '../utils/supabase/info';
+import { supabaseConfigError, isSupabaseConfigured } from '../utils/supabase/info';
+import { echoApi } from '../utils/echoApi';
 
 export default function Configuration() {
   const { user, updateUser, settings, updateSettings, refresh } = useSales();
@@ -29,22 +30,8 @@ export default function Configuration() {
     setIsImporting(true);
     setImportStatus(null);
     try {
-      const res = await fetch(
-        `${supabaseUrl}/functions/v1/make-server-139017f8/pipedrive/import`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: publicAnonKey,
-            Authorization: `Bearer ${publicAnonKey}`,
-          },
-        },
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || 'Import failed');
-      }
-      setImportStatus(`Imported ${data?.count ?? 0} contacts.`);
+      const data = await echoApi.importPipedrive();
+      setImportStatus(`Importováno ${data?.count ?? 0} kontaktů.`);
       await refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Import failed';
