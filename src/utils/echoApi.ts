@@ -631,6 +631,30 @@ export const echoApi = {
   },
 };
 
+// Coaching narrative types (pipeline stage 4)
+export interface CoachingAction {
+  title: string;
+  description: string;
+  example?: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface PracticeScenario {
+  situation: string;
+  betterApproach: string;
+}
+
+export interface CoachingNarrative {
+  /** Story-format coaching overview */
+  narrative: string;
+  /** Ordered list of specific improvement actions */
+  actions: CoachingAction[];
+  /** Replay moments with better approach */
+  practiceScenarios: PracticeScenario[];
+  /** One-sentence motivational takeaway */
+  motivationalClose: string;
+}
+
 // Transcript analysis types
 export interface TranscriptAnalysisResult {
   id: string | null;
@@ -659,6 +683,7 @@ export interface TranscriptAnalysisResult {
     objectionsHandled: { objection: string; response: string; quality: string }[];
     spinNotesPipedrive: string;
   };
+  coaching?: CoachingNarrative | null;
   saved: boolean;
 }
 
